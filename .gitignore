@@ -1,0 +1,90 @@
+############################
+# Build & Generated Output #
+############################
+
+# CMake / Ninja / Make
+/build*/
+cmake-build*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+compile_commands.json
+.ninja_deps
+.ninja_log
+
+# Binaries & libraries
+/bin*/
+lib*/
+out*/
+
+############################
+# IDE / Editor Artifacts   #
+############################
+
+# Visual Studio / MSVC
+.vs/
+*.sln
+*.vcxproj*
+*.pdb
+*.ilk
+*.obj
+*.tlog
+*.idb
+
+# VS Code
+.vscode/
+
+# CLion
+.idea/
+
+############################
+# OS Files                 #
+############################
+
+.DS_Store
+Thumbs.db
+
+############################
+# Logs, Databases, Output  #
+############################
+
+# Logs
+*.log
+
+# SQLite / telemetry / memory
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated dashboards / exports
+/pages/tags/
+/web/*.json
+/web/export*/
+
+############################
+# Python Tooling (if any)  #
+############################
+
+__pycache__/
+*.pyc
+*.pyo
+
+############################
+# Archives / Temp          #
+############################
+
+*.zip
+*.tar.gz
+*.tmp
+*.bak
+
+############################
+# Explicitly Keep          #
+############################
+
+# Keep documentation, configs, and licenses
+!README.md
+!LICENSE
+!LICENSE_ADDENDUM.md
+!CITATION.cff
+!docs/**
