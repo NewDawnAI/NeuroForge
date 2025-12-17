@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroForge Baby AI Demo</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Arial', sans-serif;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .demo-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            height: 100vh;
+        }
+
+        .brain-visualizer {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .learning-dashboard {
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .brain-region {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            position: relative;
+            margin: 20px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .visual-cortex {
+            background: radial-gradient(circle, #ff6b6b, #ee5a52);
+            animation: pulse 2s infinite;
+        }
+
+        .auditory-cortex {
+            background: radial-gradient(circle, #4ecdc4, #44a08d);
+            animation: pulse 2.5s infinite;
+        }
+
+        .language-cortex {
+            background: radial-gradient(circle, #45b7d1, #2196f3);
+            animation: pulse 3s infinite;
+        }
+
+        .association-cortex {
+            background: radial-gradient(circle, #f9ca24, #f39c12);
+            animation: pulse 1.8s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 0.8; }
+            50% { transform: scale(1.1); opacity: 1; }
+        }
+
+        .region-label {
+            position: absolute;
+            bottom: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            font-weight: bold;
+            text-align: center;
+        }
+
+        .synapse-connection {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.8), rgba(255,255,255,0.3));
+            animation: signal-flow 1.5s infinite;
+        }
+
+        @keyframes signal-flow {
+            0% { opacity: 0.3; transform: scaleX(0.5); }
+            50% { opacity: 1; transform: scaleX(1); }
+            100% { opacity: 0.3; transform: scaleX(0.5); }
+        }
+
+        .stats-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-value {
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00f260, #0575e6);
+            border-radius: 10px;
+            transition: width 0.5s ease;
+            animation: shimmer 2s infinite;
+        }
+
+        @keyframes shimmer {
+            0% { background-position: -200px 0; }
+            100% { background-position: 200px 0; }
+        }
+
+        .learning-log {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 10px;
+            padding: 20px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .log-entry {
+            margin: 5px 0;
+            opacity: 0;
+            animation: fadeIn 0.5s forwards;
+        }
+
+        .log-success {
+            color: #00ff88;
+            font-weight: bold;
+        }
+
+        .log-attempt {
+            color: #ffa726;
+        }
+
+        .log-info {
+            color: #81c784;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .input-stimuli {
+            display: flex;
+            justify-content: space-around;
+            margin: 30px 0;
+        }
+
+        .stimulus {
+            text-align: center;
+            padding: 15px;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .stimulus.active {
+            border-color: #00ff88;
+            transform: scale(1.05);
+            box-shadow: 0 10px 30px rgba(0, 255, 136, 0.3);
+        }
+
+        .stimulus-icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+        }
+
+        .title {
+            text-align: center;
+            font-size: 2.5em;
+            font-weight: bold;
+            margin-bottom: 30px;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .success-celebration {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 4em;
+            font-weight: bold;
+            color: #00ff88;
+            opacity: 0;
+            z-index: 1000;
+            text-shadow: 0 0 30px rgba(0, 255, 136, 0.8);
+        }
+
+        .success-celebration.show {
+            animation: celebrate 2s forwards;
+        }
+
+        @keyframes celebrate {
+            0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+            50% { opacity: 1; transform: translate(-50%, -50%) scale(1.2); }
+            100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+        }
+    </style>
+</head>
+<body>
+    <h1 class="title">NeuroForge Baby AI - Learning Demo</h1>
+    
+    <div class="demo-container">
+        <div class="brain-visualizer">
+            <h2>🧠 Baby AI Brain Activity</h2>
+            
+            <div style="position: relative; height: 400px;">
+                <div class="brain-region visual-cortex" style="position: absolute; top: 50px; left: 50px;">
+                    <div class="region-label">Visual Cortex</div>
+                </div>
+                
+                <div class="brain-region auditory-cortex" style="position: absolute; top: 50px; right: 50px;">
+                    <div class="region-label">Auditory Cortex</div>
+                </div>
+                
+                <div class="brain-region language-cortex" style="position: absolute; bottom: 50px; left: 50px;">
+                    <div class="region-label">Language Cortex</div>
+                </div>
+                
+                <div class="brain-region association-cortex" style="position: absolute; bottom: 50px; right: 50px;">
+                    <div class="region-label">Association Area</div>
+                </div>
+                
+                <div class="synapse-connection" style="top: 110px; left: 170px; width: 180px;"></div>
+                <div class="synapse-connection" style="top: 230px; left: 170px; width: 180px;"></div>
+                <div class="synapse-connection" style="left: 110px; top: 170px; width: 2px; height: 120px; transform: rotate(90deg);"></div>
+                <div class="synapse-connection" style="right: 110px; top: 170px; width: 2px; height: 120px; transform: rotate(90deg);"></div>
+            </div>
+            
+            <div class="input-stimuli">
+                <div class="stimulus" id="visual-input">
+                    <div class="stimulus-icon">🍎</div>
+                    <div>Visual Input</div>
+                </div>
+                <div class="stimulus" id="audio-input">
+                    <div class="stimulus-icon">🔊</div>
+                    <div>Audio Input</div>
+                </div>
+                <div class="stimulus" id="text-input">
+                    <div class="stimulus-icon">📝</div>
+                    <div>Text Input</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="learning-dashboard">
+            <h2>📊 Learning Progress</h2>
+            
+            <div class="stats-panel">
+                <div class="stat-card">
+                    <div class="stat-value" id="success-rate">0%</div>
+                    <div class="stat-label">Success Rate</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="active-synapses">96</div>
+                    <div class="stat-label">Active Synapses</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="attempts">0</div>
+                    <div class="stat-label">Learning Attempts</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="alignments">0</div>
+                    <div class="stat-label">Multimodal Alignments</div>
+                </div>
+            </div>
+            
+            <div>
+                <h3>Similarity Score Progress</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="similarity-progress" style="width: 2.5%;"></div>
+                </div>
+                <small>Current: <span id="current-similarity">0.025</span> / Target: 0.100</small>
+            </div>
+            
+            <div class="learning-log" id="learning-log">
+                <div class="log-entry log-info">[System] Baby AI Brain initialized</div>
+                <div class="log-entry log-info">[System] 42 multimodal embeddings loaded</div>
+                <div class="log-entry log-info">[System] Starting learning simulation...</div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="success-celebration" id="success-msg">🎉 FIRST SUCCESS! 🎉</div>
+
+    <script>
+        let attemptCount = 0;
+        let successCount = 0;
+        let currentSimilarity = 0.025;
+        let activeSynapses = 96;
+        let alignments = 0;
+
+        function simulateLearningAttempt() {
+            attemptCount++;
+            
+            // Simulate gradual improvement
+            currentSimilarity += (Math.random() * 0.02) + 0.003;
+            activeSynapses += Math.floor(Math.random() * 3);
+            
+            // Update stats
+            document.getElementById('attempts').textContent = attemptCount;
+            document.getElementById('active-synapses').textContent = activeSynapses;
+            document.getElementById('current-similarity').textContent = currentSimilarity.toFixed(3);
+            
+            // Update progress bar
+            const progress = Math.min((currentSimilarity / 0.1) * 100, 100);
+            document.getElementById('similarity-progress').style.width = progress + '%';
+            
+            // Add log entry
+            const logContainer = document.getElementById('learning-log');
+            const isSuccess = currentSimilarity >= 0.1;
+            
+            if (isSuccess && successCount === 0) {
+                successCount++;
+                const successMsg = document.getElementById('success-msg');
+                successMsg.classList.add('show');
+                setTimeout(() => successMsg.classList.remove('show'), 2000);
+                
+                alignments++;
+                document.getElementById('alignments').textContent = alignments;
+                
+                logContainer.innerHTML += `<div class="log-entry log-success">[SUCCESS] Mimicry successful! Similarity: ${currentSimilarity.toFixed(3)}</div>`;
+            } else {
+                logContainer.innerHTML += `<div class="log-entry log-attempt">[Attempt ${attemptCount}] Similarity: ${currentSimilarity.toFixed(3)}, Novelty: ${(1-currentSimilarity).toFixed(3)}</div>`;
+            }
+            
+            // Update success rate
+            const successRate = Math.floor((successCount / attemptCount) * 100);
+            document.getElementById('success-rate').textContent = successRate + '%';
+            
+            // Auto-scroll log
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Activate random stimulus
+            const stimuli = ['visual-input', 'audio-input', 'text-input'];
+            document.querySelectorAll('.stimulus').forEach(s => s.classList.remove('active'));
+            document.getElementById(stimuli[Math.floor(Math.random() * stimuli.length)]).classList.add('active');
+        }
+
+        // Start simulation
+        setInterval(simulateLearningAttempt, 2000);
+        
+        // Initial activation
+        document.getElementById('visual-input').classList.add('active');
+    </script>
+</body>
+</html>

@@ -1,41 +1,126 @@
 ############################
-# Build & Generated Output #
+# Build & Toolchain Output #
 ############################
 
-# CMake / Ninja / Make
-/build*/
-cmake-build*/
+# CMake (in-source artifacts)
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 compile_commands.json
-.ninja_deps
-.ninja_log
+*.ninja_deps
+*.ninja_log
+build.ninja
+rules.ninja
+CMakeUserPresets.json
 
-# Binaries & libraries
+# Out-of-source build trees (project uses many build-* folders)
+/build*/
+/cmake-build*/
+/out*/
 /bin*/
-lib*/
-out*/
-
-############################
-# IDE / Editor Artifacts   #
-############################
+/lib*/
 
 # Visual Studio / MSVC
 .vs/
+*.VC.db
+*.VC.VC.opendb
 *.sln
 *.vcxproj*
+*.user
+*.suo
 *.pdb
 *.ilk
 *.obj
 *.tlog
 *.idb
+*.ipch
+*.iobj
+*.ipdb
+*.exp
+*.lib
+*.dll
+*.exe
 
-# VS Code
+############################
+# vcpkg (vendored)         #
+############################
+
+/external/vcpkg/buildtrees/
+/external/vcpkg/downloads/
+/external/vcpkg/packages/
+/external/vcpkg/installed/
+/external/vcpkg/vcpkg_installed/
+/external/vcpkg/.cache/
+/external/vcpkg/vcpkg.exe
+/external/vcpkg/vcpkg
+
+############################
+# Python / Notebooks       #
+############################
+
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage*
+.pytype/
+.ipynb_checkpoints/
+
+############################
+# IDE / Editor             #
+############################
+
 .vscode/
-
-# CLion
 .idea/
+
+############################
+# Telemetry & Run Artifacts#
+############################
+
+# SQLite / telemetry / memory (include WAL/SHM sidecars)
+*.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.sqlite3
+*.sqlite3-*
+
+# Logs and checkpoints
+*.log
+logs/
+production_logs/
+PhaseC_Logs/
+trajectory_logs/
+exports/
+
+# Common root-level outputs produced by demos/tests
+/*.csv
+/*.jsonl
+/*.png
+/*.svg
+/*.pdf
+/*.zip
+/*.tmp
+/*.bak
+
+# Object files (safety net)
+*.o
+*.obj
+
+# Backup / temp files
+*.bak
+*.bak_*
+
+# Script-local build junk
+scripts/build/
+scripts/_tmp_*/
+scripts/_inspect_out.txt
+scripts/*results*.txt
 
 ############################
 # OS Files                 #
@@ -43,46 +128,12 @@ out*/
 
 .DS_Store
 Thumbs.db
-
-############################
-# Logs, Databases, Output  #
-############################
-
-# Logs
-*.log
-
-# SQLite / telemetry / memory
-*.db
-*.sqlite
-*.sqlite3
-
-# Generated dashboards / exports
-/pages/tags/
-/web/*.json
-/web/export*/
-
-############################
-# Python Tooling (if any)  #
-############################
-
-__pycache__/
-*.pyc
-*.pyo
-
-############################
-# Archives / Temp          #
-############################
-
-*.zip
-*.tar.gz
-*.tmp
-*.bak
+ehthumbs.db
+Desktop.ini
 
 ############################
 # Explicitly Keep          #
 ############################
-
-# Keep documentation, configs, and licenses
 !README.md
 !LICENSE
 !LICENSE_ADDENDUM.md

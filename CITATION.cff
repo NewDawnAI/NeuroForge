@@ -1,0 +1,52 @@
+cff-version: 1.2.0
+
+message: >
+  If you use NeuroForge in academic work, research prototypes,
+  or derivative systems, please cite it as below.
+
+title: "NeuroForge: A Neuro-Cognitive Architecture with Symbolic–Substrate Coupling and Persistent Memory"
+
+abstract: >
+  NeuroForge is a neuro-cognitive research and engineering architecture
+  that integrates a spiking-inspired neural substrate with symbolic
+  language grounding, persistent episodic/semantic/procedural memory,
+  and self-regulatory cognitive phases including reflection, goal
+  coherence, self-trust, and ethics regulation. Unlike purely generative
+  models, NeuroForge emphasizes causal coupling between symbols and
+  substrate plasticity, learning across sessions without retraining,
+  and interpretable internal metrics governing autonomy and behavior.
+
+authors:
+  - family-names: "Sharma"
+    given-names: "Anol Deb"
+    affiliation: "Independent Researcher"
+    email: "anoldeb15632665@gmail.com"
+    orcid: ""   # optional, leave empty if you do not have one
+
+version: "0.7"
+
+date-released: 2025-01-01
+
+license: "Apache-2.0"
+
+repository-code: "https://github.com/NewDawnAI/NeuroForge"
+
+keywords:
+  - neuro-cognitive architecture
+  - artificial general intelligence
+  - symbolic–subsymbolic integration
+  - spiking neural systems
+  - persistent memory
+  - self-regulation
+  - language grounding
+  - autonomous learning
+
+preferred-citation:
+  type: software
+  authors:
+    - family-names: "Sharma"
+      given-names: "Anol Deb"
+  title: "NeuroForge"
+  version: "0.7"
+  year: 2025
+  url: "https://github.com/NewDawnAI/NeuroForge"

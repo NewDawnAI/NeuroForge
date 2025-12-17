@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2F6FED"/>
+      <stop offset="100%" stop-color="#2BBBAD"/>
+    </linearGradient>
+  </defs>
+  <rect x="24" y="24" width="464" height="464" rx="64" fill="url(#g)"/>
+  <g fill="#ffffff">
+    <!-- Stylized N -->
+    <path d="M120,380 L120,132 L180,132 L332,332 L332,132 L392,132 L392,380 L332,380 L180,180 L180,380 Z"/>
+    <!-- Minimal neural arcs -->
+    <circle cx="256" cy="80" r="10"/>
+    <circle cx="80" cy="256" r="10"/>
+    <circle cx="432" cy="256" r="10"/>
+    <circle cx="256" cy="432" r="10"/>
+    <path d="M256,80 C256,80 160,160 80,256" stroke="#ffffff" stroke-width="8" fill="none" opacity="0.8"/>
+    <path d="M256,80 C256,80 352,160 432,256" stroke="#ffffff" stroke-width="8" fill="none" opacity="0.8"/>
+    <path d="M256,432 C256,432 160,352 80,256" stroke="#ffffff" stroke-width="8" fill="none" opacity="0.8"/>
+    <path d="M256,432 C256,432 352,352 432,256" stroke="#ffffff" stroke-width="8" fill="none" opacity="0.8"/>
+  </g>
+</svg>
