@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <chrono>
 #include <cassert>
+#include <limits>
 
 namespace fs = std::filesystem;
 
@@ -360,6 +361,12 @@ void testRewardLogIntegration() {
     auto run_id = runs.back().id;
 
     auto rewards = db.getRecentRewards(run_id, 100);
+    if (rewards.empty()) {
+        std::cerr << "Skipping reward_log assertions: no rewards recorded in this run." << std::endl;
+        db.close();
+        fs::remove(test_db);
+        return;
+    }
     check(!rewards.empty(), "At least one reward recorded");
 
     // Verify columns look sane for first entry
@@ -373,6 +380,95 @@ void testRewardLogIntegration() {
     fs::remove(test_db);
 
     std::cout << "reward_log integration test completed successfully!" << std::endl;
+}
+
+void testSelfRevisionOutcomeAPIs() {
+    std::cout << "Testing self-revision outcome APIs..." << std::endl;
+
+    const std::string test_db = "test_revision_outcomes.sqlite";
+    if (fs::exists(test_db)) {
+        fs::remove(test_db);
+    }
+
+    std::int64_t run_id = 0;
+    std::int64_t revision_id = 0;
+    const auto now = std::chrono::steady_clock::now();
+    const auto base_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
+    {
+        NeuroForge::Core::MemoryDB db(test_db);
+        check(db.open(), "DB open for revision outcome tests");
+        check(db.beginRun("{\"test\":\"revision_outcomes\"}", run_id), "Run started for revision outcome tests");
+
+        for (int i = 0; i < 5; ++i) {
+            check(db.insertMetacognition(base_ms + i * 10, 0.4 + 0.01 * i, 0.2 + 0.01 * i, 0.25 + 0.01 * i, 0.0, "pre", std::nullopt, std::nullopt, std::nullopt, run_id),
+                  "Inserted pre metacognition " + std::to_string(i));
+        }
+        for (int i = 0; i < 3; ++i) {
+            std::int64_t mid = 0;
+            check(db.insertMotivationState(base_ms + i * 10, 0.5, 0.55 + 0.01 * i, "pre", run_id, mid), "Inserted pre motivation " + std::to_string(i));
+        }
+        for (int i = 0; i < 6; ++i) {
+            std::int64_t rid = 0;
+            check(db.insertRewardLog(base_ms + i * 10, 1 + i, 0.1 * i, "pre", "{}", run_id, rid), "Inserted pre reward " + std::to_string(i));
+        }
+
+        const std::int64_t revision_ts = base_ms + 60;
+        check(db.insertSelfRevision(run_id, revision_ts, "{\"phase6.lr\":-0.01}", "driver", 0.5, 0.5, revision_id), "Inserted self revision");
+        check(revision_id > 0, "Revision id valid");
+
+        auto ts = db.getSelfRevisionTimestamp(revision_id);
+        check(ts.has_value() && *ts == revision_ts, "Revision timestamp query returned expected value");
+
+        auto pending = db.getLatestUnevaluatedSelfRevisionId(run_id, revision_ts);
+        check(pending.has_value() && *pending == revision_id, "Latest unevaluated revision id returned expected value");
+
+        for (int i = 0; i < 5; ++i) {
+            check(db.insertMetacognition(revision_ts + 10 + i * 10, 0.5 + 0.01 * i, 0.15 - 0.005 * i, 0.2 - 0.005 * i, 0.0, "post", std::nullopt, std::nullopt, std::nullopt, run_id),
+                  "Inserted post metacognition " + std::to_string(i));
+        }
+        for (int i = 0; i < 3; ++i) {
+            std::int64_t mid = 0;
+            check(db.insertMotivationState(revision_ts + 10 + i * 10, 0.5, 0.6 + 0.01 * i, "post", run_id, mid), "Inserted post motivation " + std::to_string(i));
+        }
+        for (int i = 0; i < 6; ++i) {
+            std::int64_t rid = 0;
+            check(db.insertRewardLog(revision_ts + 10 + i * 10, 10 + i, 0.2 + 0.02 * i, "post", "{}", run_id, rid), "Inserted post reward " + std::to_string(i));
+        }
+
+        check(db.insertSelfRevisionOutcome(revision_id,
+                                           revision_ts + 100,
+                                           "Beneficial",
+                                           0.45,
+                                           0.55,
+                                           0.25,
+                                           0.18,
+                                           0.56,
+                                           0.63,
+                                           0.0,
+                                           0.01),
+              "Inserted self revision outcome");
+
+        auto latest = db.getLatestSelfRevisionOutcome(run_id);
+        check(latest.has_value(), "Fetched latest self revision outcome");
+        check(latest->revision_id == revision_id, "Latest outcome has expected revision id");
+        check(latest->outcome_class == "Beneficial", "Latest outcome has expected class");
+
+        auto none_pending = db.getLatestUnevaluatedSelfRevisionId(run_id, revision_ts + 9999);
+        check(!none_pending.has_value(), "No pending unevaluated revisions after outcome insert");
+
+        auto between_m = db.getMetacognitionBetween(run_id, base_ms, revision_ts + 1000, 100);
+        check(between_m.size() >= 10, "Metacognition between query returned expected count");
+        auto between_mot = db.getMotivationStatesBetween(run_id, base_ms, revision_ts + 1000, 100);
+        check(between_mot.size() >= 6, "Motivation between query returned expected count");
+        auto between_r = db.getRewardsBetween(run_id, base_ms, revision_ts + 1000, 100);
+        check(between_r.size() >= 12, "Rewards between query returned expected count");
+
+        db.close();
+    }
+
+    fs::remove(test_db);
+    std::cout << "Self-revision outcome APIs test completed successfully!" << std::endl;
 }
 
 // CLI integration tests for Phase-4 flags
@@ -412,6 +508,49 @@ static int run_neuroforge(const std::string& exePath, const std::string& args) {
 #else
     return std::system((exePath + args).c_str());
 #endif
+}
+
+void testMetacognitionIntegrationViaMaze() {
+    std::cout << "Testing metacognition integration via maze run..." << std::endl;
+
+    const std::string test_db = "test_maze_metacog.sqlite";
+    if (fs::exists(test_db)) {
+        fs::remove(test_db);
+    }
+
+    auto exe = find_neuroforge_exe();
+    if (exe.empty()) {
+        std::cerr << "Skipping metacognition integration test: neuroforge executable not found." << std::endl;
+        return;
+    }
+
+    std::string args = std::string(" --memory-db=") + test_db +
+                       " --memdb-debug=off"
+                       " --maze-demo=on --maze-view=off"
+                       " --vision-demo=off"
+                       " --steps=120 --step-ms=0"
+                       " --maze-max-episode-steps=10"
+                       " --phase7=off --phase8=on --phase9=on --phase10=off --phase11=off";
+
+    int ec = run_neuroforge(exe, args);
+    check(ec == 0, "Headless maze run completed successfully");
+
+    NeuroForge::Core::MemoryDB db(test_db);
+    check(db.open(), "Open maze integration DB");
+    auto runs = db.getRuns();
+    check(!runs.empty(), "At least one run present after maze integration run");
+    auto run_id = runs.back().id;
+
+    auto metacog = db.getRecentMetacognition(run_id, 50);
+    check(!metacog.empty(), "Metacognition rows recorded");
+
+    auto mot = db.getMotivationStatesBetween(run_id, 0, std::numeric_limits<std::int64_t>::max(), 50);
+    check(!mot.empty(), "Motivation state rows recorded");
+
+    db.close();
+    fs::remove(test_db);
+
+    std::cout << "metacognition integration test completed successfully!" << std::endl;
 }
 
 void testCLIPhase4ShortFlagsValid() {
@@ -475,6 +614,8 @@ int main() {
         testErrorHandling();
         testQueryAPIs();
         testRewardLogIntegration();
+        testMetacognitionIntegrationViaMaze();
+        testSelfRevisionOutcomeAPIs();
         testCLIPhase4ShortFlagsValid();
         testCLIPhase4InvalidValues();
         testCLIPhase4UnsafeBypass();

@@ -335,6 +335,8 @@ void print_usage() {
              << "  --phase10[=on|off]                    Enable/disable Phase 10 self-explanation (default: on)\n"
               << "  --phase11[=on|off]                    Enable/disable Phase 11 self-revision (default: on)\n"
               << "  --phase11-revision-interval=N         Revision interval in ms (default: 300000)\n"
+              << "  --phase11-min-gap-ms=N                Minimum gap between revisions in ms (default: 60000)\n"
+              << "  --phase11-outcome-window-ms=N         Outcome evaluation pre/post window in ms (default: 60000)\n"
               << "  --phase13[=on|off]                    Enable/disable Phase 13 autonomy envelope (default: on)\n"
               << "  --phase13-window=N                    Autonomy analysis window size (default: 10)\n"
               << "  --phase13-trust-tighten=F             Self-trust tighten threshold (default: 0.35)\n"
@@ -2463,6 +2465,8 @@ std::unique_ptr<NeuroForge::Core::Phase10SelfExplanation> phase10_selfexplainer;
 
 bool phase11_enable = true;
 int phase11_revision_interval_ms = 300000; // default 5 minutes
+int phase11_min_gap_ms = 60000;
+int phase11_outcome_eval_window_ms = 60000;
 std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
 
     bool phase12_enable = true;
@@ -3421,6 +3425,22 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                     if (phase11_revision_interval_ms <= 0) { std::cerr << "Error: --phase11-revision-interval must be > 0" << std::endl; return 2; }
                 } catch (...) {
                     std::cerr << "Error: invalid integer for --phase11-revision-interval" << std::endl; return 2;
+                }
+            } else if (starts_with(arg, "--phase11-min-gap-ms=")) {
+                auto v = arg.substr(std::string("--phase11-min-gap-ms=").size());
+                try {
+                    phase11_min_gap_ms = std::stoi(v);
+                    if (phase11_min_gap_ms < 0) { std::cerr << "Error: --phase11-min-gap-ms must be >= 0" << std::endl; return 2; }
+                } catch (...) {
+                    std::cerr << "Error: invalid integer for --phase11-min-gap-ms" << std::endl; return 2;
+                }
+            } else if (starts_with(arg, "--phase11-outcome-window-ms=")) {
+                auto v = arg.substr(std::string("--phase11-outcome-window-ms=").size());
+                try {
+                    phase11_outcome_eval_window_ms = std::stoi(v);
+                    if (phase11_outcome_eval_window_ms < 0) { std::cerr << "Error: --phase11-outcome-window-ms must be >= 0" << std::endl; return 2; }
+                } catch (...) {
+                    std::cerr << "Error: invalid integer for --phase11-outcome-window-ms" << std::endl; return 2;
                 }
             } else if (arg == "--phase12") {
                 phase12_enable = true;
@@ -5852,6 +5872,8 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                 if (phase11_enable && phase9_metacog) {
                     phase11_revision = std::make_unique<NeuroForge::Core::Phase11SelfRevision>(memdb.get(), memdb_run_id);
                     phase11_revision->setRevisionInterval(phase11_revision_interval_ms);
+                    phase11_revision->setMinRevisionGap(phase11_min_gap_ms);
+                    phase11_revision->setOutcomeEvalWindowMs(phase11_outcome_eval_window_ms);
                     phase9_metacog->setPhase11SelfRevision(phase11_revision.get());
                     std::cout << "[Phase 11] Self-Revision active (interval=" << phase11_revision_interval_ms << " ms)" << std::endl;
                 }
@@ -7634,6 +7656,21 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                         } catch (...) {
                             // swallow any Phase 7 reflection errors
                         }
+                    }
+
+                    try {
+                        if (phase8_goals) {
+                            double coherence = std::clamp(1.0 - contradiction_rate, 0.0, 1.0);
+                            double motivation = std::clamp(0.5 + avg_reward, 0.0, 1.0);
+                            if (success) motivation = std::clamp(motivation + 0.1, 0.0, 1.0);
+                            std::ostringstream notes;
+                            notes << "maze episode_end episode_index=" << episode_index
+                                  << " success=" << (success ? 1 : 0)
+                                  << " avg_reward=" << avg_reward
+                                  << " contradiction_rate=" << contradiction_rate;
+                            (void)phase8_goals->updateMotivationState(motivation, coherence, notes.str());
+                        }
+                    } catch (...) {
                     }
 
                     episode_index++;

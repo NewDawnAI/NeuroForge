@@ -35,7 +35,38 @@ bool Phase10SelfExplanation::runForMetacogId(std::int64_t metacog_id, const std:
     const double mean_abs_error = 0.0;
     const double confidence_bias = 0.0;
 
-    const std::string narrative = synthesizeNarrative(trust_delta, mean_abs_error, confidence_bias, context);
+    std::string narrative = synthesizeNarrative(trust_delta, mean_abs_error, confidence_bias, context);
+    auto outcome = db_->getLatestSelfRevisionOutcome(run_id_);
+    if (outcome.has_value()) {
+        auto to_json_num = [](const std::optional<double>& v) -> std::string {
+            if (!v.has_value()) return "null";
+            std::ostringstream oss;
+            oss << *v;
+            return oss.str();
+        };
+
+        std::ostringstream oss;
+        oss << ",\"stage7_5\":{";
+        oss << "\"revision_id\":" << outcome->revision_id << ",";
+        oss << "\"eval_ts_ms\":" << outcome->eval_ts_ms << ",";
+        oss << "\"outcome_class\":\"" << outcome->outcome_class << "\",";
+        oss << "\"trust_pre\":" << to_json_num(outcome->trust_pre) << ",";
+        oss << "\"trust_post\":" << to_json_num(outcome->trust_post) << ",";
+        oss << "\"prediction_error_pre\":" << to_json_num(outcome->prediction_error_pre) << ",";
+        oss << "\"prediction_error_post\":" << to_json_num(outcome->prediction_error_post) << ",";
+        oss << "\"coherence_pre\":" << to_json_num(outcome->coherence_pre) << ",";
+        oss << "\"coherence_post\":" << to_json_num(outcome->coherence_post) << ",";
+        oss << "\"reward_slope_pre\":" << to_json_num(outcome->reward_slope_pre) << ",";
+        oss << "\"reward_slope_post\":" << to_json_num(outcome->reward_slope_post);
+        oss << "}";
+        const std::string injection = oss.str();
+
+        const std::size_t last_brace = narrative.rfind('}');
+        if (last_brace != std::string::npos) {
+            narrative.insert(last_brace, injection);
+        }
+    }
+
     return db_->updateMetacognitionExplanation(metacog_id, narrative);
 }
 

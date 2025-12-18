@@ -123,6 +123,10 @@ public:
     };
 
     std::vector<RewardEntry> getRecentRewards(std::int64_t run_id, int limit);
+    std::vector<RewardEntry> getRewardsBetween(std::int64_t run_id,
+                                               std::int64_t start_ts_ms,
+                                               std::int64_t end_ts_ms,
+                                               int limit = 1000);
     std::vector<EpisodeEntry> getEpisodes(std::int64_t run_id);
     std::vector<RunEntry> getRuns();
 
@@ -340,6 +344,34 @@ public:
                             double trust_after,
                             std::int64_t& out_revision_id);
 
+    struct SelfRevisionOutcomeEntry {
+        std::int64_t revision_id{0};
+        std::int64_t eval_ts_ms{0};
+        std::string outcome_class;
+        std::optional<double> trust_pre;
+        std::optional<double> trust_post;
+        std::optional<double> prediction_error_pre;
+        std::optional<double> prediction_error_post;
+        std::optional<double> coherence_pre;
+        std::optional<double> coherence_post;
+        std::optional<double> reward_slope_pre;
+        std::optional<double> reward_slope_post;
+    };
+    bool insertSelfRevisionOutcome(std::int64_t revision_id,
+                                  std::int64_t eval_ts_ms,
+                                  const std::string& outcome_class,
+                                  double trust_pre,
+                                  double trust_post,
+                                  double prediction_error_pre,
+                                  double prediction_error_post,
+                                  double coherence_pre,
+                                  double coherence_post,
+                                  double reward_slope_pre,
+                                  double reward_slope_post);
+    std::optional<SelfRevisionOutcomeEntry> getLatestSelfRevisionOutcome(std::int64_t run_id);
+    std::optional<std::int64_t> getLatestUnevaluatedSelfRevisionId(std::int64_t run_id, std::int64_t max_ts_ms);
+    std::optional<std::int64_t> getSelfRevisionTimestamp(std::int64_t revision_id);
+
     // Phase 12: Self-Consistency logging
     struct SelfConsistencyEntry {
         std::int64_t id{0};
@@ -451,6 +483,22 @@ public:
         std::optional<double> goal_accuracy_delta;
     };
     std::vector<MetacognitionEntry> getRecentMetacognition(std::int64_t run_id, int n = 10);
+    std::vector<MetacognitionEntry> getMetacognitionBetween(std::int64_t run_id,
+                                                            std::int64_t start_ts_ms,
+                                                            std::int64_t end_ts_ms,
+                                                            int limit = 200);
+
+    struct MotivationStateEntry {
+        std::int64_t id{0};
+        std::int64_t ts_ms{0};
+        double motivation{0.0};
+        double coherence{0.0};
+        std::string notes;
+    };
+    std::vector<MotivationStateEntry> getMotivationStatesBetween(std::int64_t run_id,
+                                                                 std::int64_t start_ts_ms,
+                                                                 std::int64_t end_ts_ms,
+                                                                 int limit = 200);
 
     // Context log for sampling signals used by ethics/metacognition modules
     struct ContextLogEntry {

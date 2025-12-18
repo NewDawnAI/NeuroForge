@@ -31,6 +31,7 @@ public:
     void setTrustDriftThreshold(double threshold) { trust_drift_threshold_ = threshold; }
     void setAnalysisWindow(int window_size) { analysis_window_ = window_size; }
     void setMinRevisionGap(std::int64_t gap_ms) { min_revision_gap_ms_ = gap_ms; }
+    void setOutcomeEvalWindowMs(std::int64_t window_ms) { outcome_eval_window_ms_ = window_ms; }
 
     // Get current revision parameters for external inspection
     std::map<std::string, double> getCurrentRevisionParams() const { return current_revision_params_; }
@@ -84,6 +85,7 @@ private:
     double trust_drift_threshold_ = 0.15; // Trigger if trust drops > 15%
     int analysis_window_ = 10; // Look at last 10 entries
     std::int64_t min_revision_gap_ms_ = 60000; // Min 1 minute between revisions
+    std::int64_t outcome_eval_window_ms_ = 60000; // 1 minute pre/post window
     
     // Current state
     std::map<std::string, double> current_revision_params_;

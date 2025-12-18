@@ -7,6 +7,7 @@
 #include <chrono>
 #include <sstream>
 #include <regex>
+#include <limits>
 
 namespace {
 
@@ -45,6 +46,125 @@ std::string escape_json_string(const std::string& in) {
 namespace NeuroForge {
 namespace Core {
 
+static inline double mean_or_nan(const std::vector<double>& values) {
+    if (values.empty()) return std::numeric_limits<double>::quiet_NaN();
+    double s = 0.0;
+    for (double v : values) s += v;
+    return s / static_cast<double>(values.size());
+}
+
+static inline double compute_reward_slope_per_s(const std::vector<MemoryDB::RewardEntry>& rewards) {
+    if (rewards.size() < 2) return std::numeric_limits<double>::quiet_NaN();
+    const double t0 = static_cast<double>(rewards.front().ts_ms);
+    double sum_t = 0.0;
+    double sum_r = 0.0;
+    std::size_t n = 0;
+    for (const auto& r : rewards) {
+        const double t = (static_cast<double>(r.ts_ms) - t0) / 1000.0;
+        sum_t += t;
+        sum_r += r.reward;
+        ++n;
+    }
+    if (n < 2) return std::numeric_limits<double>::quiet_NaN();
+    const double mean_t = sum_t / static_cast<double>(n);
+    const double mean_r = sum_r / static_cast<double>(n);
+    double num = 0.0;
+    double den = 0.0;
+    for (const auto& r : rewards) {
+        const double t = (static_cast<double>(r.ts_ms) - t0) / 1000.0;
+        const double dt = t - mean_t;
+        const double dr = r.reward - mean_r;
+        num += dt * dr;
+        den += dt * dt;
+    }
+    if (den <= 1e-12) return 0.0;
+    return num / den;
+}
+
+static inline double compute_prediction_error_mean(const std::vector<MemoryDB::MetacognitionEntry>& entries) {
+    double sum = 0.0;
+    std::size_t n = 0;
+    for (const auto& e : entries) {
+        double s = 0.0;
+        std::size_t k = 0;
+        if (e.narrative_rmse.has_value()) { s += *e.narrative_rmse; ++k; }
+        if (e.goal_mae.has_value()) { s += *e.goal_mae; ++k; }
+        if (k == 0) continue;
+        sum += (s / static_cast<double>(k));
+        ++n;
+    }
+    if (n == 0) return std::numeric_limits<double>::quiet_NaN();
+    return sum / static_cast<double>(n);
+}
+
+static inline std::string classify_outcome(double trust_pre,
+                                           double trust_post,
+                                           double pred_err_pre,
+                                           double pred_err_post,
+                                           double coherence_pre,
+                                           double coherence_post,
+                                           double reward_slope_pre,
+                                           double reward_slope_post) {
+    struct MetricVote {
+        bool has{false};
+        bool improved{false};
+        bool worsened{false};
+    };
+
+    MetricVote trust{};
+    if (!std::isnan(trust_pre) && !std::isnan(trust_post)) {
+        trust.has = true;
+        const double d = trust_post - trust_pre;
+        trust.improved = d > 0.02;
+        trust.worsened = d < -0.02;
+    }
+
+    MetricVote pred{};
+    if (!std::isnan(pred_err_pre) && !std::isnan(pred_err_post)) {
+        pred.has = true;
+        const double d = pred_err_pre - pred_err_post;
+        pred.improved = d > 0.02;
+        pred.worsened = d < -0.02;
+    }
+
+    MetricVote coh{};
+    if (!std::isnan(coherence_pre) && !std::isnan(coherence_post)) {
+        coh.has = true;
+        const double d = coherence_post - coherence_pre;
+        coh.improved = d > 0.02;
+        coh.worsened = d < -0.02;
+    }
+
+    MetricVote slope{};
+    if (!std::isnan(reward_slope_pre) && !std::isnan(reward_slope_post)) {
+        slope.has = true;
+        const double d = reward_slope_post - reward_slope_pre;
+        slope.improved = d > 1e-4;
+        slope.worsened = d < -1e-4;
+    }
+
+    int improvements = 0;
+    int worsens = 0;
+    int available = 0;
+    for (const auto& v : {trust, pred, coh, slope}) {
+        if (!v.has) continue;
+        ++available;
+        if (v.improved) ++improvements;
+        if (v.worsened) ++worsens;
+    }
+
+    if (available == 0) return "Neutral";
+    if (available == 1) {
+        if (improvements == 1) return "Beneficial";
+        if (worsens == 1) return "Harmful";
+        return "Neutral";
+    }
+
+    if (improvements >= 2 && worsens == 0) return "Beneficial";
+    if (worsens >= 2 && improvements == 0) return "Harmful";
+    return "Neutral";
+}
+
 bool Phase11SelfRevision::maybeRevise(const std::string& context) {
     if (!shouldTriggerRevision()) {
         return false;
@@ -54,6 +174,75 @@ bool Phase11SelfRevision::maybeRevise(const std::string& context) {
 
 bool Phase11SelfRevision::runForLatest(const std::string& context) {
     if (!db_) return false;
+
+    std::int64_t now_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+
+    if (outcome_eval_window_ms_ > 0) {
+        const std::int64_t max_revision_ts = now_ts_ms - outcome_eval_window_ms_;
+        auto pending_revision_id = db_->getLatestUnevaluatedSelfRevisionId(run_id_, max_revision_ts);
+        if (pending_revision_id.has_value() && *pending_revision_id > 0) {
+            auto revision_ts = db_->getSelfRevisionTimestamp(*pending_revision_id);
+            if (revision_ts.has_value()) {
+                const std::int64_t pre_start = *revision_ts - outcome_eval_window_ms_;
+                const std::int64_t pre_end = *revision_ts;
+                const std::int64_t post_start = *revision_ts;
+                const std::int64_t post_end = *revision_ts + outcome_eval_window_ms_;
+
+                const auto pre_metacog = db_->getMetacognitionBetween(run_id_, pre_start, pre_end, 200);
+                const auto post_metacog = db_->getMetacognitionBetween(run_id_, post_start, post_end, 200);
+
+                std::vector<double> trust_pre_vals;
+                trust_pre_vals.reserve(pre_metacog.size());
+                for (const auto& e : pre_metacog) trust_pre_vals.push_back(e.self_trust);
+                std::vector<double> trust_post_vals;
+                trust_post_vals.reserve(post_metacog.size());
+                for (const auto& e : post_metacog) trust_post_vals.push_back(e.self_trust);
+
+                const double trust_pre = mean_or_nan(trust_pre_vals);
+                const double trust_post = mean_or_nan(trust_post_vals);
+                const double pred_pre = compute_prediction_error_mean(pre_metacog);
+                const double pred_post = compute_prediction_error_mean(post_metacog);
+
+                const auto pre_mot = db_->getMotivationStatesBetween(run_id_, pre_start, pre_end, 200);
+                const auto post_mot = db_->getMotivationStatesBetween(run_id_, post_start, post_end, 200);
+                std::vector<double> coh_pre_vals;
+                coh_pre_vals.reserve(pre_mot.size());
+                for (const auto& e : pre_mot) coh_pre_vals.push_back(e.coherence);
+                std::vector<double> coh_post_vals;
+                coh_post_vals.reserve(post_mot.size());
+                for (const auto& e : post_mot) coh_post_vals.push_back(e.coherence);
+                const double coherence_pre = mean_or_nan(coh_pre_vals);
+                const double coherence_post = mean_or_nan(coh_post_vals);
+
+                const auto pre_rewards = db_->getRewardsBetween(run_id_, pre_start, pre_end, 1000);
+                const auto post_rewards = db_->getRewardsBetween(run_id_, post_start, post_end, 1000);
+                const double reward_slope_pre = compute_reward_slope_per_s(pre_rewards);
+                const double reward_slope_post = compute_reward_slope_per_s(post_rewards);
+
+                const std::string outcome_class = classify_outcome(trust_pre,
+                                                                   trust_post,
+                                                                   pred_pre,
+                                                                   pred_post,
+                                                                   coherence_pre,
+                                                                   coherence_post,
+                                                                   reward_slope_pre,
+                                                                   reward_slope_post);
+
+                (void)db_->insertSelfRevisionOutcome(*pending_revision_id,
+                                                     now_ts_ms,
+                                                     outcome_class,
+                                                     trust_pre,
+                                                     trust_post,
+                                                     pred_pre,
+                                                     pred_post,
+                                                     coherence_pre,
+                                                     coherence_post,
+                                                     reward_slope_pre,
+                                                     reward_slope_post);
+            }
+        }
+    }
     
     // Check if we should trigger a revision
     auto trigger = checkRevisionTriggers();
@@ -108,8 +297,7 @@ bool Phase11SelfRevision::runForLatest(const std::string& context) {
     }
     
     std::int64_t revision_id = 0;
-    std::int64_t ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+    std::int64_t ts_ms = now_ts_ms;
     
     bool success = db_->insertSelfRevision(run_id_, ts_ms, revision_json, 
                                           driver_explanation, trust_before, 
@@ -424,11 +612,21 @@ std::string Phase11SelfRevision::synthesizeDriverExplanation(
 bool Phase11SelfRevision::validateRevisionSafety(const std::vector<ParameterDelta>& deltas) {
     // Check for reasonable delta magnitudes
     for (const auto& delta : deltas) {
-        if (std::abs(delta.delta_value) > 0.5) { // No single change > 50%
-            return false;
-        }
         if (delta.confidence < 0.5) { // Require minimum confidence
             return false;
+        }
+        const bool looks_like_time_ms =
+            (delta.parameter_name.find("interval") != std::string::npos) ||
+            (delta.parameter_name.find("_ms") != std::string::npos) ||
+            (delta.parameter_name.find("hysteresis") != std::string::npos);
+        if (looks_like_time_ms) {
+            if (std::abs(delta.delta_value) > 10000.0) {
+                return false;
+            }
+        } else {
+            if (std::abs(delta.delta_value) > 0.5) {
+                return false;
+            }
         }
     }
     
@@ -439,8 +637,18 @@ bool Phase11SelfRevision::validateRevisionSafety(const std::vector<ParameterDelt
     }
     
     for (const auto& [param, total_change] : param_changes) {
-        if (std::abs(total_change) > 0.3) { // Total change per parameter < 30%
-            return false;
+        const bool looks_like_time_ms =
+            (param.find("interval") != std::string::npos) ||
+            (param.find("_ms") != std::string::npos) ||
+            (param.find("hysteresis") != std::string::npos);
+        if (looks_like_time_ms) {
+            if (std::abs(total_change) > 20000.0) {
+                return false;
+            }
+        } else {
+            if (std::abs(total_change) > 0.3) {
+                return false;
+            }
         }
     }
     
@@ -449,10 +657,15 @@ bool Phase11SelfRevision::validateRevisionSafety(const std::vector<ParameterDelt
 
 void Phase11SelfRevision::clampParameterDeltas(std::vector<ParameterDelta>& deltas) {
     for (auto& delta : deltas) {
-        // Clamp individual deltas
-        delta.delta_value = std::max(-0.2, std::min(0.2, delta.delta_value));
-        
-        // Apply confidence-based scaling
+        const bool looks_like_time_ms =
+            (delta.parameter_name.find("interval") != std::string::npos) ||
+            (delta.parameter_name.find("_ms") != std::string::npos) ||
+            (delta.parameter_name.find("hysteresis") != std::string::npos);
+        if (looks_like_time_ms) {
+            delta.delta_value = std::max(-5000.0, std::min(5000.0, delta.delta_value));
+        } else {
+            delta.delta_value = std::max(-0.2, std::min(0.2, delta.delta_value));
+        }
         delta.delta_value *= delta.confidence;
     }
 }

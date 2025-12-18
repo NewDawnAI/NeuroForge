@@ -3,6 +3,8 @@
 #include <sstream>
 #include <iostream>
 #include <cstring>
+#include <cmath>
+#include <algorithm>
 
 #ifdef NF_HAVE_SQLITE3
 #include <sqlite3.h>
@@ -479,6 +481,24 @@ bool MemoryDB::ensureSchema() {
         ");"
         "CREATE INDEX IF NOT EXISTS idx_self_revision_run ON self_revision_log(run_id);"
         "CREATE INDEX IF NOT EXISTS idx_self_revision_ts ON self_revision_log(ts_ms);"
+        "CREATE TABLE IF NOT EXISTS self_revision_outcomes ("
+        "  revision_id INTEGER PRIMARY KEY,"
+        "  run_id INTEGER NOT NULL,"
+        "  eval_ts_ms INTEGER NOT NULL,"
+        "  outcome_class TEXT NOT NULL,"
+        "  trust_pre REAL,"
+        "  trust_post REAL,"
+        "  prediction_error_pre REAL,"
+        "  prediction_error_post REAL,"
+        "  coherence_pre REAL,"
+        "  coherence_post REAL,"
+        "  reward_slope_pre REAL,"
+        "  reward_slope_post REAL,"
+        "  FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE,"
+        "  FOREIGN KEY(revision_id) REFERENCES self_revision_log(id) ON DELETE CASCADE"
+        ");"
+        "CREATE INDEX IF NOT EXISTS idx_self_revision_outcomes_run ON self_revision_outcomes(run_id);"
+        "CREATE INDEX IF NOT EXISTS idx_self_revision_outcomes_evalts ON self_revision_outcomes(eval_ts_ms);"
         // Phase 12: Self-Consistency tables
         "CREATE TABLE IF NOT EXISTS self_consistency_log ("
         "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -985,6 +1005,47 @@ std::vector<MemoryDB::RewardEntry> MemoryDB::getRecentRewards(std::int64_t run_i
     return out;
 #else
     (void)run_id; (void)limit; std::vector<RewardEntry> out; return out;
+#endif
+}
+
+std::vector<MemoryDB::RewardEntry> MemoryDB::getRewardsBetween(std::int64_t run_id,
+                                                               std::int64_t start_ts_ms,
+                                                               std::int64_t end_ts_ms,
+                                                               int limit) {
+#ifdef NF_HAVE_SQLITE3
+    std::vector<RewardEntry> out;
+    if (!db_ || run_id <= 0 || limit <= 0) return out;
+    if (start_ts_ms > end_ts_ms) std::swap(start_ts_ms, end_ts_ms);
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "SELECT id, ts_ms, step, reward, source, context_json"
+        " FROM reward_log WHERE run_id = ? AND ts_ms >= ? AND ts_ms <= ?"
+        " ORDER BY ts_ms ASC LIMIT ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getRewardsBetween: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return out;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int64(stmt, 2, start_ts_ms);
+    sqlite3_bind_int64(stmt, 3, end_ts_ms);
+    sqlite3_bind_int(stmt, 4, limit);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        RewardEntry e;
+        e.id = sqlite3_column_int64(stmt, 0);
+        e.ts_ms = sqlite3_column_int64(stmt, 1);
+        e.step = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 2));
+        e.reward = sqlite3_column_double(stmt, 3);
+        const unsigned char* src = sqlite3_column_text(stmt, 4);
+        const unsigned char* ctx = sqlite3_column_text(stmt, 5);
+        e.source = src ? reinterpret_cast<const char*>(src) : "";
+        e.context_json = ctx ? reinterpret_cast<const char*>(ctx) : "";
+        out.push_back(std::move(e));
+    }
+    sqlite3_finalize(stmt);
+    return out;
+#else
+    (void)run_id; (void)start_ts_ms; (void)end_ts_ms; (void)limit; return {};
 #endif
 }
 
@@ -1792,6 +1853,45 @@ bool MemoryDB::insertMotivationState(std::int64_t ts_ms,
 #endif
 }
 
+std::vector<MemoryDB::MotivationStateEntry> MemoryDB::getMotivationStatesBetween(std::int64_t run_id,
+                                                                                std::int64_t start_ts_ms,
+                                                                                std::int64_t end_ts_ms,
+                                                                                int limit) {
+#ifdef NF_HAVE_SQLITE3
+    std::vector<MotivationStateEntry> out;
+    if (!db_ || run_id <= 0 || limit <= 0) return out;
+    if (start_ts_ms > end_ts_ms) std::swap(start_ts_ms, end_ts_ms);
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "SELECT id, ts_ms, motivation, coherence, COALESCE(notes, '')"
+        " FROM motivation_state WHERE run_id = ? AND ts_ms >= ? AND ts_ms <= ?"
+        " ORDER BY ts_ms ASC LIMIT ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getMotivationStatesBetween: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return out;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int64(stmt, 2, start_ts_ms);
+    sqlite3_bind_int64(stmt, 3, end_ts_ms);
+    sqlite3_bind_int(stmt, 4, limit);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        MotivationStateEntry e;
+        e.id = sqlite3_column_int64(stmt, 0);
+        e.ts_ms = sqlite3_column_int64(stmt, 1);
+        e.motivation = sqlite3_column_double(stmt, 2);
+        e.coherence = sqlite3_column_double(stmt, 3);
+        const char* notes = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+        e.notes = notes ? notes : "";
+        out.push_back(std::move(e));
+    }
+    sqlite3_finalize(stmt);
+    return out;
+#else
+    (void)run_id; (void)start_ts_ms; (void)end_ts_ms; (void)limit; return {};
+#endif
+}
+
 bool MemoryDB::insertMetacognition(std::int64_t ts_ms,
                                    double self_trust,
                                    double narrative_rmse,
@@ -2332,6 +2432,137 @@ bool MemoryDB::insertSelfRevision(std::int64_t run_id,
 #endif
 }
 
+bool MemoryDB::insertSelfRevisionOutcome(std::int64_t revision_id,
+                                        std::int64_t eval_ts_ms,
+                                        const std::string& outcome_class,
+                                        double trust_pre,
+                                        double trust_post,
+                                        double prediction_error_pre,
+                                        double prediction_error_post,
+                                        double coherence_pre,
+                                        double coherence_post,
+                                        double reward_slope_pre,
+                                        double reward_slope_post) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_ || revision_id <= 0) return false;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "INSERT OR REPLACE INTO self_revision_outcomes (revision_id, run_id, eval_ts_ms, outcome_class, trust_pre, trust_post, prediction_error_pre, prediction_error_post, coherence_pre, coherence_post, reward_slope_pre, reward_slope_post)"
+        " VALUES (?, (SELECT run_id FROM self_revision_log WHERE id = ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for insertSelfRevisionOutcome: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return false;
+    }
+    sqlite3_bind_int64(stmt, 1, revision_id);
+    sqlite3_bind_int64(stmt, 2, revision_id);
+    sqlite3_bind_int64(stmt, 3, eval_ts_ms);
+    sqlite3_bind_text(stmt, 4, outcome_class.c_str(), -1, SQLITE_TRANSIENT);
+    if (std::isnan(trust_pre)) sqlite3_bind_null(stmt, 5); else sqlite3_bind_double(stmt, 5, trust_pre);
+    if (std::isnan(trust_post)) sqlite3_bind_null(stmt, 6); else sqlite3_bind_double(stmt, 6, trust_post);
+    if (std::isnan(prediction_error_pre)) sqlite3_bind_null(stmt, 7); else sqlite3_bind_double(stmt, 7, prediction_error_pre);
+    if (std::isnan(prediction_error_post)) sqlite3_bind_null(stmt, 8); else sqlite3_bind_double(stmt, 8, prediction_error_post);
+    if (std::isnan(coherence_pre)) sqlite3_bind_null(stmt, 9); else sqlite3_bind_double(stmt, 9, coherence_pre);
+    if (std::isnan(coherence_post)) sqlite3_bind_null(stmt, 10); else sqlite3_bind_double(stmt, 10, coherence_post);
+    if (std::isnan(reward_slope_pre)) sqlite3_bind_null(stmt, 11); else sqlite3_bind_double(stmt, 11, reward_slope_pre);
+    if (std::isnan(reward_slope_post)) sqlite3_bind_null(stmt, 12); else sqlite3_bind_double(stmt, 12, reward_slope_post);
+    bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
+    if (!ok && debug_) std::cerr << "[MemoryDB] step failed for insertSelfRevisionOutcome: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+    sqlite3_finalize(stmt);
+    return ok;
+#else
+    (void)revision_id; (void)eval_ts_ms; (void)outcome_class; (void)trust_pre; (void)trust_post; (void)prediction_error_pre; (void)prediction_error_post; (void)coherence_pre; (void)coherence_post; (void)reward_slope_pre; (void)reward_slope_post;
+    return false;
+#endif
+}
+
+std::optional<MemoryDB::SelfRevisionOutcomeEntry> MemoryDB::getLatestSelfRevisionOutcome(std::int64_t run_id) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_) return std::nullopt;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "SELECT revision_id, eval_ts_ms, outcome_class, trust_pre, trust_post, prediction_error_pre, prediction_error_post, coherence_pre, coherence_post, reward_slope_pre, reward_slope_post"
+        " FROM self_revision_outcomes WHERE run_id = ? ORDER BY eval_ts_ms DESC LIMIT 1;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getLatestSelfRevisionOutcome: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return std::nullopt;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    std::optional<SelfRevisionOutcomeEntry> out = std::nullopt;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        SelfRevisionOutcomeEntry e;
+        e.revision_id = sqlite3_column_int64(stmt, 0);
+        e.eval_ts_ms = sqlite3_column_int64(stmt, 1);
+        const char* cls = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        e.outcome_class = cls ? cls : "";
+        e.trust_pre = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 3));
+        e.trust_post = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 4));
+        e.prediction_error_pre = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 5));
+        e.prediction_error_post = sqlite3_column_type(stmt, 6) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 6));
+        e.coherence_pre = sqlite3_column_type(stmt, 7) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 7));
+        e.coherence_post = sqlite3_column_type(stmt, 8) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 8));
+        e.reward_slope_pre = sqlite3_column_type(stmt, 9) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 9));
+        e.reward_slope_post = sqlite3_column_type(stmt, 10) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 10));
+        out = e;
+    }
+    sqlite3_finalize(stmt);
+    return out;
+#else
+    (void)run_id; return std::nullopt;
+#endif
+}
+
+std::optional<std::int64_t> MemoryDB::getLatestUnevaluatedSelfRevisionId(std::int64_t run_id, std::int64_t max_ts_ms) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_) return std::nullopt;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "SELECT s.id"
+        " FROM self_revision_log s"
+        " LEFT JOIN self_revision_outcomes o ON o.revision_id = s.id"
+        " WHERE s.run_id = ? AND o.revision_id IS NULL AND s.ts_ms <= ?"
+        " ORDER BY s.ts_ms DESC LIMIT 1;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getLatestUnevaluatedSelfRevisionId: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return std::nullopt;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int64(stmt, 2, max_ts_ms);
+    std::optional<std::int64_t> out = std::nullopt;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        out = sqlite3_column_int64(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return out;
+#else
+    (void)run_id; (void)max_ts_ms; return std::nullopt;
+#endif
+}
+
+std::optional<std::int64_t> MemoryDB::getSelfRevisionTimestamp(std::int64_t revision_id) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_ || revision_id <= 0) return std::nullopt;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql = "SELECT ts_ms FROM self_revision_log WHERE id = ? LIMIT 1;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getSelfRevisionTimestamp: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return std::nullopt;
+    }
+    sqlite3_bind_int64(stmt, 1, revision_id);
+    std::optional<std::int64_t> out = std::nullopt;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        out = sqlite3_column_int64(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return out;
+#else
+    (void)revision_id; return std::nullopt;
+#endif
+}
+
 // Phase 12: Self-Consistency logging
 bool MemoryDB::insertSelfConsistency(std::int64_t run_id,
                                      std::int64_t ts_ms,
@@ -2520,6 +2751,48 @@ std::vector<MemoryDB::MetacognitionEntry> MemoryDB::getRecentMetacognition(std::
     return entries;
 #else
     (void)run_id; (void)n; return {};
+#endif
+}
+
+std::vector<MemoryDB::MetacognitionEntry> MemoryDB::getMetacognitionBetween(std::int64_t run_id,
+                                                                            std::int64_t start_ts_ms,
+                                                                            std::int64_t end_ts_ms,
+                                                                            int limit) {
+#ifdef NF_HAVE_SQLITE3
+    std::vector<MetacognitionEntry> entries;
+    if (!db_ || run_id <= 0 || limit <= 0) return entries;
+    if (start_ts_ms > end_ts_ms) std::swap(start_ts_ms, end_ts_ms);
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "SELECT id, ts_ms, self_trust, narrative_rmse, goal_mae, ece, trust_delta, coherence_delta, goal_accuracy_delta"
+        " FROM metacognition WHERE run_id = ? AND ts_ms >= ? AND ts_ms <= ?"
+        " ORDER BY ts_ms ASC LIMIT ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getMetacognitionBetween: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return entries;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int64(stmt, 2, start_ts_ms);
+    sqlite3_bind_int64(stmt, 3, end_ts_ms);
+    sqlite3_bind_int(stmt, 4, limit);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        MetacognitionEntry entry;
+        entry.id = sqlite3_column_int64(stmt, 0);
+        entry.ts_ms = sqlite3_column_int64(stmt, 1);
+        entry.self_trust = sqlite3_column_double(stmt, 2);
+        entry.narrative_rmse = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 3));
+        entry.goal_mae = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 4));
+        entry.ece = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 5));
+        entry.trust_delta = sqlite3_column_type(stmt, 6) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 6));
+        entry.coherence_delta = sqlite3_column_type(stmt, 7) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 7));
+        entry.goal_accuracy_delta = sqlite3_column_type(stmt, 8) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 8));
+        entries.push_back(entry);
+    }
+    sqlite3_finalize(stmt);
+    return entries;
+#else
+    (void)run_id; (void)start_ts_ms; (void)end_ts_ms; (void)limit; return {};
 #endif
 }
 
