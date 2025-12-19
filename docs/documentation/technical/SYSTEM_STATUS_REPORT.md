@@ -17,6 +17,10 @@ The NeuroForge Neural Substrate Migration has been **successfully completed** wi
 - ✅ **Performance Targets Met**: All benchmarks exceeded
 - ✅ **Documentation Complete**: Full system documentation updated
 
+### Recent Governance Work (Stages 7 → 7.5 → C)
+- Recent work focused on governance layers rather than capability expansion.
+- Autonomy is now conditioned on evaluated self-modification history, with no increase in learning power.
+
 ---
 
 ## 🧠 CORE SYSTEM STATUS

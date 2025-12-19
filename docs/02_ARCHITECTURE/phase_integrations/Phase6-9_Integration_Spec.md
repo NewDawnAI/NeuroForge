@@ -5,6 +5,51 @@ Status: Adopted
 Owner: Core Systems
 Last Updated: 2025-11-06
 
+## Governance Layers (Stages 7 → 7.5 → C)
+
+NeuroForge separates capability from governance explicitly.
+
+Later cognitive stages introduce mechanisms that evaluate, constrain, and gate behavior without increasing autonomy or learning power.
+
+These layers exist to ensure that self-modification precedes autonomy expansion with evaluation and accountability.
+
+Self-Revision (Stage 7)
+        ↓
+Outcome Evaluation (Stage 7.5)
+        ↓
+Autonomy Gating (Stage C v1)
+        ↓
+Existing Action & Learning Systems
+
+### Stage 7 — Self-Revision
+
+Stage 7 enables bounded, rate-limited self-modification of internal parameters. Revisions are generated with safety checks and are fully logged.
+
+At this stage, the system can change itself, but does not yet evaluate the downstream effects of those changes.
+
+### Stage 7.5 — Post-Revision Outcome Evaluation (Frozen)
+
+Stage 7.5 introduces an evaluation-only layer that observes the effects of self-revisions over time.
+
+For each self-revision, the system compares pre- and post-revision metrics and classifies outcomes as `Beneficial`, `Neutral`, or `Harmful`. These evaluations are persisted for audit and later reasoning, and may be surfaced in structured self-explanations.
+
+Stage 7.5 does not modify behavior, learning, or autonomy. It exists purely to ground future decisions in observed outcomes.
+
+This stage is frozen at the `stage7_5-freeze` tag.
+
+### Stage C v1 — Governance-Only Autonomy Gating
+
+Stage C v1 consumes the outcome history produced by Stage 7.5 to conservatively gate autonomy.
+
+Key properties:
+- Reads past self-revision outcomes (read-only)
+- Derives a slow-moving reputation-like signal over a recent window
+- Applies a cap to the existing autonomy envelope
+- Never increases autonomy beyond predefined bounds
+- Does not introduce new goals, learning rules, or revision logic
+
+Stage C v1 is a governance mechanism, not a capability expansion.
+
 ## Addendum: Phase 10 and Phase 11 Overview
 
 This spec extends the existing Phase 6→7→8→9 integration with two new components:

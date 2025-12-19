@@ -7,6 +7,9 @@
 
 ---
 
+## Governance (Future Work)
+- Stage C v2: Learning from self-revision outcomes (not started)
+
 ## 🎯 PHASE 1: ADVANCED RESEARCH FEATURES
 *Timeline: 2-3 months*
 

@@ -12,6 +12,10 @@ This document provides **accurate implementation status** based on comprehensive
 
 **Key Finding**: NeuroForge demonstrates **excellent core implementation** (M0-M5) with **professional-grade engineering**. **M6 Memory Internalization and M7 Autonomous Operation are now CLI-accessible** and validated. **Stage 6.5 Autonomy Envelope (read-only) is fully implemented, wired into the sandbox loop, and logging to `autonomy_envelope_log` for analysis.** Dataset Triplets ingestion and Phase A runtime controls are integrated and documented. Unified Self System work (Phase 10–15) now includes Phase 11 personality revision proposals and a centralized, auditable Phase 15 approval path backed by MemoryDB.
 
+- Governance layers (no capability expansion):
+  - Stage 7.5: Implemented and frozen (evaluation-only) at `stage7_5-freeze`
+  - Stage C v1: Implemented and validated in runs (governance-only autonomy gating)
+
 ---
 
 ## ✅ **VALIDATED IMPLEMENTATION** (Confirmed Working)

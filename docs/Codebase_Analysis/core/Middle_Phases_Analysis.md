@@ -2,6 +2,22 @@
 
 This document analyzes the "Self-Regulation" phases of the NeuroForge cognitive pipeline. These phases provide the agent with the ability to explain its actions, revise its beliefs, and maintain operational consistency.
 
+## Governance Layers (Stages 7 → 7.5 → C)
+
+NeuroForge separates capability from governance explicitly.
+
+Later stages introduce mechanisms that evaluate and constrain behavior without increasing autonomy or learning power.
+
+Self-Revision (Stage 7)
+        ↓
+Outcome Evaluation (Stage 7.5)
+        ↓
+Autonomy Gating (Stage C v1)
+        ↓
+Existing Action & Learning Systems
+
+Stage 7.5 is frozen at the `stage7_5-freeze` tag.
+
 ## 1. Phase 10: Self-Explanation
 
 ### Location
@@ -24,11 +40,22 @@ Generates structured narratives to explain *why* the system's self-trust changed
 - `include/core/Phase11SelfRevision.h` (inferred)
 
 ### Functional Description
-The mechanism for updating beliefs or strategies when `Phase10` identifies a failure.
+The mechanism for bounded, rate-limited parameter revision based on recent metacognition signals and explanation context.
 
 ### Key Features
-- **Trigger**: High prediction error or low self-trust.
-- **Action**: Modifies internal models, potentially adjusting weights in the `Reasoning` phase or changing `Goal` priorities.
+- **Trigger**: Periodic cadence and/or trend thresholds (for example sustained error or trust drift).
+- **Action**: Proposes and applies safe deltas to internal parameters within configured bounds.
+- **Audit**: Persists applied revisions to `self_revision_log` and `parameter_history` for later inspection.
+
+### Stage 7.5: Post-Revision Outcome Evaluation (Evaluation-Only, Frozen)
+Stage 7.5 evaluates the observed outcomes of each self-revision over time and persists a classification (`Beneficial`, `Neutral`, `Harmful`) plus pre/post metrics into `self_revision_outcomes`.
+
+This layer is evaluation-only: it does not approve revisions, does not modify learning rules, and does not grant additional autonomy. It is frozen at the `stage7_5-freeze` tag.
+
+### Stage C v1: Governance-Only Autonomy Gating
+Stage C v1 reads the historical outcomes produced by Stage 7.5 (read-only), derives a conservative reputation-like signal over a recent window, and applies an autonomy cap multiplier to the existing autonomy envelope.
+
+Stage C v1 does not add new capabilities, goals, or learning behaviors.
 
 ---
 
