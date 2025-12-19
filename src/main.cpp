@@ -333,10 +333,11 @@ void print_usage() {
 << "  --phase9[=on|off]                     Enable/disable Phase 9 metacognition (default: on)\n"
              << "  --phase9-modulation[=on|off]           Enable Phase 9 metacog modulation (default: off)\n"
              << "  --phase10[=on|off]                    Enable/disable Phase 10 self-explanation (default: on)\n"
-              << "  --phase11[=on|off]                    Enable/disable Phase 11 self-revision (default: on)\n"
-              << "  --phase11-revision-interval=N         Revision interval in ms (default: 300000)\n"
-              << "  --phase11-min-gap-ms=N                Minimum gap between revisions in ms (default: 60000)\n"
-              << "  --phase11-outcome-window-ms=N         Outcome evaluation pre/post window in ms (default: 60000)\n"
+             << "  --phase11[=on|off]                    Enable/disable Phase 11 self-revision (default: on)\n"
+             << "  --phase11-revision-interval=N         Revision interval in ms (default: 300000)\n"
+             << "  --phase11-min-gap-ms=N                Minimum gap between revisions in ms (default: 60000)\n"
+             << "  --phase11-outcome-window-ms=N         Outcome evaluation pre/post window in ms (default: 60000)\n"
+              << "  --stagec[=on|off]                     Enable/disable Stage C v1 autonomy gating (default: on)\n"
               << "  --phase13[=on|off]                    Enable/disable Phase 13 autonomy envelope (default: on)\n"
               << "  --phase13-window=N                    Autonomy analysis window size (default: 10)\n"
               << "  --phase13-trust-tighten=F             Self-trust tighten threshold (default: 0.35)\n"
@@ -2469,6 +2470,8 @@ int phase11_min_gap_ms = 60000;
 int phase11_outcome_eval_window_ms = 60000;
 std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
 
+    bool stagec_enable = true;
+
     bool phase12_enable = true;
     int phase12_window = 8; // default analysis window
     std::unique_ptr<NeuroForge::Core::Phase12Consistency> phase12_consistency;
@@ -3442,6 +3445,11 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                 } catch (...) {
                     std::cerr << "Error: invalid integer for --phase11-outcome-window-ms" << std::endl; return 2;
                 }
+            } else if (arg == "--stagec") {
+                stagec_enable = true;
+            } else if (starts_with(arg, "--stagec=")) {
+                auto v = arg.substr(std::string("--stagec=").size());
+                if (!parse_on_off_flag(v, stagec_enable)) { std::cerr << "Error: --stagec must be on|off|true|false|1|0" << std::endl; return 2; }
             } else if (arg == "--phase12") {
                 phase12_enable = true;
             } else if (starts_with(arg, "--phase12=")) {
@@ -8404,6 +8412,36 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
          if (memdb && current_episode_id > 0) {
              (void)brain.endEpisode(current_episode_id);
              current_episode_id = 0;
+         }
+
+         if (phase11_revision && phase11_outcome_eval_window_ms > 0) {
+             // Drain self-revision outcomes so the invariant `outcomes == revisions - 1` holds at shutdown.
+             // Phase 11 outcome evaluation requires the revision to be at least `phase11_outcome_eval_window_ms`
+             // old (pre/post window), so we poll until either all pending outcomes are written or we time out.
+             const auto drain_start = std::chrono::steady_clock::now();
+             const auto max_drain_ms = std::max<std::int64_t>(2000, 3LL * phase11_outcome_eval_window_ms);
+             const auto drain_deadline = drain_start + std::chrono::milliseconds(max_drain_ms);
+
+             while (std::chrono::steady_clock::now() < drain_deadline) {
+                 bool progressed = false;
+                 for (int i = 0; i < 1000; ++i) {
+                     if (!phase11_revision->evaluatePendingOutcomes()) break;
+                     progressed = true;
+                 }
+
+                 bool has_pending = false;
+                 if (memdb && memdb_run_id > 0) {
+                     has_pending = memdb->getLatestUnevaluatedSelfRevisionId(
+                                       memdb_run_id,
+                                       std::numeric_limits<std::int64_t>::max())
+                                       .has_value();
+                 }
+                 if (!has_pending) break;
+
+                 if (!progressed) {
+                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
+                 }
+             }
          }
 
          // Optional: export synapse snapshot CSV
