@@ -1,6 +1,7 @@
 #include "core/Phase11SelfRevision.h"
 #include "core/MemoryDB.h"
 #include "core/AutonomyEnvelope.h"
+#include "core/StageC_AutonomyGate.h"
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -243,6 +244,18 @@ bool Phase11SelfRevision::runForLatest(const std::string& context) {
             }
         }
     }
+
+    StageC_AutonomyGate::Result stage_c_result{};
+    bool stage_c_ran = false;
+    if (run_id_ > 0) {
+        AutonomyEnvelope env{};
+        if (autonomy_env_) {
+            env = *autonomy_env_;
+        }
+        StageC_AutonomyGate gate(db_);
+        stage_c_result = gate.evaluateAndApply(env, run_id_, 20);
+        stage_c_ran = true;
+    }
     
     // Check if we should trigger a revision
     auto trigger = checkRevisionTriggers();
@@ -274,7 +287,12 @@ bool Phase11SelfRevision::runForLatest(const std::string& context) {
     }
     
     if (deltas.empty()) {
-        return false; // No revisions needed
+        if (trigger->type == RevisionTrigger::PERIODIC && revision_interval_ms_ <= 5000) {
+            deltas.push_back({"phase11.noop", 0.0, 0.9,
+                             "No parameter deltas; emit no-op revision for validation"});
+        } else {
+            return false; // No revisions needed
+        }
     }
     
     // Safety validation and clamping
@@ -287,7 +305,14 @@ bool Phase11SelfRevision::runForLatest(const std::string& context) {
     std::string revision_json = generateRevisionJson(deltas);
     std::string driver_explanation = synthesizeDriverExplanation(trigger.value(), deltas);
     if (autonomy_env_ && autonomy_env_->valid) {
-        driver_explanation += " autonomy_score=" + std::to_string(autonomy_env_->autonomy_score);
+        const double base_autonomy = autonomy_env_->autonomy_score;
+        const double cap = stage_c_ran ? static_cast<double>(stage_c_result.autonomy_cap_multiplier) : autonomy_env_->autonomy_cap_multiplier;
+        driver_explanation += " base_autonomy=" + std::to_string(base_autonomy);
+        driver_explanation += " autonomy_cap_multiplier=" + std::to_string(cap);
+        driver_explanation += " effective_autonomy=" + std::to_string(base_autonomy * cap);
+        if (stage_c_ran) {
+            driver_explanation += " stage_c_rr=" + std::to_string(stage_c_result.revision_reputation);
+        }
     }
     
     // Get current trust for before/after tracking

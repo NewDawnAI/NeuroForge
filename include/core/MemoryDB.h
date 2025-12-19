@@ -369,6 +369,7 @@ public:
                                   double reward_slope_pre,
                                   double reward_slope_post);
     std::optional<SelfRevisionOutcomeEntry> getLatestSelfRevisionOutcome(std::int64_t run_id);
+    std::vector<SelfRevisionOutcomeEntry> getRecentSelfRevisionOutcomes(std::int64_t run_id, std::size_t n = 20);
     std::optional<std::int64_t> getLatestUnevaluatedSelfRevisionId(std::int64_t run_id, std::int64_t max_ts_ms);
     std::optional<std::int64_t> getSelfRevisionTimestamp(std::int64_t revision_id);
 

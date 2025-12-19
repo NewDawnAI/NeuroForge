@@ -68,7 +68,7 @@ ReasonScore Phase6Reasoner::scoreOptions(const std::vector<ReasonOption>& option
     if (autonomy_env_ && autonomy_env_->valid) {
         if (debug_) {
             std::cerr << "[Phase6] autonomy tier=" << static_cast<int>(autonomy_env_->tier)
-                      << " score=" << autonomy_env_->autonomy_score << std::endl;
+                      << " score=" << autonomy_env_->getEffectiveAutonomy() << std::endl;
         }
     }
 
@@ -155,7 +155,7 @@ ReasonScore Phase6Reasoner::scoreOptions(const std::vector<ReasonOption>& option
     double autonomy_score = 0.0;
     AutonomyTier autonomy_tier = AutonomyTier::NONE;
     if (autonomy_env_ && autonomy_env_->valid) {
-        autonomy_score = autonomy_env_->autonomy_score;
+        autonomy_score = autonomy_env_->getEffectiveAutonomy();
         autonomy_tier = autonomy_env_->tier;
     }
 

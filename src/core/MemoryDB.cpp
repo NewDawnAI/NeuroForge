@@ -2513,6 +2513,44 @@ std::optional<MemoryDB::SelfRevisionOutcomeEntry> MemoryDB::getLatestSelfRevisio
 #endif
 }
 
+std::vector<MemoryDB::SelfRevisionOutcomeEntry> MemoryDB::getRecentSelfRevisionOutcomes(std::int64_t run_id, std::size_t n) {
+#ifdef NF_HAVE_SQLITE3
+    std::vector<SelfRevisionOutcomeEntry> entries;
+    if (!db_ || run_id <= 0 || n == 0) return entries;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "SELECT revision_id, eval_ts_ms, outcome_class, trust_pre, trust_post, prediction_error_pre, prediction_error_post, coherence_pre, coherence_post, reward_slope_pre, reward_slope_post"
+        " FROM self_revision_outcomes WHERE run_id = ? ORDER BY eval_ts_ms DESC LIMIT ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getRecentSelfRevisionOutcomes: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return entries;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int(stmt, 2, static_cast<int>(n));
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        SelfRevisionOutcomeEntry e;
+        e.revision_id = sqlite3_column_int64(stmt, 0);
+        e.eval_ts_ms = sqlite3_column_int64(stmt, 1);
+        const char* cls = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+        e.outcome_class = cls ? cls : "";
+        e.trust_pre = sqlite3_column_type(stmt, 3) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 3));
+        e.trust_post = sqlite3_column_type(stmt, 4) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 4));
+        e.prediction_error_pre = sqlite3_column_type(stmt, 5) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 5));
+        e.prediction_error_post = sqlite3_column_type(stmt, 6) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 6));
+        e.coherence_pre = sqlite3_column_type(stmt, 7) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 7));
+        e.coherence_post = sqlite3_column_type(stmt, 8) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 8));
+        e.reward_slope_pre = sqlite3_column_type(stmt, 9) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 9));
+        e.reward_slope_post = sqlite3_column_type(stmt, 10) == SQLITE_NULL ? std::nullopt : std::make_optional(sqlite3_column_double(stmt, 10));
+        entries.push_back(std::move(e));
+    }
+    sqlite3_finalize(stmt);
+    return entries;
+#else
+    (void)run_id; (void)n; return {};
+#endif
+}
+
 std::optional<std::int64_t> MemoryDB::getLatestUnevaluatedSelfRevisionId(std::int64_t run_id, std::int64_t max_ts_ms) {
 #ifdef NF_HAVE_SQLITE3
     if (!db_) return std::nullopt;

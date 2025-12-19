@@ -1,15 +1,35 @@
 #include "core/AutonomyEnvelope.h"
 #include "core/MemoryDB.h"
 #include <algorithm>
+#include <atomic>
+#include <cmath>
 #include <sstream>
 
 namespace NeuroForge {
 namespace Core {
 
+static std::atomic<double> g_autonomy_cap_multiplier{1.0};
+
 static double clamp01(double x) {
     if (x < 0.0) return 0.0;
     if (x > 1.0) return 1.0;
     return x;
+}
+
+bool AutonomyEnvelope::applyAutonomyCap(double multiplier) {
+    const double clamped = std::clamp(multiplier, 0.5, 1.0);
+    const double prev = g_autonomy_cap_multiplier.load(std::memory_order_relaxed);
+    if (std::fabs(prev - clamped) < 1e-12) {
+        autonomy_cap_multiplier = clamped;
+        return false;
+    }
+    g_autonomy_cap_multiplier.store(clamped, std::memory_order_relaxed);
+    autonomy_cap_multiplier = clamped;
+    return true;
+}
+
+double AutonomyEnvelope::getEffectiveAutonomy() const {
+    return autonomy_score * autonomy_cap_multiplier;
 }
 
 static const char* TierToString(AutonomyTier tier) {
@@ -77,6 +97,7 @@ AutonomyEnvelope ComputeAutonomyEnvelope(const AutonomyInputs& inputs,
     env.self_component = self_component;
     env.ethics_component = ethics_component;
     env.social_component = social_component;
+    env.autonomy_cap_multiplier = g_autonomy_cap_multiplier.load(std::memory_order_relaxed);
     env.allow_action = allow_action;
     env.allow_goal_commit = allow_goal_commit;
     env.allow_self_revision = allow_self_revision;
@@ -115,6 +136,8 @@ bool LogAutonomyEnvelope(MemoryDB* db,
     js << "{";
     js << "\"version\":1";
     js << ",\"autonomy_score\":" << envelope.autonomy_score;
+    js << ",\"autonomy_cap_multiplier\":" << envelope.autonomy_cap_multiplier;
+    js << ",\"effective_autonomy\":" << envelope.getEffectiveAutonomy();
     js << ",\"tier\":\"" << TierToString(envelope.tier) << "\"";
     js << ",\"self_component\":" << envelope.self_component;
     js << ",\"ethics_component\":" << envelope.ethics_component;

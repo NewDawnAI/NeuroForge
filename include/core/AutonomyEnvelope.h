@@ -30,6 +30,7 @@ struct AutonomyEnvelope {
     double self_component = 0.0;
     double ethics_component = 0.0;
     double social_component = 0.0;
+    double autonomy_cap_multiplier = 1.0;
     bool allow_action = false;
     bool allow_goal_commit = false;
     bool allow_self_revision = false;
@@ -37,6 +38,10 @@ struct AutonomyEnvelope {
     std::uint64_t step = 0;
     std::string rationale;
     bool valid = false;
+
+    double getBaseAutonomy() const { return autonomy_score; }
+    bool applyAutonomyCap(double multiplier);
+    double getEffectiveAutonomy() const;
 };
 
 AutonomyEnvelope ComputeAutonomyEnvelope(const AutonomyInputs& inputs,

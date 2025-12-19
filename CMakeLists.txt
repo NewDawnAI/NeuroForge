@@ -92,6 +92,7 @@ set(CORE_SOURCES
     src/core/Region.cpp
     src/core/SelfModel.cpp
     src/core/AutonomyEnvelope.cpp
+    src/core/StageC_AutonomyGate.cpp
     src/core/HypergraphBrain.cpp
     src/core/LearningSystem.cpp
     src/core/Logger.cpp
