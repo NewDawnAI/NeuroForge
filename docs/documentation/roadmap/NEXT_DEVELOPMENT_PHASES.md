@@ -10,6 +10,268 @@
 ## Governance (Future Work)
 - Stage C v2: Learning from self-revision outcomes (not started)
 
+## Stage C v1 — Freeze Criteria (Governance-Only)
+
+### Definition of “Frozen” (Scope Lock)
+
+A **Stage C v1 freeze** means:
+
+> *The autonomy-gating mechanism is considered correct, stable, and non-escalatory, and will not be changed except for bug fixes.*
+
+No feature growth.  
+No threshold tuning.  
+No scope creep.
+
+---
+
+### 1. Behavioral Stability Criteria (Mandatory)
+
+#### C1.1 — Autonomy Cap Stability
+
+✔ Over a **long run (≥10k steps)**:
+
+- Autonomy cap changes **≤1 time**
+- No oscillation (`0.75 → 1.0 → 0.75` is disallowed)
+
+**Pass condition:**  
+Cap monotonically tightens or remains constant.
+
+#### C1.2 — No Autonomy Expansion Beyond Base
+
+✔ Across all runs:
+
+- `autonomy_cap_multiplier ∈ {0.5, 0.75, 1.0}`
+- **Never exceeds 1.0**
+
+**Pass condition:**  
+Absolute upper bound is never violated.
+
+#### C1.3 — Neutral Outcome Dominance Is Non-Exploitative
+
+✔ If outcomes are mostly `Neutral`:
+
+- Autonomy remains constrained or unchanged
+- No gradual “creep” toward relaxation
+
+**Pass condition:**  
+Neutral ≠ reward.
+
+---
+
+### 2. Governance Integrity Criteria (Mandatory)
+
+#### C2.1 — Read-Only Outcome Consumption
+
+✔ Stage C v1:
+
+- Reads from `self_revision_outcomes`
+- Does **not** write to:
+  - learning parameters
+  - trust
+  - reward
+  - revision logic
+
+**Pass condition:**  
+Search for any mutation outside `AutonomyEnvelope` returns **zero hits**.
+
+#### C2.2 — No Learning-from-Outcomes
+
+✔ There is **no gradient**, heuristic adaptation, or memory update that:
+
+- Adjusts thresholds
+- Adjusts weights
+- Adapts policy based on outcomes
+
+**Pass condition:**  
+All mappings are static, explicit, and constant in code.
+
+#### C2.3 — No Revision Triggering
+
+✔ Stage C:
+
+- Cannot initiate self-revision
+- Cannot influence revision frequency
+- Cannot influence revision magnitude
+
+**Pass condition:**  
+Call graph confirms one-way flow:
+
+```
+Stage 7.5 → Stage C → AutonomyEnvelope
+```
+
+---
+
+### 3. Explainability & Audit Criteria (Mandatory)
+
+#### C3.1 — Explanation Completeness
+
+✔ Every autonomy cap application produces a Phase 10 entry containing:
+
+- `revision_reputation`
+- `autonomy_cap_multiplier`
+- window size
+- human-readable reason
+
+**Pass condition:**  
+100% of autonomy changes are explainable.
+
+#### C3.2 — Silent Failure Is Impossible
+
+✔ If Stage C cannot evaluate (e.g. no data):
+
+- Reputation defaults to `0.5`
+- Autonomy cap remains unchanged
+- Explanation explicitly states “no outcome history”
+
+**Pass condition:**  
+No silent “best guess” behavior.
+
+---
+
+### 4. Temporal Discipline Criteria (Mandatory)
+
+#### C4.1 — Update Rate Limit
+
+✔ Stage C runs:
+
+- At most **once per revision cycle**
+- Never continuously
+- Never inside learning loops
+
+**Pass condition:**  
+No autonomy updates appear without a corresponding revision boundary.
+
+#### C4.2 — Causality Order Preserved
+
+✔ Ordering is always:
+
+```
+Revision → Evaluation → Governance → Next behavior
+```
+
+**Pass condition:**  
+No governance decision precedes evaluation.
+
+---
+
+### 5. Code Hygiene Criteria (Mandatory)
+
+#### C5.1 — Isolation
+
+✔ Stage C logic lives in:
+
+- Its own class/module
+- Does not sprawl into Phase 7/9/11 logic
+
+**Pass condition:**  
+`StageC_*` symbols appear only in governance-related files.
+
+#### C5.2 — Test Coverage
+
+✔ At least:
+
+- One test validating neutral-only history
+- One test validating harmful history tightening
+- One test validating no-history default behavior
+
+**Pass condition:**  
+Tests fail if autonomy escalates improperly.
+
+---
+
+### 6. Documentation Alignment Criteria (Mandatory)
+
+#### C6.1 — Docs Explicitly Say “Governance-Only”
+
+✔ Documentation states:
+
+- Stage C v1 **does not learn**
+- Stage C v1 **does not increase autonomy**
+- Stage C v1 **is evaluative and constraining**
+
+**Pass condition:**  
+No document implies capability expansion.
+
+#### C6.2 — Stage Boundaries Are Explicit
+
+✔ Docs clearly distinguish:
+
+- Stage 7
+- Stage 7.5 (frozen)
+- Stage C v1
+- Stage C v2 (future, not implemented)
+
+**Pass condition:**  
+No ambiguity about what exists today.
+
+---
+
+### 7. Release Discipline Criteria (Mandatory)
+
+#### C7.1 — Pre-Release Only
+
+✔ Stage C v1 freeze must be:
+
+- Tagged
+- Marked **pre-release**
+- Not labeled “stable” or “production”
+
+**Pass condition:**  
+Public signaling matches internal caution.
+
+---
+
+### 8. Negative Criteria (Must Be True)
+
+All of the following must be **false**:
+
+- ❌ “Autonomy improves performance”
+- ❌ “The system learns which changes are good”
+- ❌ “Stage C increases intelligence”
+- ❌ “Governance optimizes behavior”
+
+If any of those statements are even *arguably* true → **do not freeze**.
+
+---
+
+### 9. Minimal Freeze Checklist (TL;DR)
+
+You may freeze Stage C v1 if **all** are true:
+
+- [ ] One-way governance flow
+- [ ] No oscillation
+- [ ] No learning-from-outcomes
+- [ ] No autonomy expansion
+- [ ] Full explainability
+- [ ] Docs match behavior
+- [ ] Tests enforce invariants
+- [ ] Pre-release only
+
+---
+
+### 10. Recommended Tag Message
+
+When you do freeze:
+
+```
+stage_c_v1-freeze
+Freeze: governance-only autonomy gating validated (no learning, no escalation)
+```
+
+---
+
+### Final Perspective
+
+A Stage C freeze is **not** a celebration of power.  
+It is a declaration of **restraint**.
+
+If someone reads your code and says:
+
+> “This system became more careful, not more capable”
+
+Then you froze at the right time.
+
 ## 🎯 PHASE 1: ADVANCED RESEARCH FEATURES
 *Timeline: 2-3 months*
 
