@@ -55,13 +55,15 @@ bool Phase10SelfExplanation::runForMetacogId(std::int64_t metacog_id, const std:
 
     std::string narrative = synthesizeNarrative(trust_delta, mean_abs_error, confidence_bias, context);
 
-    {
+    if (stage_c_enabled_) {
         const auto outcomes = db_->getRecentSelfRevisionOutcomes(run_id_, 20);
         const float rr = compute_revision_reputation(outcomes);
         const float cap = outcomes.empty() ? 1.0f : map_reputation_to_cap(rr);
-        const char* note = (cap < 1.0f)
-            ? "Autonomy constrained due to recent neutral/harmful self-revision outcomes"
-            : "Autonomy unconstrained by recent self-revision outcomes";
+        const char* note = outcomes.empty()
+            ? "No outcome history; autonomy cap unchanged"
+            : ((cap < 1.0f)
+                ? "Autonomy constrained due to recent neutral/harmful self-revision outcomes"
+                : "Autonomy unconstrained by recent self-revision outcomes");
 
         std::ostringstream oss;
         oss.setf(std::ios::fixed);

@@ -1,5 +1,7 @@
 #include "core/MemoryDB.h"
 #include "core/LearningSystem.h"
+#include "core/AutonomyEnvelope.h"
+#include "core/StageC_AutonomyGate.h"
 #include <iostream>
 #include <string>
 #include <filesystem>
@@ -413,12 +415,17 @@ void testSelfRevisionOutcomeAPIs() {
             check(db.insertRewardLog(base_ms + i * 10, 1 + i, 0.1 * i, "pre", "{}", run_id, rid), "Inserted pre reward " + std::to_string(i));
         }
 
-        const std::int64_t revision_ts = base_ms + 60;
-        check(db.insertSelfRevision(run_id, revision_ts, "{\"phase6.lr\":-0.01}", "driver", 0.5, 0.5, revision_id), "Inserted self revision");
-        check(revision_id > 0, "Revision id valid");
+        const std::int64_t baseline_ts = base_ms + 60;
+        std::int64_t baseline_revision_id = 0;
+        check(db.insertSelfRevision(run_id, baseline_ts, "{\"phase6.lr\":-0.01}", "driver", 0.5, 0.5, baseline_revision_id), "Inserted self revision");
+        check(baseline_revision_id > 0, "Revision id valid");
 
-        auto ts = db.getSelfRevisionTimestamp(revision_id);
-        check(ts.has_value() && *ts == revision_ts, "Revision timestamp query returned expected value");
+        auto ts = db.getSelfRevisionTimestamp(baseline_revision_id);
+        check(ts.has_value() && *ts == baseline_ts, "Revision timestamp query returned expected value");
+
+        const std::int64_t revision_ts = base_ms + 120;
+        check(db.insertSelfRevision(run_id, revision_ts, "{\"phase6.lr\":-0.02}", "driver2", 0.5, 0.5, revision_id), "Inserted self revision");
+        check(revision_id > 0, "Second revision id valid");
 
         auto pending = db.getLatestUnevaluatedSelfRevisionId(run_id, revision_ts);
         check(pending.has_value() && *pending == revision_id, "Latest unevaluated revision id returned expected value");
@@ -469,6 +476,152 @@ void testSelfRevisionOutcomeAPIs() {
 
     fs::remove(test_db);
     std::cout << "Self-revision outcome APIs test completed successfully!" << std::endl;
+}
+
+void testStageCGatingNoHistory() {
+    std::cout << "Testing Stage C v1 autonomy gating (no history)..." << std::endl;
+
+    const std::string test_db = "test_stagec_no_history.sqlite";
+    if (fs::exists(test_db)) {
+        fs::remove(test_db);
+    }
+
+    {
+        NeuroForge::Core::MemoryDB db(test_db);
+        check(db.open(), "DB open for Stage C no-history test");
+        std::int64_t run_id = 0;
+        check(db.beginRun("{\"test\":\"stagec_no_history\"}", run_id), "Run started for Stage C no-history test");
+
+        NeuroForge::Core::AutonomyEnvelope reset{};
+        (void)reset.applyAutonomyCap(1.0);
+
+        NeuroForge::Core::AutonomyEnvelope env{};
+        env.autonomy_score = 0.8;
+        env.valid = true;
+
+        NeuroForge::Core::StageC_AutonomyGate gate(&db);
+        auto r = gate.evaluateAndApply(env, run_id, 20);
+
+        check(r.window_n == 0, "Stage C reports zero history window");
+        check(r.autonomy_cap_multiplier == 1.0f, "Stage C leaves autonomy cap at 1.0 with no history");
+        check(!r.applied, "Stage C does not apply cap with no history");
+
+        db.close();
+    }
+
+    fs::remove(test_db);
+    std::cout << "Stage C no-history test completed successfully!" << std::endl;
+}
+
+static void seed_revision_outcomes(NeuroForge::Core::MemoryDB& db,
+                                   std::int64_t run_id,
+                                   const std::vector<std::string>& outcome_classes) {
+    const auto now = std::chrono::steady_clock::now();
+    const auto base_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+    const double NaN = std::numeric_limits<double>::quiet_NaN();
+
+    for (size_t i = 0; i < outcome_classes.size(); ++i) {
+        std::int64_t rid = 0;
+        check(db.insertSelfRevision(run_id,
+                                    base_ms + static_cast<std::int64_t>(i * 10),
+                                    "{\"noop\":true}",
+                                    "seed",
+                                    0.5,
+                                    0.5,
+                                    rid),
+              "Inserted seeded self revision " + std::to_string(i));
+        check(rid > 0, "Seeded revision id valid " + std::to_string(i));
+        check(db.insertSelfRevisionOutcome(rid,
+                                           base_ms + static_cast<std::int64_t>(i * 10 + 1),
+                                           outcome_classes[i],
+                                           NaN,
+                                           NaN,
+                                           NaN,
+                                           NaN,
+                                           NaN,
+                                           NaN,
+                                           NaN,
+                                           NaN),
+              "Inserted seeded outcome " + outcome_classes[i]);
+    }
+}
+
+void testStageCGatingNeutralOnly() {
+    std::cout << "Testing Stage C v1 autonomy gating (neutral-only)..." << std::endl;
+
+    const std::string test_db = "test_stagec_neutral_only.sqlite";
+    if (fs::exists(test_db)) {
+        fs::remove(test_db);
+    }
+
+    {
+        NeuroForge::Core::MemoryDB db(test_db);
+        check(db.open(), "DB open for Stage C neutral-only test");
+        std::int64_t run_id = 0;
+        check(db.beginRun("{\"test\":\"stagec_neutral_only\"}", run_id), "Run started for Stage C neutral-only test");
+
+        seed_revision_outcomes(db, run_id, {"Neutral", "Neutral", "Neutral", "Neutral"});
+
+        NeuroForge::Core::AutonomyEnvelope reset{};
+        (void)reset.applyAutonomyCap(1.0);
+
+        NeuroForge::Core::AutonomyEnvelope env{};
+        env.autonomy_score = 0.8;
+        env.valid = true;
+
+        NeuroForge::Core::StageC_AutonomyGate gate(&db);
+        auto r = gate.evaluateAndApply(env, run_id, 20);
+
+        check(r.window_n == 4, "Stage C window includes all seeded outcomes");
+        check(r.revision_reputation == 0.5f, "Stage C reputation equals 0.5 for neutral-only");
+        check(r.autonomy_cap_multiplier == 0.75f, "Stage C cap is 0.75 for neutral-only");
+        check(r.applied, "Stage C applies autonomy cap when history exists");
+        check(env.autonomy_cap_multiplier == 0.75, "Autonomy envelope cap multiplier updated");
+
+        db.close();
+    }
+
+    fs::remove(test_db);
+    std::cout << "Stage C neutral-only test completed successfully!" << std::endl;
+}
+
+void testStageCGatingHarmfulOnly() {
+    std::cout << "Testing Stage C v1 autonomy gating (harmful-only)..." << std::endl;
+
+    const std::string test_db = "test_stagec_harmful_only.sqlite";
+    if (fs::exists(test_db)) {
+        fs::remove(test_db);
+    }
+
+    {
+        NeuroForge::Core::MemoryDB db(test_db);
+        check(db.open(), "DB open for Stage C harmful-only test");
+        std::int64_t run_id = 0;
+        check(db.beginRun("{\"test\":\"stagec_harmful_only\"}", run_id), "Run started for Stage C harmful-only test");
+
+        seed_revision_outcomes(db, run_id, {"Harmful", "Harmful", "Harmful"});
+
+        NeuroForge::Core::AutonomyEnvelope reset{};
+        (void)reset.applyAutonomyCap(1.0);
+
+        NeuroForge::Core::AutonomyEnvelope env{};
+        env.autonomy_score = 0.8;
+        env.valid = true;
+
+        NeuroForge::Core::StageC_AutonomyGate gate(&db);
+        auto r = gate.evaluateAndApply(env, run_id, 20);
+
+        check(r.window_n == 3, "Stage C window includes all seeded outcomes");
+        check(r.revision_reputation == 0.0f, "Stage C reputation equals 0.0 for harmful-only");
+        check(r.autonomy_cap_multiplier == 0.5f, "Stage C cap is 0.5 for harmful-only");
+        check(r.applied, "Stage C applies autonomy cap when history exists");
+        check(env.autonomy_cap_multiplier == 0.5, "Autonomy envelope cap multiplier updated");
+
+        db.close();
+    }
+
+    fs::remove(test_db);
+    std::cout << "Stage C harmful-only test completed successfully!" << std::endl;
 }
 
 // CLI integration tests for Phase-4 flags
@@ -616,6 +769,9 @@ int main() {
         testRewardLogIntegration();
         testMetacognitionIntegrationViaMaze();
         testSelfRevisionOutcomeAPIs();
+        testStageCGatingNoHistory();
+        testStageCGatingNeutralOnly();
+        testStageCGatingHarmfulOnly();
         testCLIPhase4ShortFlagsValid();
         testCLIPhase4InvalidValues();
         testCLIPhase4UnsafeBypass();

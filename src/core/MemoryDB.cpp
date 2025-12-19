@@ -2560,6 +2560,7 @@ std::optional<std::int64_t> MemoryDB::getLatestUnevaluatedSelfRevisionId(std::in
         " FROM self_revision_log s"
         " LEFT JOIN self_revision_outcomes o ON o.revision_id = s.id"
         " WHERE s.run_id = ? AND o.revision_id IS NULL AND s.ts_ms <= ?"
+        " AND s.id != (SELECT id FROM self_revision_log WHERE run_id = ? ORDER BY ts_ms ASC, id ASC LIMIT 1)"
         " ORDER BY s.ts_ms DESC LIMIT 1;";
     sqlite3_stmt* stmt = nullptr;
     if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
@@ -2568,6 +2569,7 @@ std::optional<std::int64_t> MemoryDB::getLatestUnevaluatedSelfRevisionId(std::in
     }
     sqlite3_bind_int64(stmt, 1, run_id);
     sqlite3_bind_int64(stmt, 2, max_ts_ms);
+    sqlite3_bind_int64(stmt, 3, run_id);
     std::optional<std::int64_t> out = std::nullopt;
     if (sqlite3_step(stmt) == SQLITE_ROW) {
         out = sqlite3_column_int64(stmt, 0);

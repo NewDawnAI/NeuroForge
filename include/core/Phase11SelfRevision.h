@@ -26,12 +26,15 @@ public:
     // Force revision analysis regardless of triggers
     bool runForLatest(const std::string& context = "");
 
+    bool evaluatePendingOutcomes();
+
     // Configuration
     void setRevisionInterval(std::int64_t interval_ms) { revision_interval_ms_ = interval_ms; }
     void setTrustDriftThreshold(double threshold) { trust_drift_threshold_ = threshold; }
     void setAnalysisWindow(int window_size) { analysis_window_ = window_size; }
     void setMinRevisionGap(std::int64_t gap_ms) { min_revision_gap_ms_ = gap_ms; }
     void setOutcomeEvalWindowMs(std::int64_t window_ms) { outcome_eval_window_ms_ = window_ms; }
+    void setStageCEnabled(bool enabled) { stage_c_enabled_ = enabled; }
 
     // Get current revision parameters for external inspection
     std::map<std::string, double> getCurrentRevisionParams() const { return current_revision_params_; }
@@ -86,6 +89,7 @@ private:
     int analysis_window_ = 10; // Look at last 10 entries
     std::int64_t min_revision_gap_ms_ = 60000; // Min 1 minute between revisions
     std::int64_t outcome_eval_window_ms_ = 60000; // 1 minute pre/post window
+    bool stage_c_enabled_ = true;
     
     // Current state
     std::map<std::string, double> current_revision_params_;

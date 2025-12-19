@@ -323,24 +323,19 @@ PhaseAMimicry::MimicryAttempt PhaseAMimicry::attemptMimicry(const std::vector<fl
     attempt.total_reward = (mimicry_weight * attempt.similarity_score) +
                           (novelty_weight * attempt.novelty_score) - neg_penalty;
     
-    // Determine success - FIXED: Lower thresholds for placeholder encoders
-    // Since teacher encoders are placeholders generating random normalized embeddings,
-    // the similarity threshold needs to be much lower to allow any success
     float adjusted_similarity_threshold = config_.similarity_threshold;
     float adjusted_novelty_threshold = config_.novelty_threshold;
     
-    // For placeholder encoders, use much lower thresholds
     if (teacher->teacher_type == TeacherType::CLIP_Vision || 
         teacher->teacher_type == TeacherType::CLIP_Text ||
         teacher->teacher_type == TeacherType::Whisper_Audio ||
         teacher->teacher_type == TeacherType::BERT_Text ||
         teacher->teacher_type == TeacherType::Custom) {
-        adjusted_similarity_threshold = 0.05f;
-        adjusted_novelty_threshold = 0.0f;
+        adjusted_similarity_threshold = std::max(adjusted_similarity_threshold, 0.3f);
+        adjusted_novelty_threshold = std::max(adjusted_novelty_threshold, 0.0f);
     }
     
-    attempt.success = (attempt.similarity_score >= adjusted_similarity_threshold) &&
-                     (attempt.novelty_score >= adjusted_novelty_threshold);
+    attempt.success = (attempt.similarity_score >= adjusted_similarity_threshold);
     
     // Store attempt
     mimicry_history_.push_back(attempt);

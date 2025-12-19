@@ -16,6 +16,8 @@ public:
     Phase10SelfExplanation(MemoryDB* db, std::int64_t run_id)
         : db_(db), run_id_(run_id) {}
 
+    void setStageCEnabled(bool enabled) { stage_c_enabled_ = enabled; }
+
     // Generate and persist explanation for the latest metacognition row
     bool runForLatest(const std::string& context = "");
 
@@ -33,6 +35,7 @@ private:
 
     MemoryDB* db_ = nullptr;
     std::int64_t run_id_ = 0;
+    bool stage_c_enabled_ = true;
 };
 
 } // namespace Core

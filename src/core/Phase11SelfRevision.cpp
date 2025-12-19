@@ -173,81 +173,90 @@ bool Phase11SelfRevision::maybeRevise(const std::string& context) {
     return runForLatest(context);
 }
 
+bool Phase11SelfRevision::evaluatePendingOutcomes() {
+    if (!db_) return false;
+    if (outcome_eval_window_ms_ <= 0) return false;
+
+    const std::int64_t now_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    const std::int64_t max_revision_ts = now_ts_ms - outcome_eval_window_ms_;
+
+    auto pending_revision_id = db_->getLatestUnevaluatedSelfRevisionId(run_id_, max_revision_ts);
+    if (!pending_revision_id.has_value() || *pending_revision_id <= 0) return false;
+    if (*pending_revision_id <= 1) return false;
+
+    auto revision_ts = db_->getSelfRevisionTimestamp(*pending_revision_id);
+    if (!revision_ts.has_value()) return false;
+
+    const std::int64_t pre_start = *revision_ts - outcome_eval_window_ms_;
+    const std::int64_t pre_end = *revision_ts;
+    const std::int64_t post_start = *revision_ts;
+    const std::int64_t post_end = *revision_ts + outcome_eval_window_ms_;
+
+    const auto pre_metacog = db_->getMetacognitionBetween(run_id_, pre_start, pre_end, 200);
+    const auto post_metacog = db_->getMetacognitionBetween(run_id_, post_start, post_end, 200);
+
+    std::vector<double> trust_pre_vals;
+    trust_pre_vals.reserve(pre_metacog.size());
+    for (const auto& e : pre_metacog) trust_pre_vals.push_back(e.self_trust);
+    std::vector<double> trust_post_vals;
+    trust_post_vals.reserve(post_metacog.size());
+    for (const auto& e : post_metacog) trust_post_vals.push_back(e.self_trust);
+
+    const double trust_pre = mean_or_nan(trust_pre_vals);
+    const double trust_post = mean_or_nan(trust_post_vals);
+    const double pred_pre = compute_prediction_error_mean(pre_metacog);
+    const double pred_post = compute_prediction_error_mean(post_metacog);
+
+    const auto pre_mot = db_->getMotivationStatesBetween(run_id_, pre_start, pre_end, 200);
+    const auto post_mot = db_->getMotivationStatesBetween(run_id_, post_start, post_end, 200);
+    std::vector<double> coh_pre_vals;
+    coh_pre_vals.reserve(pre_mot.size());
+    for (const auto& e : pre_mot) coh_pre_vals.push_back(e.coherence);
+    std::vector<double> coh_post_vals;
+    coh_post_vals.reserve(post_mot.size());
+    for (const auto& e : post_mot) coh_post_vals.push_back(e.coherence);
+    const double coherence_pre = mean_or_nan(coh_pre_vals);
+    const double coherence_post = mean_or_nan(coh_post_vals);
+
+    const auto pre_rewards = db_->getRewardsBetween(run_id_, pre_start, pre_end, 1000);
+    const auto post_rewards = db_->getRewardsBetween(run_id_, post_start, post_end, 1000);
+    const double reward_slope_pre = compute_reward_slope_per_s(pre_rewards);
+    const double reward_slope_post = compute_reward_slope_per_s(post_rewards);
+
+    const std::string outcome_class = classify_outcome(trust_pre,
+                                                       trust_post,
+                                                       pred_pre,
+                                                       pred_post,
+                                                       coherence_pre,
+                                                       coherence_post,
+                                                       reward_slope_pre,
+                                                       reward_slope_post);
+
+    return db_->insertSelfRevisionOutcome(*pending_revision_id,
+                                         now_ts_ms,
+                                         outcome_class,
+                                         trust_pre,
+                                         trust_post,
+                                         pred_pre,
+                                         pred_post,
+                                         coherence_pre,
+                                         coherence_post,
+                                         reward_slope_pre,
+                                         reward_slope_post);
+}
+
 bool Phase11SelfRevision::runForLatest(const std::string& context) {
     if (!db_) return false;
+
+    (void)evaluatePendingOutcomes();
 
     std::int64_t now_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
 
-    if (outcome_eval_window_ms_ > 0) {
-        const std::int64_t max_revision_ts = now_ts_ms - outcome_eval_window_ms_;
-        auto pending_revision_id = db_->getLatestUnevaluatedSelfRevisionId(run_id_, max_revision_ts);
-        if (pending_revision_id.has_value() && *pending_revision_id > 0) {
-            auto revision_ts = db_->getSelfRevisionTimestamp(*pending_revision_id);
-            if (revision_ts.has_value()) {
-                const std::int64_t pre_start = *revision_ts - outcome_eval_window_ms_;
-                const std::int64_t pre_end = *revision_ts;
-                const std::int64_t post_start = *revision_ts;
-                const std::int64_t post_end = *revision_ts + outcome_eval_window_ms_;
-
-                const auto pre_metacog = db_->getMetacognitionBetween(run_id_, pre_start, pre_end, 200);
-                const auto post_metacog = db_->getMetacognitionBetween(run_id_, post_start, post_end, 200);
-
-                std::vector<double> trust_pre_vals;
-                trust_pre_vals.reserve(pre_metacog.size());
-                for (const auto& e : pre_metacog) trust_pre_vals.push_back(e.self_trust);
-                std::vector<double> trust_post_vals;
-                trust_post_vals.reserve(post_metacog.size());
-                for (const auto& e : post_metacog) trust_post_vals.push_back(e.self_trust);
-
-                const double trust_pre = mean_or_nan(trust_pre_vals);
-                const double trust_post = mean_or_nan(trust_post_vals);
-                const double pred_pre = compute_prediction_error_mean(pre_metacog);
-                const double pred_post = compute_prediction_error_mean(post_metacog);
-
-                const auto pre_mot = db_->getMotivationStatesBetween(run_id_, pre_start, pre_end, 200);
-                const auto post_mot = db_->getMotivationStatesBetween(run_id_, post_start, post_end, 200);
-                std::vector<double> coh_pre_vals;
-                coh_pre_vals.reserve(pre_mot.size());
-                for (const auto& e : pre_mot) coh_pre_vals.push_back(e.coherence);
-                std::vector<double> coh_post_vals;
-                coh_post_vals.reserve(post_mot.size());
-                for (const auto& e : post_mot) coh_post_vals.push_back(e.coherence);
-                const double coherence_pre = mean_or_nan(coh_pre_vals);
-                const double coherence_post = mean_or_nan(coh_post_vals);
-
-                const auto pre_rewards = db_->getRewardsBetween(run_id_, pre_start, pre_end, 1000);
-                const auto post_rewards = db_->getRewardsBetween(run_id_, post_start, post_end, 1000);
-                const double reward_slope_pre = compute_reward_slope_per_s(pre_rewards);
-                const double reward_slope_post = compute_reward_slope_per_s(post_rewards);
-
-                const std::string outcome_class = classify_outcome(trust_pre,
-                                                                   trust_post,
-                                                                   pred_pre,
-                                                                   pred_post,
-                                                                   coherence_pre,
-                                                                   coherence_post,
-                                                                   reward_slope_pre,
-                                                                   reward_slope_post);
-
-                (void)db_->insertSelfRevisionOutcome(*pending_revision_id,
-                                                     now_ts_ms,
-                                                     outcome_class,
-                                                     trust_pre,
-                                                     trust_post,
-                                                     pred_pre,
-                                                     pred_post,
-                                                     coherence_pre,
-                                                     coherence_post,
-                                                     reward_slope_pre,
-                                                     reward_slope_post);
-            }
-        }
-    }
-
     StageC_AutonomyGate::Result stage_c_result{};
     bool stage_c_ran = false;
-    if (run_id_ > 0) {
+    if (stage_c_enabled_ && run_id_ > 0) {
         AutonomyEnvelope env{};
         if (autonomy_env_) {
             env = *autonomy_env_;
