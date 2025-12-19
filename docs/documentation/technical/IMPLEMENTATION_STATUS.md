@@ -14,7 +14,7 @@ This document provides **accurate implementation status** based on comprehensive
 
 - Governance layers (no capability expansion):
   - Stage 7.5: Implemented and frozen (evaluation-only) at `stage7_5-freeze`
-  - Stage C v1: Implemented and validated in runs (governance-only autonomy gating)
+  - Stage C v1: Implemented and frozen. Autonomy is gated by evaluated self-revision history. No learning-from-outcomes.
 
 ---
 

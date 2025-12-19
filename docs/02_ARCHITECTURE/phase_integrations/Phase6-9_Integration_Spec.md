@@ -39,6 +39,8 @@ This stage is frozen at the `stage7_5-freeze` tag.
 
 ### Stage C v1 — Governance-Only Autonomy Gating
 
+Stage C v1 is frozen at `stage_c_v1-freeze` and acts purely as a governance layer.
+
 Stage C v1 consumes the outcome history produced by Stage 7.5 to conservatively gate autonomy.
 
 Key properties:

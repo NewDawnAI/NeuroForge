@@ -12,6 +12,8 @@
 
 ## Stage C v1 — Freeze Criteria (Governance-Only)
 
+**Status:** Frozen (`stage_c_v1-freeze`). Governance-only autonomy gating validated under long-run execution.
+
 ### Definition of “Frozen” (Scope Lock)
 
 A **Stage C v1 freeze** means:

@@ -20,6 +20,7 @@ The NeuroForge Neural Substrate Migration has been **successfully completed** wi
 ### Recent Governance Work (Stages 7 → 7.5 → C)
 - Recent work focused on governance layers rather than capability expansion.
 - Autonomy is now conditioned on evaluated self-modification history, with no increase in learning power.
+Stage C v1 governance is complete and frozen. Autonomy constraints are applied conservatively based on post-revision outcome evaluation, with no escalation or adaptive learning.
 
 ---
 
