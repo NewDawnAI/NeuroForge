@@ -16,6 +16,8 @@ This document provides **accurate implementation status** based on comprehensive
   - Stage 7.5: Implemented and frozen (evaluation-only) at `stage7_5-freeze`
   - Stage C v1: Implemented and frozen. Autonomy is gated by evaluated self-revision history. No learning-from-outcomes.
 
+Stage C v1 freeze includes a shutdown-time outcome drain to ensure all eligible self-revisions are evaluated before governance decisions are finalized (see commit history around `stage_c_v1-freeze`).
+
 ---
 
 ## ✅ **VALIDATED IMPLEMENTATION** (Confirmed Working)

@@ -22,6 +22,31 @@ The NeuroForge Neural Substrate Migration has been **successfully completed** wi
 - Autonomy is now conditioned on evaluated self-modification history, with no increase in learning power.
 Stage C v1 governance is complete and frozen. Autonomy constraints are applied conservatively based on post-revision outcome evaluation, with no escalation or adaptive learning.
 
+### Stage C v1 Validation (Reproducibility)
+Stage C v1 was validated using a long-run maze scenario with frequent self-revision and a bounded outcome evaluation window.
+
+Example command used for validation:
+```text
+neuroforge.exe
+--maze-demo=on
+--maze-view=off
+--steps=5000
+--step-ms=1
+--memory-db=stage_c_freeze_check.sqlite
+--memdb-interval=100
+--phase11=on
+--phase11-revision-interval=600
+--phase11-min-gap-ms=0
+--phase11-outcome-window-ms=500
+--stagec=on
+```
+
+Validation checks included:
+- Outcome count equals revision count minus one
+- No pending unevaluated revisions at shutdown
+- Autonomy cap stability (no oscillation)
+- Presence of Stage C v1 data in all self-explanations
+
 ---
 
 ## 🧠 CORE SYSTEM STATUS
