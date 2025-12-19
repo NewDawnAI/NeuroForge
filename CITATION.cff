@@ -21,8 +21,7 @@ authors:
     given-names: "Anol Deb"
     affiliation: "Independent Researcher"
     email: "anoldeb15632665@gmail.com"
-    orcid: ""   # optional, leave empty if you do not have one
-
+    orcid: "https://orcid.org/0009-0007-3228-3761"
 version: "0.7"
 
 date-released: 2025-01-01
