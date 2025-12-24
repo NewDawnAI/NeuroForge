@@ -17,8 +17,11 @@ This tool validates that learning telemetry exists for a run and checks that no 
 - A MemoryDB SQLite file (e.g. `rwci.sqlite`) containing `runs` and `autonomy_envelope_log`.
 - Optionally, a JSONL learning trace file for basic parseability checks.
 
+## CLI
+- `--strict` / `--no-strict` (default: `--strict`)
+- `--format=json|md` (default: `json`)
+
 ## Canonical example
 ```powershell
-python tools/governance_eval/governance_eval.py --db Artifacts/RWCI_Canonical_Run/rwci.sqlite --trace Artifacts/RWCI_Canonical_Run/learning_trace.jsonl --json
+python tools/governance_eval/governance_eval.py --db Artifacts/RWCI_Canonical_Run/rwci.sqlite --trace Artifacts/RWCI_Canonical_Run/learning_trace.jsonl --format json
 ```
-
