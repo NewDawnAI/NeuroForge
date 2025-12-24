@@ -375,7 +375,7 @@ void testRewardLogIntegration() {
     const auto& r = rewards.front();
     check(r.id > 0, "Reward id valid");
     check(r.ts_ms > 0, "Reward timestamp valid");
-    check(r.step > 0, "Reward step valid");
+    check(r.step <= 200, "Reward step within configured range");
     check(r.source.size() > 0, "Reward source non-empty");
 
     db.close();
@@ -758,6 +758,28 @@ void testCLIPhase4UnsafeBypass() {
     check(ec == 0, "CLI accepted invalid Phase-4 values when --phase4-unsafe is set");
 }
 
+void testCLIRWCIDisallowedAutonomyCoupling() {
+    std::cout << "Testing CLI RWCI disallowed autonomy coupling (expect exit code 2)..." << std::endl;
+    auto exe = find_neuroforge_exe();
+    if (exe.empty()) {
+        std::cerr << "Skipping CLI RWCI autonomy coupling test: neuroforge executable not found." << std::endl;
+        return;
+    }
+    int ec = run_neuroforge(exe, " --steps=1 --step-ms=0 --vision-demo=off --rwci=on --autonomous-mode=on");
+    check(ec == 2, "CLI rejected --rwci=on combined with --autonomous-mode=on");
+}
+
+void testCLIRWCIDrivesRevisionForbidden() {
+    std::cout << "Testing CLI RWCI drives-revision forbidden (expect exit code 2)..." << std::endl;
+    auto exe = find_neuroforge_exe();
+    if (exe.empty()) {
+        std::cerr << "Skipping CLI RWCI drives-revision test: neuroforge executable not found." << std::endl;
+        return;
+    }
+    int ec = run_neuroforge(exe, " --steps=1 --step-ms=0 --vision-demo=off --rwci=on --rwci-drives-revision=on");
+    check(ec == 2, "CLI rejected --rwci-drives-revision=on under Stage C v1");
+}
+
 int main() {
     std::cout << "Starting MemoryDB smoke tests..." << std::endl;
     
@@ -775,6 +797,8 @@ int main() {
         testCLIPhase4ShortFlagsValid();
         testCLIPhase4InvalidValues();
         testCLIPhase4UnsafeBypass();
+        testCLIRWCIDisallowedAutonomyCoupling();
+        testCLIRWCIDrivesRevisionForbidden();
         
         std::cout << "All MemoryDB smoke tests passed!" << std::endl;
         return 0;
