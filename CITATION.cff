@@ -2,19 +2,26 @@ cff-version: 1.2.0
 
 message: >
   If you use NeuroForge in academic work, research prototypes,
-  or derivative systems, please cite it as below.
+  evaluation studies, or governance analysis, please cite it as below.
 
-title: "NeuroForge: A Neuro-Cognitive Architecture with Symbolic–Substrate Coupling and Persistent Memory"
+title: >
+  NeuroForge: A Governed Neuro-Cognitive Architecture with Auditable
+  Internal Change and Bounded Self-Revision
 
 abstract: >
-  NeuroForge is a neuro-cognitive research and engineering architecture
-  that integrates a spiking-inspired neural substrate with symbolic
-  language grounding, persistent episodic/semantic/procedural memory,
-  and self-regulatory cognitive phases including reflection, goal
-  coherence, self-trust, and ethics regulation. Unlike purely generative
-  models, NeuroForge emphasizes causal coupling between symbols and
-  substrate plasticity, learning across sessions without retraining,
-  and interpretable internal metrics governing autonomy and behavior.
+  NeuroForge is a neuro-cognitive research architecture designed to make
+  internal state, internal change, and internal justifications observable
+  and auditable over time. It integrates a spiking-inspired neural
+  substrate with symbolic language grounding, persistent episodic,
+  semantic, and procedural memory, and metacognitive governance layers
+  including reflection, goal coherence, self-trust, self-explanation,
+  and bounded self-revision.
+  
+  The system prioritizes architecture-first governance, traceability,
+  and safety-bounded learning over benchmark performance. NeuroForge is
+  intentionally frozen at Stage C v1, permitting learning without
+  authority escalation, and serves as a reference implementation for
+  governed learning systems rather than an autonomous agent or product.
 
 authors:
   - family-names: "Sharma"
@@ -22,23 +29,25 @@ authors:
     affiliation: "Independent Researcher"
     email: "anoldeb15632665@gmail.com"
     orcid: "https://orcid.org/0009-0007-3228-3761"
-version: "0.7"
 
-date-released: 2025-01-01
+version: "C-v1"
 
-license: "Apache-2.0"
+date-released: 2025-02-01
+
+license: "NeuroForge Research License (Non-Commercial)"
 
 repository-code: "https://github.com/NewDawnAI/NeuroForge"
 
 keywords:
-  - neuro-cognitive architecture
-  - artificial general intelligence
+  - governed learning systems
+  - cognitive architecture
+  - AI governance
+  - self-revision evaluation
+  - interpretability
   - symbolic–subsymbolic integration
-  - spiking neural systems
   - persistent memory
-  - self-regulation
-  - language grounding
-  - autonomous learning
+  - safety-bounded adaptation
+  - auditability
 
 preferred-citation:
   type: software
@@ -46,6 +55,6 @@ preferred-citation:
     - family-names: "Sharma"
       given-names: "Anol Deb"
   title: "NeuroForge"
-  version: "0.7"
+  version: "C-v1"
   year: 2025
   url: "https://github.com/NewDawnAI/NeuroForge"
