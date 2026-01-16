@@ -648,6 +648,28 @@ if(NEUROFORGE_ENABLE_TESTS)
     endif()
     add_test(NAME test_neuron_scaling COMMAND $<TARGET_FILE:test_neuron_scaling>)
 
+    # Region processing benchmark
+    add_executable(benchmark_region_process tests/benchmark_region_process.cpp)
+    target_link_libraries(benchmark_region_process PRIVATE
+        neuroforge_core
+        neuroforge_regions
+        neuroforge_connectivity
+        neuroforge_encoders
+    )
+    target_include_directories(benchmark_region_process PRIVATE include)
+    # No test registration as this is a benchmark
+
+    # Region optimization verification test
+    add_executable(test_region_optimization tests/test_region_optimization.cpp)
+    target_link_libraries(test_region_optimization PRIVATE
+        neuroforge_core
+        neuroforge_regions
+        neuroforge_connectivity
+        neuroforge_encoders
+    )
+    target_include_directories(test_region_optimization PRIVATE include)
+    add_test(NAME test_region_optimization COMMAND $<TARGET_FILE:test_region_optimization>)
+
     # Demo executables
     add_executable(phase5_language_demo src/phase5_language_demo.cpp)
     target_link_libraries(phase5_language_demo PRIVATE

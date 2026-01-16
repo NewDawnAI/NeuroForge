@@ -35,6 +35,12 @@ namespace NeuroForge {
             // Reserve space for efficient memory usage
             neurons_.reserve(1000);  // Start with reasonable capacity
             internal_synapses_.reserve(5000);
+            updateSnapshot();
+        }
+
+        void Region::updateSnapshot() {
+            // Must be called under region_mutex_
+            neurons_snapshot_ = std::make_shared<const NeuronContainer>(neurons_);
         }
 
         bool Region::addNeuron(NeuronPtr neuron) {
@@ -56,6 +62,7 @@ namespace NeuroForge {
 
             neurons_.push_back(neuron);
             mito_states_.emplace_back(); // Add default mitochondrial state
+            neurons_snapshot_.reset();
             return true;
         }
 
@@ -97,6 +104,7 @@ namespace NeuroForge {
             }
 
             neurons_.erase(it);
+            neurons_snapshot_.reset();
             return true;
         }
 
@@ -128,6 +136,7 @@ namespace NeuroForge {
                 neurons_.insert(neurons_.end(), created_neurons.begin(), created_neurons.end());
                 // Initialize mitochondrial states for new neurons
                 mito_states_.insert(mito_states_.end(), count, MitochondrialState{});
+                neurons_snapshot_.reset();
             }
 
             return created_neurons;
@@ -481,16 +490,21 @@ namespace NeuroForge {
             auto start_time = std::chrono::steady_clock::now();
 
             // Process neurons according to activation pattern
-            // Create a copy of neurons to avoid holding region_mutex_ during processing
+            // Use snapshot to avoid holding region_mutex_ during processing and avoid expensive vector copy
             // This prevents deadlock with learning operations that access neuron synapses
-            std::vector<NeuronPtr> neurons_copy;
+            std::shared_ptr<const NeuronContainer> current_snapshot;
             {
                 std::lock_guard<std::mutex> lock(region_mutex_);
-                neurons_copy = neurons_; // Copy the vector
+                if (!neurons_snapshot_) {
+                    updateSnapshot();
+                }
+                current_snapshot = neurons_snapshot_;
             }
             
             // Process neurons without holding region_mutex_ to avoid deadlock
-            processNeuronsFromCopy(neurons_copy, delta_time);
+            if (current_snapshot) {
+                processNeuronsFromCopy(*current_snapshot, delta_time);
+            }
 
             // R-STDP-lite: decay and accumulate eligibility traces for synapses connected to this region
             {
