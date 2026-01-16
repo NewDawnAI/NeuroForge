@@ -139,6 +139,39 @@ extern "C" void NF_ForceLink_PhaseARegion();
 
 namespace {
 
+// Helper: sanitizes shell arguments to prevent command injection
+std::string shell_escape(const std::string& arg) {
+#ifdef _WIN32
+    // Windows cmd.exe escaping: wrap in double quotes, escape double quotes inside
+    std::string out = "\"";
+    for (char c : arg) {
+        if (c == '"') {
+            out += "\\\"";
+        } else if (c == '\\') {
+            // Note: In some contexts (like before a quote), backslashes might need doubling,
+            // but for simple file paths this simple escaping is usually sufficient when wrapped in quotes.
+            out += "\\";
+        } else {
+            out += c;
+        }
+    }
+    out += "\"";
+    return out;
+#else
+    // POSIX sh escaping: wrap in single quotes, escape single quotes inside
+    std::string out = "'";
+    for (char c : arg) {
+        if (c == '\'') {
+            out += "'\\''";
+        } else {
+            out += c;
+        }
+    }
+    out += "'";
+    return out;
+#endif
+}
+
 void print_usage() {
     std::cout << "NeuroForge demo\n"
               << "Usage: neuroforge.exe [options]\n\n"
@@ -5194,14 +5227,33 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                     }
                 }
                 if (!viewer_exe_path.empty() && file_exists(viewer_exe_path)) {
-                    // Compose command line
+                    // Validate layout to prevent injection
+                    if (viewer_layout != "shells" && viewer_layout != "layers") {
+                        viewer_layout = "shells";
+                    }
+
+                    // Compose command line with sanitized arguments
                     std::string cmd;
                 #ifdef _WIN32
-                    cmd = "cmd /c start \"NF Viewer\" \"" + viewer_exe_path + "\" --snapshot-file=\"" + snapshot_path_for_viewer + "\" --weight-threshold=" + std::to_string(viewer_threshold) + " --layout=" + viewer_layout + " --refresh-ms=" + std::to_string(viewer_refresh_ms);
-                    if (!spikes_live_path.empty()) { cmd += " --spikes-file=\"" + spikes_path_for_viewer + "\""; }
+                    // On Windows, start takes a title first. We use shell_escape for paths.
+                    // Note: start handles arguments slightly differently, but escaping should hold for the launched process args.
+                    cmd = "cmd /c start \"NF Viewer\" " + shell_escape(viewer_exe_path) +
+                          " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
+                          " --weight-threshold=" + std::to_string(viewer_threshold) +
+                          " --layout=" + shell_escape(viewer_layout) +
+                          " --refresh-ms=" + std::to_string(viewer_refresh_ms);
+                    if (!spikes_live_path.empty()) {
+                        cmd += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
+                    }
                 #else
-                    cmd = "\"" + viewer_exe_path + "\" --snapshot-file=\"" + snapshot_path_for_viewer + "\" --weight-threshold=" + std::to_string(viewer_threshold) + " --layout=" + viewer_layout + " --refresh-ms=" + std::to_string(viewer_refresh_ms);
-                    if (!spikes_live_path.empty()) { cmd += " --spikes-file=\"" + spikes_path_for_viewer + "\""; }
+                    cmd = shell_escape(viewer_exe_path) +
+                          " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
+                          " --weight-threshold=" + std::to_string(viewer_threshold) +
+                          " --layout=" + shell_escape(viewer_layout) +
+                          " --refresh-ms=" + std::to_string(viewer_refresh_ms);
+                    if (!spikes_live_path.empty()) {
+                        cmd += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
+                    }
                     cmd += " &";
                 #endif
                     std::thread([cmd]() { std::system(cmd.c_str()); }).detach();
