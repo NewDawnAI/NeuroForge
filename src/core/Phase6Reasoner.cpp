@@ -113,7 +113,13 @@ ReasonScore Phase6Reasoner::scoreOptions(const std::vector<ReasonOption>& option
         double prior = 0.0;
         auto it = posteriors_.find(opt.key);
         if (it != posteriors_.end()) prior = it->second.mean;
-        double s = prior - alpha_eff_trust * opt.complexity;
+
+        // Hierarchical reasoning: boost score if subgoals have high expected value
+        double h_bonus = scoreHierarchicalBonus(opt.key);
+        // Blend hierarchical bonus with prior (e.g. 50% mix or additive)
+        // Here we treat it as an additive shaping term
+        double s = prior + 0.5 * h_bonus - alpha_eff_trust * opt.complexity;
+
         pre_scores[i] = s;
         rs.scores[i] = s;
         if (s > best) {
@@ -384,6 +390,35 @@ void Phase6Reasoner::maybeEmitIntentFormation(const std::string& key,
         }
         last_contradiction_[key] = false;
     }
+}
+
+double Phase6Reasoner::scoreHierarchicalBonus(const std::string& key) {
+    if (!phase8_goals_) return 0.0;
+    auto goal_id = phase8_goals_->findGoalByDescription(key);
+    if (!goal_id.has_value()) return 0.0;
+
+    auto subgoals = phase8_goals_->getSubGoals(goal_id.value());
+    if (subgoals.empty()) return 0.0;
+
+    double total_score = 0.0;
+    double total_weight = 0.0;
+
+    for (const auto& pair : subgoals) {
+        std::int64_t sub_id = pair.first;
+        double weight = pair.second;
+
+        auto desc = phase8_goals_->getGoalDescription(sub_id);
+        if (desc.has_value()) {
+            double sub_mean = getPosteriorMean(desc.value());
+            total_score += sub_mean * weight;
+            total_weight += weight;
+        }
+    }
+
+    if (total_weight > 0.0) {
+        return total_score / total_weight;
+    }
+    return 0.0;
 }
 
 } // namespace Core

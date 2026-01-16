@@ -5,6 +5,7 @@
 #include <optional>
 #include <cstdint>
 #include <unordered_map>
+#include <vector>
 
 namespace NeuroForge {
 namespace Core {
@@ -39,11 +40,14 @@ public:
     bool linkGoals(std::int64_t parent_goal_id, std::int64_t child_goal_id, double weight = 1.0);
     bool updateGoalStability(std::int64_t goal_id, double stability);
 
+    std::vector<std::pair<std::int64_t, double>> getSubGoals(std::int64_t goal_id);
+
     // Background decay for unused goals (uniform slow decay)
     void decayStability(double dt_seconds);
     
     // Goal retrieval
     std::optional<std::int64_t> findGoalByDescription(const std::string& description);
+    std::optional<std::string> getGoalDescription(std::int64_t goal_id);
 
     // Set Phase 9 metacognition (optional)
     void setPhase9Metacognition(Phase9Metacognition* meta) { metacog_ = meta; }

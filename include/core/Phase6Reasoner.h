@@ -131,6 +131,9 @@ private:
                                   bool contradiction,
                                   double observed_reward,
                                   double posterior_mean);
+
+    // Hierarchical Reasoning: score subgoals recursively
+    double scoreHierarchicalBonus(const std::string& key);
 };
 
 } // namespace Core

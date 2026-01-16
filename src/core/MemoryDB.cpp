@@ -1772,6 +1772,31 @@ std::optional<std::int64_t> MemoryDB::findGoalByDescription(const std::string& d
 #endif
 }
 
+std::optional<std::string> MemoryDB::getGoalDescription(std::int64_t goal_id) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_) return std::nullopt;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql = "SELECT description FROM goal_nodes WHERE goal_id = ? LIMIT 1;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getGoalDescription: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return std::nullopt;
+    }
+    sqlite3_bind_int64(stmt, 1, goal_id);
+    std::optional<std::string> result = std::nullopt;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char* text = sqlite3_column_text(stmt, 0);
+        if (text) {
+            result = reinterpret_cast<const char*>(text);
+        }
+    }
+    sqlite3_finalize(stmt);
+    return result;
+#else
+    (void)goal_id; return std::nullopt;
+#endif
+}
+
 bool MemoryDB::updateGoalStability(std::int64_t goal_id, double stability) {
 #ifdef NF_HAVE_SQLITE3
     if (!db_) return false;
@@ -1817,6 +1842,30 @@ bool MemoryDB::insertGoalEdge(std::int64_t goal_id,
 #else
     (void)goal_id; (void)subgoal_id; (void)weight; return false;
 #endif
+}
+
+std::vector<std::pair<std::int64_t, double>> MemoryDB::getChildGoals(std::int64_t parent_goal_id) {
+    std::vector<std::pair<std::int64_t, double>> children;
+#ifdef NF_HAVE_SQLITE3
+    if (!db_ || parent_goal_id <= 0) return children;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql = "SELECT subgoal_id, weight FROM goal_edges WHERE goal_id = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getChildGoals: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return children;
+    }
+    sqlite3_bind_int64(stmt, 1, parent_goal_id);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        std::int64_t id = sqlite3_column_int64(stmt, 0);
+        double w = sqlite3_column_double(stmt, 1);
+        children.emplace_back(id, w);
+    }
+    sqlite3_finalize(stmt);
+#else
+    (void)parent_goal_id;
+#endif
+    return children;
 }
 
 bool MemoryDB::insertMotivationState(std::int64_t ts_ms,

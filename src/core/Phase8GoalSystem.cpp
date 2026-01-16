@@ -114,6 +114,11 @@ bool Phase8GoalSystem::updateGoalStability(std::int64_t goal_id, double stabilit
     return ok;
 }
 
+std::vector<std::pair<std::int64_t, double>> Phase8GoalSystem::getSubGoals(std::int64_t goal_id) {
+    if (!memory_db_) return {};
+    return memory_db_->getChildGoals(goal_id);
+}
+
 void Phase8GoalSystem::decayStability(double dt_seconds) {
     // Uniform decay across cached goals; clamp to [0,1]
     if (goal_stability_cache_.empty()) return;
@@ -131,6 +136,10 @@ void Phase8GoalSystem::decayStability(double dt_seconds) {
 
 std::optional<std::int64_t> Phase8GoalSystem::findGoalByDescription(const std::string& description) {
     return memory_db_->findGoalByDescription(description, run_id_);
+}
+
+std::optional<std::string> Phase8GoalSystem::getGoalDescription(std::int64_t goal_id) {
+    return memory_db_->getGoalDescription(goal_id);
 }
 
 bool Phase8GoalSystem::extractGoalsFromReflection(const std::string& reflection_text, std::int64_t reflection_id) {

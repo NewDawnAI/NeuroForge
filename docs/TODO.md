@@ -1033,10 +1033,10 @@ void runAutonomousLoop() {
 ---
 
 ## Phase 6: Hybrid Reasoning Engine (AGI Threshold)
-Status: Reactivation started — MemoryDB schema and minimal APIs restored (options, option_stats, inferred_facts, verifications). Reasoner skeleton pending and gated behind `--phase6=on`.
+Status: **Active Development** — Hierarchical Reasoning (HRL) and Causal Graph integration in progress.
 **Goal:** Enable reasoning beyond reactive neural learning.  
 
-- **Hierarchical reasoning**: Option-Critic HRL for subgoals.  
+- **Hierarchical reasoning**: Option-Critic HRL for subgoals (Implementation active).
 - **Causal reasoning**: build graphs of actions → effects.  
 - **Probabilistic reasoning**: Bayesian CriticAgent.  
 - **Logical reasoning**: Horn-clause inference for KB consistency.  

@@ -288,9 +288,13 @@ public:
     std::optional<std::int64_t> findGoalByDescription(const std::string& description,
                                                        std::int64_t run_id);
 
+    std::optional<std::string> getGoalDescription(std::int64_t goal_id);
+
     bool updateGoalStability(std::int64_t goal_id, double stability);
 
     bool insertGoalEdge(std::int64_t parent_id, std::int64_t child_id, double weight);
+
+    std::vector<std::pair<std::int64_t, double>> getChildGoals(std::int64_t parent_goal_id);
 
     bool insertMotivationState(std::int64_t ts_ms,
                                double motivation,
