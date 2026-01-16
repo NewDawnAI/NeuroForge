@@ -3145,7 +3145,11 @@ namespace NeuroForge {
                 case SubstrateMode::Mirror:
                     // Enable mirroring of external inputs
                     setSubstrateTaskGenerationEnabled(false);
-                    // TODO: Implement mirroring logic
+                    setAutonomousModeEnabled(false);
+                    if (learning_system_) {
+                        learning_system_->setMimicryEnabled(true);
+                        learning_system_->setSubstrateTrainingMode(false);
+                    }
                     break;
                     
                 case SubstrateMode::Train:

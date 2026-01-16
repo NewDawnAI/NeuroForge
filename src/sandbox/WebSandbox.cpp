@@ -35,17 +35,16 @@ static constexpr DWORD NF_SANDBOX_NAV_RETRY_INTERVAL_MS = 50;
 static constexpr DWORD NF_SANDBOX_NAV_GIVEUP_MS = 10000;
 #endif
 
+#ifdef _WIN32
 static LRESULT CALLBACK NfSandboxWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
     __try {
         switch(msg){
             case WM_TIMER: {
-#ifdef _WIN32
                 if (wParam == NF_SANDBOX_NAV_TIMER_ID) {
                     auto* inst = reinterpret_cast<NeuroForge::Sandbox::WebSandbox*>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
                     if (inst) inst->flushPendingNavigation();
                     return 0;
                 }
-#endif
                 break;
             }
             case WM_NF_SANDBOX_FLUSH_NAV: {
@@ -101,6 +100,7 @@ static LRESULT CALLBACK NfSandboxWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPA
         return DefWindowProc(hWnd, msg, wParam, lParam);
     }
 }
+#endif
 
 WebSandbox::WebSandbox() {}
 WebSandbox::~WebSandbox() {

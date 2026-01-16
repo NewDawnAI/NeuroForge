@@ -176,6 +176,10 @@ public:
         std::lock_guard<std::mutex> lg(mimicry_mutex_);
         mimicry_enabled_ = enabled;
     }
+    inline bool isMimicryEnabled() const {
+        std::lock_guard<std::mutex> lg(mimicry_mutex_);
+        return mimicry_enabled_;
+    }
     inline void setMimicryWeight(float mu) {
         std::lock_guard<std::mutex> lg(mimicry_mutex_);
         mimicry_weight_mu_ = mu;
