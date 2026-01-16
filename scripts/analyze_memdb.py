@@ -1,6 +1,7 @@
 import sqlite3
 import sys
 import os
+from collections import defaultdict
 
 def main():
     db = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.getcwd(), "phasec_mem.db")
@@ -10,6 +11,8 @@ def main():
 
     con = sqlite3.connect(db)
     cur = con.cursor()
+
+    # Fetch list of tables
     tables = [t[0] for t in cur.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
     print("TABLES:", tables)
 
@@ -30,9 +33,34 @@ def main():
         "step",
     }
 
+    # Optimization: Fetch all columns for all tables in one go using pragma_table_info join
+    table_columns = defaultdict(list)
+    try:
+        # Use a join to get columns for all tables at once
+        # Ordering by cid ensures correct column order
+        rows = cur.execute("""
+            SELECT m.name, p.name
+            FROM sqlite_master m
+            JOIN pragma_table_info(m.name) p
+            WHERE m.type='table'
+            ORDER BY m.name, p.cid
+        """).fetchall()
+
+        for t_name, c_name in rows:
+            table_columns[t_name].append(c_name)
+
+    except Exception as e:
+        # Fallback for older SQLite versions that might not support the join or if it fails
+        print(f"Bulk schema fetch failed, falling back: {e}")
+        table_columns = {}
+
     found = []
     for t in tables:
-        cols = [c[1] for c in cur.execute(f"PRAGMA table_info({t})").fetchall()]
+        cols = table_columns.get(t)
+        if cols is None:
+            # Fallback or if table had no columns in the join
+            cols = [c[1] for c in cur.execute(f"PRAGMA table_info({t})").fetchall()]
+
         if any((c in metric_cols) or c.endswith("_updates") or c.endswith("_assemblies") for c in cols):
             found.append((t, cols))
     print("METRIC_TABLES:", found)
