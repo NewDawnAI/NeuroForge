@@ -29,7 +29,9 @@ AudioCapture::AudioCapture(const Config& config)
 
 AudioCapture::~AudioCapture() {
     stopCapture();
+#ifdef _WIN32
     cleanupWindows();
+#endif
 }
 
 bool AudioCapture::initialize() {
