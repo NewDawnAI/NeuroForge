@@ -46,7 +46,21 @@ void LanguageSystem::TokenTrajectoryLogger::captureSnapshot(const LanguageSystem
     snapshot.cross_modal_strength = calculateCrossModalStrength(lang_system, token_id);
     
     // Get associated tokens (simplified - could be enhanced)
-    snapshot.associated_tokens = {}; // TODO: Implement token association analysis
+    // Find tokens with similar embeddings to determine associations
+    std::vector<std::size_t> similar_token_ids = lang_system.findSimilarTokens(snapshot.embedding, 0.7f);
+
+    snapshot.associated_tokens.clear();
+    for (size_t similar_id : similar_token_ids) {
+        if (similar_id != token_id) {
+            const auto* similar_token = lang_system.getToken(similar_id);
+            if (similar_token) {
+                snapshot.associated_tokens.push_back(similar_token->symbol);
+                if (snapshot.associated_tokens.size() >= 10) {
+                    break;
+                }
+            }
+        }
+    }
     
     // Calculate cluster stability using simple history-based statistics
     // Tokens that appear frequently with consistent activation are treated as more stable.
