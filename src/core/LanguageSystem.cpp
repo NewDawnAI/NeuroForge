@@ -1115,12 +1115,12 @@ LanguageSystem::TokenType LanguageSystem::inferTokenType(const std::string& symb
 const LanguageSystem::SymbolicToken* LanguageSystem::getToken(const std::string& symbol) const {
     std::lock_guard<std::recursive_mutex> lock(vocabulary_mutex_);
     
-    auto it = std::find_if(vocabulary_.begin(), vocabulary_.end(),
-                          [&symbol](const SymbolicToken& token) {
-                              return token.symbol == symbol;
-                          });
+    auto it = token_lookup_.find(symbol);
+    if (it != token_lookup_.end()) {
+        return &vocabulary_[it->second];
+    }
     
-    return (it != vocabulary_.end()) ? &(*it) : nullptr;
+    return nullptr;
 }
 
 const LanguageSystem::SymbolicToken* LanguageSystem::getToken(std::size_t token_id) const {
