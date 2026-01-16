@@ -26,14 +26,16 @@ def seed_db(path):
     cur.execute('update episodes set end_ms=? where id=?', (base_ms + 110, ep1))
 
     # Insert 6 rewards
+    rewards_data = []
     for i in range(6):
         ts = base_ms + 100 + i*5
         step = 1 + i
         reward = 0.1 * (i + 1)
         source = 'seed'
         ctx = json.dumps({"k": i})
-        cur.execute('insert into reward_log(run_id, ts_ms, step, reward, source, context_json) values (?,?,?,?,?,?)',
-                    (run_id, ts, step, reward, source, ctx))
+        rewards_data.append((run_id, ts, step, reward, source, ctx))
+
+    cur.executemany('insert into reward_log(run_id, ts_ms, step, reward, source, context_json) values (?,?,?,?,?,?)', rewards_data)
 
     con.commit()
     # Show counts
