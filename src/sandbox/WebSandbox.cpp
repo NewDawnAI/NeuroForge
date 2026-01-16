@@ -34,7 +34,6 @@ static constexpr UINT_PTR NF_SANDBOX_NAV_TIMER_ID = 1;
 static constexpr DWORD NF_SANDBOX_NAV_RETRY_INTERVAL_MS = 50;
 static constexpr DWORD NF_SANDBOX_NAV_GIVEUP_MS = 10000;
 
-#ifdef _WIN32
 static LRESULT CALLBACK NfSandboxWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
     __try {
         switch(msg){
@@ -95,7 +94,7 @@ static LRESULT CALLBACK NfSandboxWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPA
         return DefWindowProc(hWnd, msg, wParam, lParam);
     }
 }
-#endif
+#endif // _WIN32
 
 WebSandbox::WebSandbox() {}
 WebSandbox::~WebSandbox() {

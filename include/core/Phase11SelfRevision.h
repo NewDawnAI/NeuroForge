@@ -35,6 +35,7 @@ public:
     void setMinRevisionGap(std::int64_t gap_ms) { min_revision_gap_ms_ = gap_ms; }
     void setOutcomeEvalWindowMs(std::int64_t window_ms) { outcome_eval_window_ms_ = window_ms; }
     void setStageCEnabled(bool enabled) { stage_c_enabled_ = enabled; }
+    void setRevisionMode(const std::string& mode) { revision_mode_ = mode; }
 
     // Get current revision parameters for external inspection
     std::map<std::string, double> getCurrentRevisionParams() const { return current_revision_params_; }
@@ -90,6 +91,7 @@ private:
     std::int64_t min_revision_gap_ms_ = 60000; // Min 1 minute between revisions
     std::int64_t outcome_eval_window_ms_ = 60000; // 1 minute pre/post window
     bool stage_c_enabled_ = true;
+    std::string revision_mode_ = "moderate";
     
     // Current state
     std::map<std::string, double> current_revision_params_;
