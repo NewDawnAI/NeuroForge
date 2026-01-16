@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <atomic>
 #include <mutex>
+#include <shared_mutex>
 #include <unordered_map>
 #include <memory>
 
@@ -201,7 +202,7 @@ private:
     std::atomic<std::uint64_t> last_update_time_{0};
 
     // Synchronization
-    mutable std::mutex constraints_mutex_;
+    mutable std::shared_mutex constraints_mutex_;
 };
 
 } // namespace Memory

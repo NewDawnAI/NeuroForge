@@ -127,7 +127,7 @@ bool DevelopmentalConstraints::defineCriticalPeriod(const CriticalPeriod& period
         return false;
     }
     
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::unique_lock<std::shared_mutex> lock(constraints_mutex_);
     
     // Check if period with same name already exists
     auto it = period_name_index_.find(period.period_name);
@@ -145,7 +145,7 @@ bool DevelopmentalConstraints::defineCriticalPeriod(const CriticalPeriod& period
 }
 
 bool DevelopmentalConstraints::removeCriticalPeriod(const std::string& period_name) {
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::unique_lock<std::shared_mutex> lock(constraints_mutex_);
     
     auto it = period_name_index_.find(period_name);
     if (it == period_name_index_.end()) {
@@ -168,7 +168,7 @@ bool DevelopmentalConstraints::removeCriticalPeriod(const std::string& period_na
 }
 
 std::unique_ptr<CriticalPeriod> DevelopmentalConstraints::getCriticalPeriod(const std::string& period_name) const {
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::shared_lock<std::shared_mutex> lock(constraints_mutex_);
     
     auto it = period_name_index_.find(period_name);
     if (it != period_name_index_.end() && it->second < critical_periods_.size()) {
@@ -179,7 +179,7 @@ std::unique_ptr<CriticalPeriod> DevelopmentalConstraints::getCriticalPeriod(cons
 }
 
 std::vector<CriticalPeriod> DevelopmentalConstraints::getActiveCriticalPeriods() const {
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::shared_lock<std::shared_mutex> lock(constraints_mutex_);
     
     std::vector<CriticalPeriod> active_periods;
     std::uint64_t current_age = getCurrentSystemAge();
@@ -207,7 +207,7 @@ float DevelopmentalConstraints::getCurrentPlasticityMultiplier(const std::string
         return config_.base_learning_rate;
     }
     
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::shared_lock<std::shared_mutex> lock(constraints_mutex_);
     
     // Check cached value first
     auto it = current_plasticity_multipliers_.find(region_name);
@@ -241,7 +241,7 @@ float DevelopmentalConstraints::getCurrentLearningRateMultiplier(const std::stri
         return config_.base_learning_rate;
     }
     
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::shared_lock<std::shared_mutex> lock(constraints_mutex_);
     
     // Check cached value first
     auto it = current_learning_rate_multipliers_.find(region_name);
@@ -268,7 +268,7 @@ float DevelopmentalConstraints::getCurrentConsolidationMultiplier(const std::str
         return 1.0f;
     }
     
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::shared_lock<std::shared_mutex> lock(constraints_mutex_);
     
     // Check cached value first
     auto it = current_consolidation_multipliers_.find(region_name);
@@ -299,7 +299,7 @@ LearningModulation DevelopmentalConstraints::getLearningModulation(
         return modulation;  // Default values
     }
     
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::shared_lock<std::shared_mutex> lock(constraints_mutex_);
     std::uint64_t current_age = getCurrentSystemAge();
     
     for (const auto& period : critical_periods_) {
@@ -368,7 +368,7 @@ void DevelopmentalConstraints::updateConstraints(bool force_update) {
     std::uint64_t current_age = getCurrentSystemAge();
     
     {
-        std::lock_guard<std::mutex> lock(constraints_mutex_);
+        std::shared_lock<std::shared_mutex> lock(constraints_mutex_);
         for (const auto& period : critical_periods_) {
             if (period.isActiveAt(current_age)) {
                 ++active_count;
@@ -397,7 +397,7 @@ float DevelopmentalConstraints::triggerSynapticPruning(const std::string& region
         return 0.0f;
     }
     
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::shared_lock<std::shared_mutex> lock(constraints_mutex_);
     std::uint64_t current_age = getCurrentSystemAge();
     
     float max_pruning_strength = 0.0f;
@@ -420,7 +420,7 @@ bool DevelopmentalConstraints::shouldPruneRegion(const std::string& region_name)
         return false;
     }
     
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::shared_lock<std::shared_mutex> lock(constraints_mutex_);
     std::uint64_t current_age = getCurrentSystemAge();
     
     for (const auto& period : critical_periods_) {
@@ -576,7 +576,7 @@ size_t DevelopmentalConstraints::initializeStandardDevelopment(bool enable_all_p
 }
 
 DevelopmentalConstraints::Statistics DevelopmentalConstraints::getStatistics() const {
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::shared_lock<std::shared_mutex> lock(constraints_mutex_);
     
     Statistics stats;
     stats.system_age_ms = getCurrentSystemAge();
@@ -609,12 +609,12 @@ DevelopmentalConstraints::Statistics DevelopmentalConstraints::getStatistics() c
 }
 
 void DevelopmentalConstraints::setConfig(const Config& new_config) {
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::unique_lock<std::shared_mutex> lock(constraints_mutex_);
     config_ = new_config;
 }
 
 void DevelopmentalConstraints::clearAllPeriods() {
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::unique_lock<std::shared_mutex> lock(constraints_mutex_);
     critical_periods_.clear();
     period_name_index_.clear();
     current_plasticity_multipliers_.clear();
@@ -663,7 +663,7 @@ float DevelopmentalConstraints::calculateModulationCurve(std::uint64_t current_t
 }
 
 void DevelopmentalConstraints::updateModulationFactors() {
-    std::lock_guard<std::mutex> lock(constraints_mutex_);
+    std::unique_lock<std::shared_mutex> lock(constraints_mutex_);
     
     // Clear cached values
     current_plasticity_multipliers_.clear();
