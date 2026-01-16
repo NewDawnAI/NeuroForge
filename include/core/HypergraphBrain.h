@@ -189,6 +189,7 @@ private:
     
     // Statistics and monitoring
     mutable GlobalStatistics global_stats_;
+    mutable bool stats_dirty_ = true;
     std::atomic<std::uint64_t> processing_cycles_;
     std::atomic<int> reward_lag_align_offset_{0};
     
@@ -1076,11 +1077,18 @@ public:
      */
     int getNoveltyMemorySize() const noexcept { return novelty_memory_size_.load(std::memory_order_relaxed); }
 
+public:
+    /**
+     * @brief Update global statistics incrementally
+     */
+    void updateGlobalStatistics(std::int64_t active_neuron_delta,
+                                std::int64_t active_region_delta,
+                                double energy_delta);
 private:
     /**
-     * @brief Update global statistics
+     * @brief Recalculate all global statistics from scratch
      */
-    void updateGlobalStatistics();
+    void recalculateGlobalStatistics();
 
     /**
      * @brief Update hardware information

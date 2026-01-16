@@ -116,7 +116,10 @@ namespace NeuroForge {
             mutable Statistics stats_;
             std::atomic<std::uint64_t> processing_cycles_{0};
 
+            HypergraphBrain* brain_ = nullptr;
+
         public:
+            void setBrain(HypergraphBrain* brain);
             /**
              * @brief Construct a new Region
              * 

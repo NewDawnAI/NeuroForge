@@ -2,6 +2,7 @@
 #include "core/Neuron.h"
 #include "core/Synapse.h"
 #include "core/CUDAAccel.h"
+#include "core/HypergraphBrain.h"
 #include <algorithm>
 #include <numeric>
 #include <chrono>
@@ -834,43 +835,45 @@ namespace NeuroForge {
             }
         }
 
+        void Region::setBrain(HypergraphBrain* brain) {
+            brain_ = brain;
+        }
+
         void Region::updateStatistics() const {
             std::size_t active_count = 0;
             float total_activation = 0.0f;
             float total_energy = 0.0f;
-            const float activation_threshold = 0.2f; // Threshold for considering a neuron "active"
+            const float activation_threshold = 0.2f;
 
-            // Activation stats
             for (const auto& neuron : neurons_) {
                 if (neuron) {
                     float activation = neuron->getActivation();
                     total_activation += activation;
-                    
-                    // Count neurons as active if their activation exceeds threshold
                     if (activation > activation_threshold) {
                         active_count++;
                     }
-                    
-                    // Simple energy calculation (activation^2)
                     total_energy += activation * activation;
                 }
             }
 
-            // Mitochondrial stats
             float total_mito_energy = 0.0f;
             float total_mito_health = 0.0f;
-            float total_metabolic_stress = 0.0f; // Derived metric
+            float total_metabolic_stress = 0.0f;
 
             for (const auto& state : mito_states_) {
                 total_mito_energy += state.energy;
                 total_mito_health += state.health;
-                
-                // Simple stress metric: low energy + low health contribution
-                // Stress increases as energy drops below 0.3 or health drops below 0.5
                 float energy_stress = (state.energy < 0.3f) ? (0.3f - state.energy) / 0.3f : 0.0f;
                 float health_stress = (state.health < 0.5f) ? (0.5f - state.health) / 0.5f : 0.0f;
                 total_metabolic_stress += (energy_stress + health_stress);
             }
+
+            std::int64_t active_neuron_delta = active_count - stats_.active_neurons;
+            double energy_delta = total_energy - stats_.total_energy;
+
+            bool was_active = stats_.active_neurons > 0;
+            bool is_active = active_count > 0;
+            std::int64_t active_region_delta = (is_active && !was_active) ? 1 : ((!is_active && was_active) ? -1 : 0);
 
             stats_.active_neurons = active_count;
             stats_.average_activation = neurons_.empty() ? 0.0f : total_activation / neurons_.size();
@@ -880,6 +883,10 @@ namespace NeuroForge {
             stats_.avg_mitochondrial_energy = m_count > 0 ? total_mito_energy / m_count : 0.0f;
             stats_.avg_mitochondrial_health = m_count > 0 ? total_mito_health / m_count : 0.0f;
             stats_.metabolic_stress = m_count > 0 ? total_metabolic_stress / m_count : 0.0f;
+
+            if (brain_) {
+                brain_->updateGlobalStatistics(active_neuron_delta, active_region_delta, energy_delta);
+            }
         }
 
         void Region::processNeurons(float delta_time) {

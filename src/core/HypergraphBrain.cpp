@@ -213,7 +213,10 @@ namespace NeuroForge {
                 processing_cycles_.store(0);
                 actual_frequency_.store(0.0f);
 
-                this->updateGlobalStatistics();
+                {
+                    std::lock_guard<std::mutex> lock(statistics_mutex_);
+                    stats_dirty_ = true;
+                }
                 
                 // Ensure processing is stopped and allow a fresh initialize() after reset
                 is_processing_.store(false);
@@ -297,9 +300,13 @@ namespace NeuroForge {
             if (state != BrainState::Uninitialized && state != BrainState::Shutdown) {
                 region->initialize();
             }
+            region->setBrain(this);
 
             // Update statistics
-            this->updateGlobalStatistics();
+            {
+                std::lock_guard<std::mutex> lock(statistics_mutex_);
+                stats_dirty_ = true;
+            }
 
             return true;
         }
@@ -350,7 +357,10 @@ namespace NeuroForge {
                 regions_.erase(region_id);
             }
 
-            this->updateGlobalStatistics();
+            {
+                std::lock_guard<std::mutex> lock(statistics_mutex_);
+                stats_dirty_ = true;
+            }
             return true;
         }
 
@@ -2152,7 +2162,10 @@ namespace NeuroForge {
                 
                 // Internal synapses are already handled via global synapse reconstruction above
                 
-                updateGlobalStatistics();
+                {
+                    std::lock_guard<std::mutex> lock(statistics_mutex_);
+                    stats_dirty_ = true;
+                }
                 std::cerr << "[capnp] import done" << std::endl;
                 return true;
                 
@@ -2507,9 +2520,10 @@ namespace NeuroForge {
         }
 
         HypergraphBrain::GlobalStatistics HypergraphBrain::getGlobalStatistics() const {
-            // Refresh statistics to reflect the latest brain state before returning
-            const_cast<HypergraphBrain*>(this)->updateGlobalStatistics();
             std::lock_guard<std::mutex> lock(statistics_mutex_);
+            if (stats_dirty_) {
+                const_cast<HypergraphBrain*>(this)->recalculateGlobalStatistics();
+            }
 
             GlobalStatistics stats = global_stats_;
             stats.processing_cycles = processing_cycles_.load();
@@ -2518,24 +2532,38 @@ namespace NeuroForge {
             return stats;
         }
 
-        void HypergraphBrain::updateGlobalStatistics() {
+        void HypergraphBrain::updateGlobalStatistics(std::int64_t active_neuron_delta,
+                                                       std::int64_t active_region_delta,
+                                                       double energy_delta) {
             std::lock_guard<std::mutex> lock(statistics_mutex_);
+            global_stats_.active_neurons += active_neuron_delta;
+            global_stats_.active_regions += active_region_delta;
+            global_stats_.total_energy += energy_delta;
+
+            if (global_stats_.total_neurons > 0) {
+                global_stats_.global_activation =
+                    static_cast<float>(global_stats_.active_neurons) / global_stats_.total_neurons;
+            } else {
+                global_stats_.global_activation = 0.0f;
+            }
+        }
+
+        void HypergraphBrain::recalculateGlobalStatistics() {
+            statistics_mutex_.unlock();
+            auto total_memory_usage = getTotalMemoryUsage();
+            statistics_mutex_.lock();
 
             global_stats_.total_regions = regions_.size();
             global_stats_.total_neurons = 0;
-
-            // Prefer ConnectivityManager's count if available and non-zero; otherwise compute from neurons
-            std::size_t cm_syn_count = connectivity_manager_ ? connectivity_manager_->getTotalSynapseCount() : 0;
-
-            // Reset other aggregates
+            global_stats_.total_synapses = 0;
             global_stats_.active_regions = 0;
             global_stats_.active_neurons = 0;
             global_stats_.global_activation = 0.0f;
             global_stats_.total_energy = 0.0f;
-            global_stats_.total_memory_usage = getTotalMemoryUsage();
+            global_stats_.total_memory_usage = total_memory_usage;
 
-            // Accumulate region-level stats and compute fallback synapse count if needed
-            std::size_t computed_total_synapses = 0;
+            std::size_t cm_syn_count = connectivity_manager_ ? connectivity_manager_->getTotalSynapseCount() : 0;
+
             for (const auto& [region_id, region] : regions_) {
                 if (region) {
                     auto region_stats = region->getStatistics();
@@ -2543,12 +2571,11 @@ namespace NeuroForge {
                     global_stats_.active_neurons += region_stats.active_neurons;
                     global_stats_.total_energy += region_stats.total_energy;
 
-                    // Count synapses by summing outputs from each neuron (each synapse appears once as an output)
                     if (cm_syn_count == 0) {
                         const auto& neurons = region->getNeurons();
                         for (const auto& neuron : neurons) {
                             if (neuron) {
-                                computed_total_synapses += neuron->getOutputSynapseCount();
+                                global_stats_.total_synapses += neuron->getOutputSynapseCount();
                             }
                         }
                     }
@@ -2559,14 +2586,16 @@ namespace NeuroForge {
                 }
             }
 
-            // Set total synapses from ConnectivityManager if non-zero, otherwise use computed fallback
-            global_stats_.total_synapses = (cm_syn_count > 0) ? cm_syn_count : computed_total_synapses;
+            if (cm_syn_count > 0) {
+                global_stats_.total_synapses = cm_syn_count;
+            }
 
-            // Calculate global activation as percentage
             if (global_stats_.total_neurons > 0) {
                 global_stats_.global_activation =
                     static_cast<float>(global_stats_.active_neurons) / global_stats_.total_neurons;
             }
+
+            stats_dirty_ = false;
         }
 
         void HypergraphBrain::updateHardwareInfo() {
