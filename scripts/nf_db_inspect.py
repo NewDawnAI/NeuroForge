@@ -11,12 +11,14 @@ tables = [r[0] for r in cur.execute("SELECT name FROM sqlite_master WHERE type='
 print(f"Tables ({len(tables)}): {', '.join(tables)}")
 
 # Counts per table
-for t in tables:
-    try:
-        cnt = cur.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
-        print(f"Count[{t}]={cnt}")
-    except Exception as e:
-        print(f"Count[{t}]=<error {e}>")
+try:
+    if tables:
+        selects = [f"SELECT '{t}' as name, COUNT(*) as cnt FROM `{t}`" for t in tables]
+        sql = " UNION ALL ".join(selects)
+        for row in cur.execute(sql).fetchall():
+            print(f"Count[{row['name']}]={row['cnt']}")
+except Exception as e:
+    print(f"Counts query failed: {e}")
 
 # Schemas (short)
 for t in tables:
