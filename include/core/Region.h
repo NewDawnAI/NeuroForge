@@ -92,6 +92,9 @@ namespace NeuroForge {
             
             // Neuron and synapse management
             NeuronContainer neurons_;
+            // Snapshot for lock-free read access during process()
+            std::shared_ptr<const NeuronContainer> neurons_snapshot_;
+
             // Mitochondrial state (parallel to neurons_)
             std::vector<MitochondrialState> mito_states_;
             
@@ -434,6 +437,11 @@ namespace NeuroForge {
              * @brief Calculate global activation across neurons
              */
             float calculateGlobalActivation() const;
+
+            /**
+             * @brief Update the neurons snapshot (called under region_mutex_)
+             */
+            void updateSnapshot();
         };
 
         /**
