@@ -1139,7 +1139,7 @@ namespace NeuroForge {
             }
             
             // Return empty connection if not found
-            RegionConnection empty_connection;
+            RegionConnection empty_connection{};
             empty_connection.is_active = false;
             return empty_connection;
         }
@@ -1152,23 +1152,26 @@ namespace NeuroForge {
         // ===== Connectivity Analysis =====
 
         std::vector<std::vector<float>> ConnectivityManager::getConnectivityMatrix() const {
-            std::vector<std::string> region_ids;
+            std::unordered_map<std::string, std::size_t> region_indices;
+            region_indices.reserve(regions_.size());
+
+            std::size_t idx = 0;
             for (const auto& [id, region] : regions_) {
-                region_ids.push_back(id);
+                region_indices[id] = idx++;
             }
             
-            std::size_t n = region_ids.size();
+            std::size_t n = regions_.size();
             std::vector<std::vector<float>> matrix(n, std::vector<float>(n, 0.0f));
             
             {
                 std::lock_guard<std::mutex> lock(connections_mutex_);
                 for (const auto& connection : connections_) {
-                    auto source_it = std::find(region_ids.begin(), region_ids.end(), connection.source_region_id);
-                    auto target_it = std::find(region_ids.begin(), region_ids.end(), connection.target_region_id);
+                    auto source_it = region_indices.find(connection.source_region_id);
+                    auto target_it = region_indices.find(connection.target_region_id);
                     
-                    if (source_it != region_ids.end() && target_it != region_ids.end()) {
-                        std::size_t source_idx = std::distance(region_ids.begin(), source_it);
-                        std::size_t target_idx = std::distance(region_ids.begin(), target_it);
+                    if (source_it != region_indices.end() && target_it != region_indices.end()) {
+                        std::size_t source_idx = source_it->second;
+                        std::size_t target_idx = target_it->second;
                         
                         matrix[source_idx][target_idx] = connection.connection_strength;
                     }
