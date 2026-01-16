@@ -373,7 +373,7 @@ void print_usage() {
              << "  --phase11-outcome-window-ms=N         Outcome evaluation pre/post window in ms (default: 60000)\n"
              << "  --revision-threshold=F                Threshold for triggering self-revision (default: 0.3)\n"
              << "  --revision-mode=MODE                  Mode for self-revision: conservative|moderate|aggressive (default: moderate)\n"
-              << "  --stagec[=on|off]                     Enable/disable Stage C v1 autonomy gating (default: on)\n"
+              << "  --stagec[=on|off]                     Enable/disable Stage C v1 autonomy gating (default: off)\n"
               << "  --phase13[=on|off]                    Enable/disable Phase 13 autonomy envelope (default: on)\n"
               << "  --phase13-window=N                    Autonomy analysis window size (default: 10)\n"
               << "  --phase13-trust-tighten=F             Self-trust tighten threshold (default: 0.35)\n"
@@ -2517,7 +2517,7 @@ double phase11_revision_threshold = 0.3;
 std::string phase11_revision_mode = "moderate";
 std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
 
-    bool stagec_enable = true;
+    bool stagec_enable = false;
 
     bool phase12_enable = true;
     int phase12_window = 8; // default analysis window
