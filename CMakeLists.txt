@@ -518,6 +518,17 @@ if(NEUROFORGE_ENABLE_TESTS)
     target_include_directories(test_language PRIVATE include)
     add_test(NAME test_language COMMAND $<TARGET_FILE:test_language>)
 
+    # Substrate Mode test executable
+    add_executable(test_substrate_mode tests/test_substrate_mode.cpp)
+    target_link_libraries(test_substrate_mode PRIVATE
+        neuroforge_core
+        neuroforge_regions
+        neuroforge_connectivity
+        neuroforge_encoders
+    )
+    target_include_directories(test_substrate_mode PRIVATE include)
+    add_test(NAME test_substrate_mode COMMAND $<TARGET_FILE:test_substrate_mode>)
+
     # Phase A test executable
     add_executable(test_phase_a src/test_phase_a.cpp)
     target_link_libraries(test_phase_a PRIVATE
