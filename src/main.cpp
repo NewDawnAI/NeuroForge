@@ -199,6 +199,7 @@ void print_usage() {
               << "  --memdb-debug[=on|off]                 Verbose MemoryDB debug logging (default: off)\n"
               << "  --memdb-color[=auto|on|off]            Colorize MemoryDB debug output; bare flag = auto (TTY only), default: auto (TTY only)\n"
               << "  --memdb-interval=MS                    Periodic MemoryDB logging interval in ms (default: 1000)\n"
+              << "  --reward-interval=MS                   Periodic reward logging interval in ms (default: 1000)\n"
               << "  --list-episodes=RUN_ID                 List episodes for RUN_ID from MemoryDB and exit\n"
               << "  --recent-rewards=RUN_ID[,LIMIT]        List recent rewards for RUN_ID (optional LIMIT, default 10) and exit\n"
               << "  --recent-run-events=RUN_ID[,LIMIT]     List recent run events for RUN_ID (optional LIMIT, default 10) and exit\n"
@@ -337,6 +338,8 @@ void print_usage() {
              << "  --phase11-revision-interval=N         Revision interval in ms (default: 300000)\n"
              << "  --phase11-min-gap-ms=N                Minimum gap between revisions in ms (default: 60000)\n"
              << "  --phase11-outcome-window-ms=N         Outcome evaluation pre/post window in ms (default: 60000)\n"
+             << "  --revision-threshold=F                Threshold for triggering self-revision (default: 0.3)\n"
+             << "  --revision-mode=MODE                  Mode for self-revision: conservative|moderate|aggressive (default: moderate)\n"
               << "  --stagec[=on|off]                     Enable/disable Stage C v1 autonomy gating (default: on)\n"
               << "  --phase13[=on|off]                    Enable/disable Phase 13 autonomy envelope (default: on)\n"
               << "  --phase13-window=N                    Autonomy analysis window size (default: 10)\n"
@@ -2249,6 +2252,8 @@ int main(int argc, char* argv[]) {
         bool memdb_color = true;
         int memdb_interval_ms = 1000; // periodic MemoryDB logging interval (ms)
         bool memdb_interval_cli_set = false; // tracks if CLI explicitly set interval
+        int reward_interval_ms = 1000; // periodic reward logging interval (ms)
+        bool reward_interval_cli_set = false; // tracks if CLI explicitly set interval
 
         // MemoryDB listing flags
         bool flag_list_episodes = false;
@@ -2475,6 +2480,8 @@ bool phase11_enable = true;
 int phase11_revision_interval_ms = 300000; // default 5 minutes
 int phase11_min_gap_ms = 60000;
 int phase11_outcome_eval_window_ms = 60000;
+double phase11_revision_threshold = 0.3;
+std::string phase11_revision_mode = "moderate";
 std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
 
     bool stagec_enable = true;
@@ -3797,6 +3804,29 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                        spikes_ttl_sec,
                        save_brain_path,
                        load_brain_path)) {
+                    handled_any = true;
+                    continue;
+                }
+
+                if (starts_with(arg, "--reward-interval=")) {
+                    auto v = arg.substr(std::string("--reward-interval=").size());
+                    try {
+                        reward_interval_ms = std::stoi(v);
+                        if (reward_interval_ms <= 0) { std::cerr << "Error: --reward-interval must be > 0" << std::endl; exit(2); }
+                        reward_interval_cli_set = true;
+                    } catch (...) { std::cerr << "Error: invalid integer for --reward-interval" << std::endl; exit(2); }
+                    handled_any = true;
+                    continue;
+                }
+                if (starts_with(arg, "--revision-threshold=")) {
+                    auto v = arg.substr(std::string("--revision-threshold=").size());
+                    try { phase11_revision_threshold = std::stof(v); }
+                    catch (...) { std::cerr << "Error: invalid float for --revision-threshold" << std::endl; exit(2); }
+                    handled_any = true;
+                    continue;
+                }
+                if (starts_with(arg, "--revision-mode=")) {
+                    phase11_revision_mode = arg.substr(std::string("--revision-mode=").size());
                     handled_any = true;
                     continue;
                 }
@@ -5347,6 +5377,7 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
         std::int64_t current_episode_id = 0;
         NeuroForge::Core::AutonomyEnvelope latest_autonomy_envelope{};
         auto last_memdb_log = std::chrono::steady_clock::now();
+        auto last_reward_log = std::chrono::steady_clock::now();
         // Optional RSS monitoring thresholds (configured via environment)
         double rss_warn_threshold_mb = 0.0;
         double rss_fail_threshold_mb = 0.0;
@@ -5886,9 +5917,11 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                 // Initialize Phase 11 Self-Revision and inject into Phase 9
                 if (phase11_enable && phase9_metacog) {
                     phase11_revision = std::make_unique<NeuroForge::Core::Phase11SelfRevision>(memdb.get(), memdb_run_id);
+                    phase11_revision->setTrustDriftThreshold(phase11_revision_threshold);
                     phase11_revision->setRevisionInterval(phase11_revision_interval_ms);
                     phase11_revision->setMinRevisionGap(phase11_min_gap_ms);
                     phase11_revision->setOutcomeEvalWindowMs(phase11_outcome_eval_window_ms);
+                    phase11_revision->setRevisionMode(phase11_revision_mode);
                     phase9_metacog->setPhase11SelfRevision(phase11_revision.get());
                     std::cout << "[Phase 11] Self-Revision active (interval=" << phase11_revision_interval_ms << " ms)" << std::endl;
                 }
@@ -7898,22 +7931,29 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
             // Periodically log learning stats to MemoryDB
             if (memdb && memdb_run_id > 0) {
                 auto now = std::chrono::steady_clock::now();
-                if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_memdb_log).count() >= memdb_interval_ms) {
-                    // Compute task reward from spike activity in the last window
-                    auto window_start = last_memdb_log;
+
+                // Decouple logging cadences
+                bool due_reward = (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_reward_log).count() >= reward_interval_ms);
+                bool due_memdb = (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_memdb_log).count() >= memdb_interval_ms);
+
+                if (due_reward || due_memdb) {
                     std::size_t spike_count = 0;
-                    {
-                        std::lock_guard<std::mutex> lg(spikes_mutex);
-                        // prune old beyond TTL window to bound memory
-                        const auto cutoff = now - std::chrono::milliseconds(static_cast<int>(spikes_ttl_sec * 1000.0));
-                        while (!spike_events.empty() && spike_events.front().second < cutoff) spike_events.pop_front();
-                        for (const auto& ev : spike_events) {
-                            if (ev.second >= window_start && ev.second <= now) ++spike_count;
-                        }
+                    std::int64_t win_ms = 0;
+
+                    // If reward logging is due, calculate task reward from spike activity in the last reward window
+                    if (due_reward) {
+                         auto window_start = last_reward_log;
+                         std::lock_guard<std::mutex> lg(spikes_mutex);
+                         const auto cutoff = now - std::chrono::milliseconds(static_cast<int>(spikes_ttl_sec * 1000.0));
+                         while (!spike_events.empty() && spike_events.front().second < cutoff) spike_events.pop_front();
+                         for (const auto& ev : spike_events) {
+                             if (ev.second >= window_start && ev.second <= now) ++spike_count;
+                         }
+                         win_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - window_start).count();
                     }
-                    const auto win_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - window_start).count();
 
                     // Build region activation vector (acts) from active demo regions
+                    // Required for reward shaping (due_reward) AND experience snapshots (due_memdb)
                     std::vector<float> region_acts;
                     if (vision_demo && visual_region) {
                         const auto& neurons = visual_region->getNeurons();
@@ -7939,439 +7979,458 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                     // Use activations as the observation proxy for shaping (keeps integration minimal)
                     std::vector<float> obs = region_acts;
 
-                    // Prepare telemetry via LearningSystem, then compute pipeline-shaped reward
-                    double task_reward = static_cast<double>(spike_count);
-                    if (maze_demo) {
-                        task_reward += static_cast<double>(maze_last_reward);
-                    }
+                    // Common state vars
                     float mimicry_sim = 0.0f;
                     float competence_level = 0.0f;
                     float substrate_similarity = 0.0f;
                     float substrate_novelty = 0.0f;
-                    if (auto* ls_reward = brain.getLearningSystem()) {
-                        (void)ls_reward->computeShapedReward(obs, region_acts, static_cast<float>(task_reward));
-                        mimicry_sim = ls_reward->getLastMimicrySim();
-                        competence_level = ls_reward->getCompetenceLevel();
-                        substrate_similarity = ls_reward->getLastSubstrateSimilarity();
-                        substrate_novelty = ls_reward->getLastSubstrateNovelty();
+
+                    // REWARD LOGGING
+                    if (due_reward) {
+                         // Prepare telemetry via LearningSystem, then compute pipeline-shaped reward
+                         double task_reward = static_cast<double>(spike_count);
+                         if (maze_demo) {
+                             task_reward += static_cast<double>(maze_last_reward);
+                         }
+
+                         if (auto* ls_reward = brain.getLearningSystem()) {
+                             (void)ls_reward->computeShapedReward(obs, region_acts, static_cast<float>(task_reward));
+                             mimicry_sim = ls_reward->getLastMimicrySim();
+                             competence_level = ls_reward->getCompetenceLevel();
+                             substrate_similarity = ls_reward->getLastSubstrateSimilarity();
+                             substrate_novelty = ls_reward->getLastSubstrateNovelty();
+                         }
+
+                         double teacher_r = static_cast<double>(phase_a_last_reward);
+                         double novelty_r = static_cast<double>(substrate_novelty);
+                         double survival_r = static_cast<double>(phase_c_survival_scale) * static_cast<double>(substrate_similarity - substrate_novelty);
+                         if (survival_r > 1.0) survival_r = 1.0; else if (survival_r < -1.0) survival_r = -1.0;
+                         double wt_T = wt_teacher, wt_S = wt_survival, wt_N = wt_novelty;
+                         double shaped_d = wt_T * teacher_r + wt_N * novelty_r + wt_S * survival_r;
+                         if (shaped_d > 1.0) shaped_d = 1.0; else if (shaped_d < -1.0) shaped_d = -1.0;
+                         float shaped_reward = static_cast<float>(shaped_d);
+
+                         if (auto* ls_reward2 = brain.getLearningSystem()) {
+                             ls_reward2->applyExternalReward(shaped_reward);
+                         }
+
+                         // Log shaped reward (with context including task spikes and vector sizes)
+                         std::string ctx = std::string("{\"spikes\":") + std::to_string(spike_count) +
+                                           ",\"window_ms\":" + std::to_string(win_ms) +
+                                           ",\"maze_reward\":" + std::to_string(maze_last_reward) +
+                                           ",\"task\":" + std::to_string(task_reward) +
+                                           ",\"shaped\":" + std::to_string(shaped_reward) +
+                                           ",\"mimicry_sim\":" + std::to_string(mimicry_sim) +
+                                           ",\"competence_level\":" + std::to_string(competence_level) +
+                                           ",\"substrate_similarity\":" + std::to_string(substrate_similarity) +
+                                           ",\"substrate_novelty\":" + std::to_string(substrate_novelty) +
+                                           ",\"teacher_policy\":\"" + teacher_policy + "\"" +
+                                           ",\"teacher_action\":" + std::to_string(last_teacher_action) +
+                                           ",\"teacher_mix\":" + std::to_string(teacher_mix) +
+                                           ",\"obs_dim\":" + std::to_string(obs.size()) +
+                                           ",\"acts_dim\":" + std::to_string(region_acts.size()) +
+                                           ",\"blocked_actions\":" + std::to_string(blocked_action_count) +
+                                           ",\"blocked_by_phase15\":" + std::to_string(blocked_by_phase15) +
+                                           ",\"blocked_by_phase13\":" + std::to_string(blocked_by_phase13) +
+                                           ",\"blocked_by_no_web_actions\":" + std::to_string(blocked_by_no_web_actions) +
+                                           ",\"blocked_by_simulate_flag\":" + std::to_string(blocked_by_simulate_flag);
+                         // Append recent context samples and current configuration
+                         try {
+                             auto ctx_samples = NeuroForge::Core::NF_GetRecentContextSamples();
+                             auto cfg_ctx = NeuroForge::Core::NF_GetContextConfig();
+                             std::ostringstream oss_ctx;
+                             oss_ctx.setf(std::ios::fixed);
+                             oss_ctx << std::setprecision(6) << "[";
+                             for (size_t k = 0; k < ctx_samples.size(); ++k) {
+                                 if (k) oss_ctx << ",";
+                                 oss_ctx << ctx_samples[k];
+                             }
+                             oss_ctx << "]";
+                             ctx += ",\"context\":" + oss_ctx.str();
+                             ctx += ",\"context_cfg\":{\"gain\":" + std::to_string(cfg_ctx.gain)
+                                    + ",\"update_ms\":" + std::to_string(cfg_ctx.update_ms)
+                                    + ",\"window\":" + std::to_string(cfg_ctx.window) + "}";
+                         } catch (...) { /* ignore */ }
+
+                         // Add Phase A and Language system telemetry if available
+                         if (phase_a_enable && phase_a_system) {
+                             auto phase_a_stats = phase_a_system->getStatistics();
+                             ctx += ",\"phase_a_mimicry_attempts\":" + std::to_string(phase_a_stats.total_mimicry_attempts);
+                             ctx += ",\"phase_a_teacher_embeddings\":" + std::to_string(phase_a_stats.teacher_embeddings_stored);
+                             ctx += ",\"phase_a_alignments\":" + std::to_string(phase_a_stats.multimodal_alignments_created);
+                             // Last mimicry attempt details for trajectory plotting (gated behind --telemetry-extended)
+                             if (telemetry_extended) {
+                                 try {
+                                     // We don't have direct accessor; use LearningSystem for sim and Phase A stats for counts
+                                     ctx += ",\"phase_a_current_teacher_id\":\"" + current_teacher_id + "\"";
+                                     ctx += ",\"phase_a_last_similarity\":" + std::to_string(phase_a_last_similarity);
+                                     ctx += ",\"phase_a_last_novelty\":" + std::to_string(phase_a_last_novelty);
+                                     ctx += ",\"phase_a_last_reward\":" + std::to_string(phase_a_last_reward);
+                                     ctx += ",\"phase_a_last_success\":" + std::string(phase_a_last_success ? "true" : "false");
+                                 } catch (...) { /* ignore */ }
+                             }
+                             // Nested phase_a block mirroring experiences schema (always include when Phase A is enabled)
+                             try {
+                                 ctx += ",\"phase_a\":{";
+                                 ctx += "\"current_teacher_id\":\"" + current_teacher_id + "\"";
+                                 ctx += ",\"last_similarity\":" + std::to_string(phase_a_last_similarity);
+                                 ctx += ",\"last_novelty\":" + std::to_string(phase_a_last_novelty);
+                                 ctx += ",\"last_reward\":" + std::to_string(phase_a_last_reward);
+                                 ctx += ",\"last_success\":" + std::string(phase_a_last_success ? "true" : "false");
+                                 ctx += "}";
+                             } catch (...) { /* ignore */ }
+                         }
+
+                         if (phase5_language_enable && language_system) {
+                             auto lang_stats = language_system->getStatistics();
+                             ctx += ",\"language_stage\":" + std::to_string(static_cast<int>(lang_stats.current_stage));
+                             ctx += ",\"language_tokens_generated\":" + std::to_string(lang_stats.total_tokens_generated);
+                             ctx += ",\"language_narrations\":" + std::to_string(lang_stats.narration_entries);
+                             ctx += ",\"language_vocab_active\":" + std::to_string(lang_stats.active_vocabulary_size);
+                             // Nested language block mirroring experiences schema
+                             ctx += ",\"language\":{";
+                             ctx += "\"stage\":" + std::to_string(static_cast<int>(lang_stats.current_stage));
+                             ctx += ",\"metrics\":{";
+                             ctx += "\"tokens_generated\":" + std::to_string(lang_stats.total_tokens_generated);
+                             ctx += ",\"narrations\":" + std::to_string(lang_stats.narration_entries);
+                             ctx += ",\"vocab_active\":" + std::to_string(lang_stats.active_vocabulary_size);
+                             ctx += "}}";
+                         }
+                         if (self_node) {
+                             try {
+                                 auto cog = self_node->getSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Cognitive);
+                                 auto emo = self_node->getSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Emotional);
+                                 ctx += ",\"self_awareness\":" + std::to_string(self_node->getSelfAwarenessLevel());
+                                 ctx += ",\"self_identity\":\"" + self_node->getCurrentIdentity() + "\"";
+                                 ctx += ",\"self_cognitive_conf\":" + std::to_string(cog.confidence_level);
+                                 ctx += ",\"self_emotional_conf\":" + std::to_string(emo.confidence_level);
+                                 // Nested self block mirroring experiences schema
+                                 ctx += ",\"self\":{";
+                                 ctx += "\"state\":{";
+                                 ctx += "\"awareness\":" + std::to_string(self_node->getSelfAwarenessLevel());
+                                 ctx += ",\"identity\":\"" + self_node->getCurrentIdentity() + "\"";
+                                 ctx += "}";
+                                 ctx += ",\"confidence\":{";
+                                 ctx += "\"cognitive\":" + std::to_string(cog.confidence_level);
+                                 ctx += ",\"emotional\":" + std::to_string(emo.confidence_level);
+                                 ctx += "}";
+                                 ctx += "}";
+                             } catch (...) { /* ignore */ }
+                         }
+
+                         ctx += "}";
+                         bool all_zero = (shaped_reward == 0.0f && teacher_r == 0.0 && novelty_r == 0.0 && survival_r == 0.0);
+                         if (!all_zero || log_shaped_zero) {
+                             brain.logReward(static_cast<double>(shaped_reward), "shaped", ctx);
+                             try {
+                                 std::ostringstream ctxs;
+                                 ctxs.setf(std::ios::fixed);
+                                 ctxs << "{"
+                                      << "\"source\":\"survival\","
+                                      << "\"teacher_id\":\"" << current_teacher_id << "\","
+                                      << "\"components\":{\"teacher\":" << std::setprecision(4) << teacher_r
+                                      << ",\"survival\":" << std::setprecision(4) << survival_r
+                                      << ",\"novelty\":" << std::setprecision(4) << novelty_r << "},"
+                                      << "\"shaped\":" << std::setprecision(4) << shaped_d
+                                      << "}";
+                                 brain.logReward(survival_r, "survival", ctxs.str());
+                             } catch (...) { }
+                             try {
+                                 double merged = static_cast<double>(shaped_reward);
+                                 std::ostringstream ctxm;
+                                 ctxm.setf(std::ios::fixed);
+                                 ctxm << "{"
+                                      << "\"source\":\"merged\","
+                                      << "\"teacher_id\":\"" << current_teacher_id << "\","
+                                      << "\"weights\":{\"teacher\":" << std::setprecision(4) << wt_T
+                                      << ",\"survival\":" << std::setprecision(4) << wt_S
+                                      << ",\"novelty\":" << std::setprecision(4) << wt_N << "},"
+                                      << "\"components\":{\"teacher\":" << std::setprecision(4) << teacher_r
+                                      << ",\"survival\":" << std::setprecision(4) << survival_r
+                                      << ",\"novelty\":" << std::setprecision(4) << novelty_r << "},"
+                                      << "\"shaped\":" << std::setprecision(4) << shaped_d
+                                      << "}";
+                                 brain.logReward(merged, "merged", ctxm.str());
+                             } catch (...) { }
+                             if (simulate_rewards > 0) {
+                                 for (int sr = 0; sr < simulate_rewards; ++sr) {
+                                     std::ostringstream jrs;
+                                     jrs << "{\"source\":\"synthetic\",\"step\":" << i << "}";
+                                     brain.logReward(1.0, "simulated", jrs.str());
+                                 }
+                             }
+                         }
+                         last_reward_log = now;
+                    } else {
+                         // Update state vars if not computed in reward block, for MEMDB use
+                         if (auto* ls = brain.getLearningSystem()) {
+                             mimicry_sim = ls->getLastMimicrySim();
+                             competence_level = ls->getCompetenceLevel();
+                             substrate_similarity = ls->getLastSubstrateSimilarity();
+                             substrate_novelty = ls->getLastSubstrateNovelty();
+                         }
                     }
 
-                    double teacher_r = static_cast<double>(phase_a_last_reward);
-                    double novelty_r = static_cast<double>(substrate_novelty);
-                    double survival_r = static_cast<double>(phase_c_survival_scale) * static_cast<double>(substrate_similarity - substrate_novelty);
-                    if (survival_r > 1.0) survival_r = 1.0; else if (survival_r < -1.0) survival_r = -1.0;
-                    double wt_T = wt_teacher, wt_S = wt_survival, wt_N = wt_novelty;
-                    double shaped_d = wt_T * teacher_r + wt_N * novelty_r + wt_S * survival_r;
-                    if (shaped_d > 1.0) shaped_d = 1.0; else if (shaped_d < -1.0) shaped_d = -1.0;
-                    float shaped_reward = static_cast<float>(shaped_d);
-                    if (auto* ls_reward2 = brain.getLearningSystem()) {
-                        ls_reward2->applyExternalReward(shaped_reward);
-                    }
-
-                    // Log shaped reward (with context including task spikes and vector sizes)
-                    std::string ctx = std::string("{\"spikes\":") + std::to_string(spike_count) +
-                                      ",\"window_ms\":" + std::to_string(win_ms) +
-                                      ",\"maze_reward\":" + std::to_string(maze_last_reward) +
-                                      ",\"task\":" + std::to_string(task_reward) +
-                                      ",\"shaped\":" + std::to_string(shaped_reward) +
-                                      ",\"mimicry_sim\":" + std::to_string(mimicry_sim) +
-                                      ",\"competence_level\":" + std::to_string(competence_level) +
-                                      ",\"substrate_similarity\":" + std::to_string(substrate_similarity) +
-                                      ",\"substrate_novelty\":" + std::to_string(substrate_novelty) +
-                                      ",\"teacher_policy\":\"" + teacher_policy + "\"" +
-                                      ",\"teacher_action\":" + std::to_string(last_teacher_action) +
-                                      ",\"teacher_mix\":" + std::to_string(teacher_mix) +
-                                      ",\"obs_dim\":" + std::to_string(obs.size()) +
-                                      ",\"acts_dim\":" + std::to_string(region_acts.size()) +
-                                      ",\"blocked_actions\":" + std::to_string(blocked_action_count) +
-                                      ",\"blocked_by_phase15\":" + std::to_string(blocked_by_phase15) +
-                                      ",\"blocked_by_phase13\":" + std::to_string(blocked_by_phase13) +
-                                      ",\"blocked_by_no_web_actions\":" + std::to_string(blocked_by_no_web_actions) +
-                                      ",\"blocked_by_simulate_flag\":" + std::to_string(blocked_by_simulate_flag);
-                    // Append recent context samples and current configuration
-                    try {
-                        auto ctx_samples = NeuroForge::Core::NF_GetRecentContextSamples();
-                        auto cfg_ctx = NeuroForge::Core::NF_GetContextConfig();
-                        std::ostringstream oss_ctx;
-                        oss_ctx.setf(std::ios::fixed);
-                        oss_ctx << std::setprecision(6) << "[";
-                        for (size_t k = 0; k < ctx_samples.size(); ++k) {
-                            if (k) oss_ctx << ",";
-                            oss_ctx << ctx_samples[k];
-                        }
-                        oss_ctx << "]";
-                        ctx += ",\"context\":" + oss_ctx.str();
-                        ctx += ",\"context_cfg\":{\"gain\":" + std::to_string(cfg_ctx.gain)
-                               + ",\"update_ms\":" + std::to_string(cfg_ctx.update_ms)
-                               + ",\"window\":" + std::to_string(cfg_ctx.window) + "}";
-                    } catch (...) { /* ignore */ }
-
-                    // Add Phase A and Language system telemetry if available
-                    if (phase_a_enable && phase_a_system) {
-                        auto phase_a_stats = phase_a_system->getStatistics();
-                        ctx += ",\"phase_a_mimicry_attempts\":" + std::to_string(phase_a_stats.total_mimicry_attempts);
-                        ctx += ",\"phase_a_teacher_embeddings\":" + std::to_string(phase_a_stats.teacher_embeddings_stored);
-                        ctx += ",\"phase_a_alignments\":" + std::to_string(phase_a_stats.multimodal_alignments_created);
-                        // Last mimicry attempt details for trajectory plotting (gated behind --telemetry-extended)
-                        if (telemetry_extended) {
-                            try {
-                                // We don't have direct accessor; use LearningSystem for sim and Phase A stats for counts
-                                ctx += ",\"phase_a_current_teacher_id\":\"" + current_teacher_id + "\"";
-                                ctx += ",\"phase_a_last_similarity\":" + std::to_string(phase_a_last_similarity);
-                                ctx += ",\"phase_a_last_novelty\":" + std::to_string(phase_a_last_novelty);
-                                ctx += ",\"phase_a_last_reward\":" + std::to_string(phase_a_last_reward);
-                                ctx += ",\"phase_a_last_success\":" + std::string(phase_a_last_success ? "true" : "false");
-                            } catch (...) { /* ignore */ }
-                        }
-                        // Nested phase_a block mirroring experiences schema (always include when Phase A is enabled)
+                    // MEMDB LOGGING
+                    if (due_memdb) {
+                        // Log context peers (sample + config) into MemoryDB
                         try {
-                            ctx += ",\"phase_a\":{";
-                            ctx += "\"current_teacher_id\":\"" + current_teacher_id + "\"";
-                            ctx += ",\"last_similarity\":" + std::to_string(phase_a_last_similarity);
-                            ctx += ",\"last_novelty\":" + std::to_string(phase_a_last_novelty);
-                            ctx += ",\"last_reward\":" + std::to_string(phase_a_last_reward);
-                            ctx += ",\"last_success\":" + std::string(phase_a_last_success ? "true" : "false");
-                            ctx += "}";
-                        } catch (...) { /* ignore */ }
-                    }
+                            auto peers = NeuroForge::Core::NF_ListContextPeers();
+                            std::int64_t ts_ms_peer = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                std::chrono::system_clock::now().time_since_epoch()).count();
+                            for (const auto& p : peers) {
+                                // Use configured label if present; default to "runtime"
+                                std::string sample_label;
+                                auto it = context_peer_labels.find(p);
+                                if (it != context_peer_labels.end()) sample_label = it->second; else sample_label = "runtime";
+                                double s = NeuroForge::Core::NF_SampleContextPeer(p, sample_label);
+                                auto cfgp = NeuroForge::Core::NF_GetPeerConfig(p);
+                                // Compute effective coupling parameters for this peer
+                                double lambda_eff = 0.0;
+                                try {
+                                    auto edges = NeuroForge::Core::NF_GetContextCouplings();
+                                    for (const auto& e : edges) {
+                                        const std::string& src = std::get<0>(e);
+                                        const std::string& dst = std::get<1>(e);
+                                        double w = std::get<2>(e);
+                                        if (dst == p) lambda_eff += w;
+                                    }
+                                    if (lambda_eff < 0.0) lambda_eff = 0.0;
+                                    if (lambda_eff > 1.0) lambda_eff = 1.0;
+                                } catch (...) { /* ignore coupling inspection errors */ }
 
-                    if (phase5_language_enable && language_system) {
-                        auto lang_stats = language_system->getStatistics();
-                        ctx += ",\"language_stage\":" + std::to_string(static_cast<int>(lang_stats.current_stage));
-                        ctx += ",\"language_tokens_generated\":" + std::to_string(lang_stats.total_tokens_generated);
-                        ctx += ",\"language_narrations\":" + std::to_string(lang_stats.narration_entries);
-                        ctx += ",\"language_vocab_active\":" + std::to_string(lang_stats.active_vocabulary_size);
-                        // Nested language block mirroring experiences schema
-                        ctx += ",\"language\":{"; 
-                        ctx += "\"stage\":" + std::to_string(static_cast<int>(lang_stats.current_stage));
-                        ctx += ",\"metrics\":{"; 
-                        ctx += "\"tokens_generated\":" + std::to_string(lang_stats.total_tokens_generated);
-                        ctx += ",\"narrations\":" + std::to_string(lang_stats.narration_entries);
-                        ctx += ",\"vocab_active\":" + std::to_string(lang_stats.active_vocabulary_size);
-                        ctx += "}}";
-                    }
-                    if (self_node) {
-                        try {
-                            auto cog = self_node->getSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Cognitive);
-                            auto emo = self_node->getSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Emotional);
-                            ctx += ",\"self_awareness\":" + std::to_string(self_node->getSelfAwarenessLevel());
-                            ctx += ",\"self_identity\":\"" + self_node->getCurrentIdentity() + "\"";
-                            ctx += ",\"self_cognitive_conf\":" + std::to_string(cog.confidence_level);
-                            ctx += ",\"self_emotional_conf\":" + std::to_string(emo.confidence_level);
-                            // Nested self block mirroring experiences schema
-                            ctx += ",\"self\":{"; 
-                            ctx += "\"state\":{"; 
-                            ctx += "\"awareness\":" + std::to_string(self_node->getSelfAwarenessLevel());
-                            ctx += ",\"identity\":\"" + self_node->getCurrentIdentity() + "\"";
-                            ctx += "}"; 
-                            ctx += ",\"confidence\":{"; 
-                            ctx += "\"cognitive\":" + std::to_string(cog.confidence_level);
-                            ctx += ",\"emotional\":" + std::to_string(emo.confidence_level);
-                            ctx += "}"; 
-                            ctx += "}"; 
-                        } catch (...) { /* ignore */ }
-                    }
+                                // Use global Phase-4 kappa param when available; default 0.0
+                                double kappa_eff = 0.0;
+                                try {
+                                    // kappa_param is parsed earlier; replicate local copy if needed
+                                    // This scope relies on captured kappa_param from main
+                                    kappa_eff = kappa_param;
+                                    if (kappa_eff < 0.0) kappa_eff = 0.0;
+                                } catch (...) { /* ignore */ }
 
-                    ctx += "}";
-                    bool all_zero = (shaped_reward == 0.0f && teacher_r == 0.0 && novelty_r == 0.0 && survival_r == 0.0);
-                    if (!all_zero || log_shaped_zero) {
-                        brain.logReward(static_cast<double>(shaped_reward), "shaped", ctx);
-                        try {
-                            std::ostringstream ctxs;
-                            ctxs.setf(std::ios::fixed);
-                            ctxs << "{"
-                                 << "\"source\":\"survival\"," 
-                                 << "\"teacher_id\":\"" << current_teacher_id << "\"," 
-                                 << "\"components\":{\"teacher\":" << std::setprecision(4) << teacher_r
-                                 << ",\"survival\":" << std::setprecision(4) << survival_r
-                                 << ",\"novelty\":" << std::setprecision(4) << novelty_r << "},"
-                                 << "\"shaped\":" << std::setprecision(4) << shaped_d
-                                 << "}";
-                            brain.logReward(survival_r, "survival", ctxs.str());
-                        } catch (...) { }
-                        try {
-                            double merged = static_cast<double>(shaped_reward);
-                            std::ostringstream ctxm;
-                            ctxm.setf(std::ios::fixed);
-                            ctxm << "{"
-                                 << "\"source\":\"merged\"," 
-                                 << "\"teacher_id\":\"" << current_teacher_id << "\"," 
-                                 << "\"weights\":{\"teacher\":" << std::setprecision(4) << wt_T
-                                 << ",\"survival\":" << std::setprecision(4) << wt_S
-                                 << ",\"novelty\":" << std::setprecision(4) << wt_N << "},"
-                                 << "\"components\":{\"teacher\":" << std::setprecision(4) << teacher_r
-                                 << ",\"survival\":" << std::setprecision(4) << survival_r
-                                 << ",\"novelty\":" << std::setprecision(4) << novelty_r << "},"
-                                 << "\"shaped\":" << std::setprecision(4) << shaped_d
-                                 << "}";
-                            brain.logReward(merged, "merged", ctxm.str());
-                        } catch (...) { }
-                        if (simulate_rewards > 0) {
-                            for (int sr = 0; sr < simulate_rewards; ++sr) {
-                                std::ostringstream jrs;
-                                jrs << "{\"source\":\"synthetic\",\"step\":" << i << "}";
-                                brain.logReward(1.0, "simulated", jrs.str());
+                                std::string mode_val = "coop"; // default mode until CLI adds couple-mode
+                                std::int64_t out_id = 0;
+                                (void)memdb->insertContextPeerLog(memdb_run_id, ts_ms_peer, p, s, cfgp.gain, cfgp.update_ms, cfgp.window, sample_label, mode_val, lambda_eff, kappa_eff, out_id);
                             }
-                        }
-                    }
+                        } catch (...) { /* ignore peer logging errors */ }
 
-                    // Log context peers (sample + config) into MemoryDB
-                    try {
-                        auto peers = NeuroForge::Core::NF_ListContextPeers();
-                        std::int64_t ts_ms_peer = std::chrono::duration_cast<std::chrono::milliseconds>(
+                        last_memdb_log = now;
+                        static std::uint64_t steps_since = 0;
+                        static auto last_hz_time = std::chrono::steady_clock::now();
+                        steps_since += 1;
+                        double hz = 0.0;
+                        auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_hz_time).count();
+                        if (elapsed_ms > 0) {
+                            hz = (steps_since * 1000.0) / static_cast<double>(elapsed_ms);
+                        }
+                        if (elapsed_ms >= memdb_interval_ms) {
+                            steps_since = 0;
+                            last_hz_time = now;
+                        }
+                        std::int64_t ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
                             std::chrono::system_clock::now().time_since_epoch()).count();
-                        for (const auto& p : peers) {
-                            // Use configured label if present; default to "runtime"
-                            std::string sample_label;
-                            auto it = context_peer_labels.find(p);
-                            if (it != context_peer_labels.end()) sample_label = it->second; else sample_label = "runtime";
-                            double s = NeuroForge::Core::NF_SampleContextPeer(p, sample_label);
-                            auto cfgp = NeuroForge::Core::NF_GetPeerConfig(p);
-                            // Compute effective coupling parameters for this peer
-                            double lambda_eff = 0.0;
-                            try {
-                                auto edges = NeuroForge::Core::NF_GetContextCouplings();
-                                for (const auto& e : edges) {
-                                    const std::string& src = std::get<0>(e);
-                                    const std::string& dst = std::get<1>(e);
-                                    double w = std::get<2>(e);
-                                    if (dst == p) lambda_eff += w;
+                        auto statsOpt2 = brain.getLearningStatistics();
+                        NeuroForge::Core::LearningSystem::Statistics st{};
+                        if (statsOpt2.has_value()) st = statsOpt2.value();
+                        {
+                            auto gs = brain.getGlobalStatistics();
+                            std::uint64_t step_pc = static_cast<std::uint64_t>(gs.processing_cycles);
+                            (void)memdb->insertLearningStats(ts_ms, step_pc, hz, st, memdb_run_id);
+                            std::int64_t event_id = 0;
+                            (void)memdb->insertRunEvent(memdb_run_id, ts_ms, step_pc, std::string("heartbeat"), std::string(), 0, nf_process_rss_mb(), 0.0, event_id);
+                            // Optional memory pressure notifications (RSS)
+                            double rss_mb = nf_process_rss_mb();
+                            if (rss_warn_threshold_mb > 0.0 && rss_mb >= rss_warn_threshold_mb) {
+                                auto now_warn = std::chrono::steady_clock::now();
+                                if (last_rss_warn.time_since_epoch().count() == 0 ||
+                                    std::chrono::duration_cast<std::chrono::milliseconds>(now_warn - last_rss_warn).count() >= rss_warn_interval_ms) {
+                                    std::int64_t warn_id = 0;
+                                    (void)memdb->insertRunEvent(memdb_run_id, ts_ms, step_pc, std::string("warning"), std::string("rss_threshold_exceeded"), 0, rss_mb, 0.0, warn_id);
+                                    last_rss_warn = now_warn;
                                 }
-                                if (lambda_eff < 0.0) lambda_eff = 0.0;
-                                if (lambda_eff > 1.0) lambda_eff = 1.0;
-                            } catch (...) { /* ignore coupling inspection errors */ }
-
-                            // Use global Phase-4 kappa param when available; default 0.0
-                            double kappa_eff = 0.0;
-                            try {
-                                // kappa_param is parsed earlier; replicate local copy if needed
-                                // This scope relies on captured kappa_param from main
-                                kappa_eff = kappa_param;
-                                if (kappa_eff < 0.0) kappa_eff = 0.0;
-                            } catch (...) { /* ignore */ }
-
-                            std::string mode_val = "coop"; // default mode until CLI adds couple-mode
-                            std::int64_t out_id = 0;
-                            (void)memdb->insertContextPeerLog(memdb_run_id, ts_ms_peer, p, s, cfgp.gain, cfgp.update_ms, cfgp.window, sample_label, mode_val, lambda_eff, kappa_eff, out_id);
-                        }
-                    } catch (...) { /* ignore peer logging errors */ }
-
-                    last_memdb_log = now;
-                    static std::uint64_t steps_since = 0;
-                    static auto last_hz_time = std::chrono::steady_clock::now();
-                    steps_since += 1;
-                    double hz = 0.0;
-                    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - last_hz_time).count();
-                    if (elapsed_ms > 0) {
-                        hz = (steps_since * 1000.0) / static_cast<double>(elapsed_ms);
-                    }
-                    if (elapsed_ms >= memdb_interval_ms) {
-                        steps_since = 0;
-                        last_hz_time = now;
-                    }
-                    std::int64_t ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::system_clock::now().time_since_epoch()).count();
-                    auto statsOpt2 = brain.getLearningStatistics();
-                    NeuroForge::Core::LearningSystem::Statistics st{};
-                    if (statsOpt2.has_value()) st = statsOpt2.value();
-                    {
-                        auto gs = brain.getGlobalStatistics();
-                        std::uint64_t step_pc = static_cast<std::uint64_t>(gs.processing_cycles);
-                        (void)memdb->insertLearningStats(ts_ms, step_pc, hz, st, memdb_run_id);
-                        std::int64_t event_id = 0;
-                        (void)memdb->insertRunEvent(memdb_run_id, ts_ms, step_pc, std::string("heartbeat"), std::string(), 0, nf_process_rss_mb(), 0.0, event_id);
-                        // Optional memory pressure notifications (RSS)
-                        double rss_mb = nf_process_rss_mb();
-                        if (rss_warn_threshold_mb > 0.0 && rss_mb >= rss_warn_threshold_mb) {
-                            auto now_warn = std::chrono::steady_clock::now();
-                            if (last_rss_warn.time_since_epoch().count() == 0 ||
-                                std::chrono::duration_cast<std::chrono::milliseconds>(now_warn - last_rss_warn).count() >= rss_warn_interval_ms) {
-                                std::int64_t warn_id = 0;
-                                (void)memdb->insertRunEvent(memdb_run_id, ts_ms, step_pc, std::string("warning"), std::string("rss_threshold_exceeded"), 0, rss_mb, 0.0, warn_id);
-                                last_rss_warn = now_warn;
+                            }
+                            if (rss_fail_threshold_mb > 0.0 && rss_mb >= rss_fail_threshold_mb) {
+                                std::int64_t err_id = 0;
+                                (void)memdb->insertRunEvent(memdb_run_id, ts_ms, step_pc, std::string("error"), std::string("rss_fail_threshold_exceeded"), 0, rss_mb, 0.0, err_id);
                             }
                         }
-                        if (rss_fail_threshold_mb > 0.0 && rss_mb >= rss_fail_threshold_mb) {
-                            std::int64_t err_id = 0;
-                            (void)memdb->insertRunEvent(memdb_run_id, ts_ms, step_pc, std::string("error"), std::string("rss_fail_threshold_exceeded"), 0, rss_mb, 0.0, err_id);
-                        }
-                    }
 
-                    // Periodic experience snapshot for state trajectory visualization
-                    try {
-                        auto vec_to_json = [](const std::vector<float>& v) -> std::string {
-                            std::ostringstream oss;
-                            oss.setf(std::ios::fixed);
-                            oss << std::setprecision(6) << "[";
-                            for (size_t k = 0; k < v.size(); ++k) {
-                                if (k) oss << ",";
-                                oss << v[k];
-                            }
-                            oss << "]";
-                            return oss.str();
-                        };
-                        std::string tag = std::string("snapshot:") + (phase_a_enable ? "phase_a" : "core");
-                        if (dataset_active && mimicry_enable && phase_a_enable && phase_a_system && !current_teacher_id.empty()) {
-                            auto* ls_mim2 = brain.getLearningSystem();
-                            std::vector<float> empty_student_vec;
-                            int mimicry_repeats = phase_a_mimicry_repeats;
-                            for (int rep = 0; rep < mimicry_repeats; ++rep) {
-                                auto attempt2 = phase_a_system->attemptMimicry(empty_student_vec, current_teacher_id, std::string("triplet_step"));
-                                if (!mimicry_internal) { phase_a_system->applyMimicryReward(attempt2); }
-                                phase_a_last_similarity = attempt2.similarity_score;
-                                phase_a_last_novelty = attempt2.novelty_score;
-                                phase_a_last_reward = attempt2.total_reward;
-                                phase_a_last_success = attempt2.success;
-                                phase_a_last_stu_len = static_cast<int>(attempt2.student_embedding.size());
-                                phase_a_last_tea_len = static_cast<int>(attempt2.teacher_embedding.size());
-                                double d2 = 0.0, ns2 = 0.0, nt2 = 0.0;
-                                std::size_t n2 = std::min(attempt2.student_embedding.size(), attempt2.teacher_embedding.size());
-                                for (std::size_t ii = 0; ii < n2; ++ii) {
-                                    double sv2 = static_cast<double>(attempt2.student_embedding[ii]);
-                                    double tv2 = static_cast<double>(attempt2.teacher_embedding[ii]);
-                                    d2 += sv2 * tv2;
-                                    ns2 += sv2 * sv2;
-                                    nt2 += tv2 * tv2;
+                        // Periodic experience snapshot for state trajectory visualization
+                        try {
+                            auto vec_to_json = [](const std::vector<float>& v) -> std::string {
+                                std::ostringstream oss;
+                                oss.setf(std::ios::fixed);
+                                oss << std::setprecision(6) << "[";
+                                for (size_t k = 0; k < v.size(); ++k) {
+                                    if (k) oss << ",";
+                                    oss << v[k];
                                 }
-                                phase_a_last_dot = d2;
-                                phase_a_last_stu_norm = std::sqrt(ns2);
-                                phase_a_last_tea_norm = std::sqrt(nt2);
-                                if (mimicry_internal && ls_mim2) {
-                                    ls_mim2->setMimicryAttemptScores(phase_a_last_similarity, phase_a_last_novelty, phase_a_last_reward, phase_a_last_success);
+                                oss << "]";
+                                return oss.str();
+                            };
+                            std::string tag = std::string("snapshot:") + (phase_a_enable ? "phase_a" : "core");
+                            if (dataset_active && mimicry_enable && phase_a_enable && phase_a_system && !current_teacher_id.empty()) {
+                                auto* ls_mim2 = brain.getLearningSystem();
+                                std::vector<float> empty_student_vec;
+                                int mimicry_repeats = phase_a_mimicry_repeats;
+                                for (int rep = 0; rep < mimicry_repeats; ++rep) {
+                                    auto attempt2 = phase_a_system->attemptMimicry(empty_student_vec, current_teacher_id, std::string("triplet_step"));
+                                    if (!mimicry_internal) { phase_a_system->applyMimicryReward(attempt2); }
+                                    phase_a_last_similarity = attempt2.similarity_score;
+                                    phase_a_last_novelty = attempt2.novelty_score;
+                                    phase_a_last_reward = attempt2.total_reward;
+                                    phase_a_last_success = attempt2.success;
+                                    phase_a_last_stu_len = static_cast<int>(attempt2.student_embedding.size());
+                                    phase_a_last_tea_len = static_cast<int>(attempt2.teacher_embedding.size());
+                                    double d2 = 0.0, ns2 = 0.0, nt2 = 0.0;
+                                    std::size_t n2 = std::min(attempt2.student_embedding.size(), attempt2.teacher_embedding.size());
+                                    for (std::size_t ii = 0; ii < n2; ++ii) {
+                                        double sv2 = static_cast<double>(attempt2.student_embedding[ii]);
+                                        double tv2 = static_cast<double>(attempt2.teacher_embedding[ii]);
+                                        d2 += sv2 * tv2;
+                                        ns2 += sv2 * sv2;
+                                        nt2 += tv2 * tv2;
+                                    }
+                                    phase_a_last_dot = d2;
+                                    phase_a_last_stu_norm = std::sqrt(ns2);
+                                    phase_a_last_tea_norm = std::sqrt(nt2);
+                                    if (mimicry_internal && ls_mim2) {
+                                        ls_mim2->setMimicryAttemptScores(phase_a_last_similarity, phase_a_last_novelty, phase_a_last_reward, phase_a_last_success);
+                                    }
+                                    if (self_node) {
+                                        self_node->updateSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Cognitive, attempt2.student_embedding);
+                                        std::vector<float> emo2 = { phase_a_last_reward, phase_a_last_similarity, phase_a_last_novelty, phase_a_last_success ? 1.0f : 0.0f };
+                                        self_node->updateSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Emotional, emo2);
+                                        std::vector<float> xp2 = { static_cast<float>(i), 0.0f, static_cast<float>(phase_a_last_reward), static_cast<float>(phase_a_last_similarity), static_cast<float>(phase_a_last_novelty) };
+                                        self_node->integrateExperience(xp2);
+                                        try { self_node->updateIdentity(std::string("teacher:") + current_teacher_id); } catch (...) {}
+                                    }
+                                }
+                            }
+                            // Input: observation proxy; optionally include extended metadata; Output: action activations
+                            std::string input_json;
+                            if (telemetry_extended) {
+                                std::ostringstream meta;
+                                meta.setf(std::ios::fixed);
+                                meta << std::setprecision(6) << "{";
+                                meta << "\"obs\":" << vec_to_json(obs);
+                                // Learning telemetry block
+                                meta << ",\"learning\":{"
+                                     "\"competence_level\":" << competence_level
+                                     << ",\"substrate_similarity\":" << substrate_similarity
+                                     << ",\"substrate_novelty\":" << substrate_novelty
+                                     << "}";
+                                // Context telemetry block
+                                try {
+                                    auto ctx_samples = NeuroForge::Core::NF_GetRecentContextSamples();
+                                    auto cfg_ctx = NeuroForge::Core::NF_GetContextConfig();
+                                    std::ostringstream oss_ctx;
+                                    oss_ctx.setf(std::ios::fixed);
+                                    oss_ctx << std::setprecision(6) << "[";
+                                    for (size_t k = 0; k < ctx_samples.size(); ++k) {
+                                        if (k) oss_ctx << ",";
+                                        oss_ctx << ctx_samples[k];
+                                    }
+                                    oss_ctx << "]";
+                                    meta << ",\"context\":{\"samples\":" << oss_ctx.str()
+                                         << ",\"config\":{\"gain\":" << cfg_ctx.gain
+                                         << ",\"update_ms\":" << cfg_ctx.update_ms
+                                         << ",\"window\":" << cfg_ctx.window << "}}";
+                                } catch (...) { /* ignore */ }
+                                if (phase_a_enable && phase_a_system) {
+                                    meta << ",\"phase_a\":{"
+                                        "\"current_teacher_id\":\"" << current_teacher_id << "\","
+                                        "\"last_similarity\":" << phase_a_last_similarity << ","
+                                        "\"last_novelty\":" << phase_a_last_novelty << ","
+                                        "\"last_reward\":" << phase_a_last_reward << ","
+                                        "\"last_success\":" << (phase_a_last_success ? "true" : "false") << ","
+                                        "\"stu_len\":" << phase_a_last_stu_len << ","
+                                        "\"tea_len\":" << phase_a_last_tea_len << ","
+                                        "\"stu_norm\":" << phase_a_last_stu_norm << ","
+                                        "\"tea_norm\":" << phase_a_last_tea_norm << ","
+                                        "\"dot\":" << phase_a_last_dot
+                                        << "}";
+                                }
+                                if (phase5_language_enable && language_system) {
+                                    auto lang_stats = language_system->getStatistics();
+                                    meta << ",\"language\":{"
+                                        "\"stage\":" << static_cast<int>(lang_stats.current_stage) << ","
+                                        "\"tokens_generated\":" << lang_stats.total_tokens_generated << ","
+                                        "\"narrations\":" << lang_stats.narration_entries << ","
+                                        "\"vocab_active\":" << lang_stats.active_vocabulary_size << ","
+                                        "\"metrics\":{\"stage\":" << static_cast<int>(lang_stats.current_stage)
+                                        << ",\"tokens_generated\":" << lang_stats.total_tokens_generated
+                                        << ",\"narrations\":" << lang_stats.narration_entries
+                                        << ",\"vocab_active\":" << lang_stats.active_vocabulary_size << "}"
+                                        << "}";
+                                }
+                                // Vision telemetry
+                                {
+                                    int vx = retina_rect_x, vy = retina_rect_y, vw = retina_rect_w, vh = retina_rect_h;
+                                    if (foveation_enable && last_fovea_w > 0 && last_fovea_h > 0) {
+                                        vx = last_fovea_x; vy = last_fovea_y; vw = last_fovea_w; vh = last_fovea_h;
+                                    }
+                                    meta << ",\"vision\":{\"source\":\"" << vision_source << "\","
+                                         << "\"retina\":{\"x\":" << vx << ",\"y\":" << vy << ",\"w\":" << vw << ",\"h\":" << vh << "},"
+                                         << "\"foveation\":{\"enabled\":" << (foveation_enable ? "true" : "false")
+                                         << ",\"mode\":\"" << fovea_mode << "\",\"alpha\":" << fovea_alpha << "}"
+                                         << "}";
                                 }
                                 if (self_node) {
-                                    self_node->updateSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Cognitive, attempt2.student_embedding);
-                                    std::vector<float> emo2 = { phase_a_last_reward, phase_a_last_similarity, phase_a_last_novelty, phase_a_last_success ? 1.0f : 0.0f };
-                                    self_node->updateSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Emotional, emo2);
-                                    std::vector<float> xp2 = { static_cast<float>(i), 0.0f, static_cast<float>(phase_a_last_reward), static_cast<float>(phase_a_last_similarity), static_cast<float>(phase_a_last_novelty) };
-                                    self_node->integrateExperience(xp2);
-                                    try { self_node->updateIdentity(std::string("teacher:") + current_teacher_id); } catch (...) {}
+                                    try {
+                                        auto cog = self_node->getSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Cognitive);
+                                        auto emo = self_node->getSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Emotional);
+                                        meta << ",\"self\":{"
+                                             "\"awareness\":" << self_node->getSelfAwarenessLevel() << ","
+                                             "\"identity\":\"" << self_node->getCurrentIdentity() << "\","
+                                             "\"cognitive_conf\":" << cog.confidence_level << ","
+                                             "\"emotional_conf\":" << emo.confidence_level << ","
+                                             "\"state\":{\"awareness\":" << self_node->getSelfAwarenessLevel()
+                                                << ",\"identity\":\"" << self_node->getCurrentIdentity() << "\"},"
+                                             "\"confidence\":{\"cognitive\":" << cog.confidence_level
+                                                << ",\"emotional\":" << emo.confidence_level << "}"
+                                             << "}";
+                                    } catch (...) { /* ignore */ }
                                 }
+                                meta << "}";
+                                input_json = meta.str();
+                            } else {
+                                input_json = vec_to_json(obs);
                             }
-                        }
-                        // Input: observation proxy; optionally include extended metadata; Output: action activations
-                        std::string input_json;
-                        if (telemetry_extended) {
-                            std::ostringstream meta;
-                            meta.setf(std::ios::fixed);
-                            meta << std::setprecision(6) << "{";
-                            meta << "\"obs\":" << vec_to_json(obs);
-                            // Learning telemetry block
-                            meta << ",\"learning\":{"
-                                 "\"competence_level\":" << competence_level
-                                 << ",\"substrate_similarity\":" << substrate_similarity
-                                 << ",\"substrate_novelty\":" << substrate_novelty
-                                 << "}";
-                            // Context telemetry block
-                            try {
-                                auto ctx_samples = NeuroForge::Core::NF_GetRecentContextSamples();
-                                auto cfg_ctx = NeuroForge::Core::NF_GetContextConfig();
-                                std::ostringstream oss_ctx;
-                                oss_ctx.setf(std::ios::fixed);
-                                oss_ctx << std::setprecision(6) << "[";
-                                for (size_t k = 0; k < ctx_samples.size(); ++k) {
-                                    if (k) oss_ctx << ",";
-                                    oss_ctx << ctx_samples[k];
-                                }
-                                oss_ctx << "]";
-                                meta << ",\"context\":{\"samples\":" << oss_ctx.str()
-                                     << ",\"config\":{\"gain\":" << cfg_ctx.gain
-                                     << ",\"update_ms\":" << cfg_ctx.update_ms
-                                     << ",\"window\":" << cfg_ctx.window << "}}";
-                            } catch (...) { /* ignore */ }
-                            if (phase_a_enable && phase_a_system) {
-                                meta << ",\"phase_a\":{"
-                                    "\"current_teacher_id\":\"" << current_teacher_id << "\","
-                                    "\"last_similarity\":" << phase_a_last_similarity << ","
-                                    "\"last_novelty\":" << phase_a_last_novelty << ","
-                                    "\"last_reward\":" << phase_a_last_reward << ","
-                                    "\"last_success\":" << (phase_a_last_success ? "true" : "false") << ","
-                                    "\"stu_len\":" << phase_a_last_stu_len << ","
-                                    "\"tea_len\":" << phase_a_last_tea_len << ","
-                                    "\"stu_norm\":" << phase_a_last_stu_norm << ","
-                                    "\"tea_norm\":" << phase_a_last_tea_norm << ","
-                                    "\"dot\":" << phase_a_last_dot
-                                    << "}";
-                            }
-                            if (phase5_language_enable && language_system) {
-                                auto lang_stats = language_system->getStatistics();
-                                meta << ",\"language\":{"
-                                    "\"stage\":" << static_cast<int>(lang_stats.current_stage) << ","
-                                    "\"tokens_generated\":" << lang_stats.total_tokens_generated << ","
-                                    "\"narrations\":" << lang_stats.narration_entries << ","
-                                    "\"vocab_active\":" << lang_stats.active_vocabulary_size << ","
-                                    "\"metrics\":{\"stage\":" << static_cast<int>(lang_stats.current_stage)
-                                    << ",\"tokens_generated\":" << lang_stats.total_tokens_generated
-                                    << ",\"narrations\":" << lang_stats.narration_entries
-                                    << ",\"vocab_active\":" << lang_stats.active_vocabulary_size << "}"
-                                    << "}";
-                            }
-                            // Vision telemetry
-                            {
-                                int vx = retina_rect_x, vy = retina_rect_y, vw = retina_rect_w, vh = retina_rect_h;
-                                if (foveation_enable && last_fovea_w > 0 && last_fovea_h > 0) {
-                                    vx = last_fovea_x; vy = last_fovea_y; vw = last_fovea_w; vh = last_fovea_h;
-                                }
-                                meta << ",\"vision\":{\"source\":\"" << vision_source << "\","
-                                     << "\"retina\":{\"x\":" << vx << ",\"y\":" << vy << ",\"w\":" << vw << ",\"h\":" << vh << "},"
-                                     << "\"foveation\":{\"enabled\":" << (foveation_enable ? "true" : "false")
-                                     << ",\"mode\":\"" << fovea_mode << "\",\"alpha\":" << fovea_alpha << "}"
-                                     << "}";
+                            std::string output_json = vec_to_json(region_acts);
+                            std::int64_t exp_id = -1;
+                            bool significant = false;
+                            auto gs = brain.getGlobalStatistics();
+                            std::uint64_t step_pc = static_cast<std::uint64_t>(gs.processing_cycles);
+                            (void)memdb->insertExperience(ts_ms,
+                                                          step_pc,
+                                                          tag,
+                                                          input_json,
+                                                          output_json,
+                                                          significant,
+                                                          memdb_run_id,
+                                                          exp_id);
+                            if (current_episode_id > 0 && exp_id > 0) {
+                                (void)memdb->linkExperienceToEpisode(exp_id, current_episode_id);
                             }
                             if (self_node) {
                                 try {
                                     auto cog = self_node->getSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Cognitive);
                                     auto emo = self_node->getSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Emotional);
-                                    meta << ",\"self\":{"
-                                         "\"awareness\":" << self_node->getSelfAwarenessLevel() << ","
-                                         "\"identity\":\"" << self_node->getCurrentIdentity() << "\"," 
-                                         "\"cognitive_conf\":" << cog.confidence_level << ","
-                                         "\"emotional_conf\":" << emo.confidence_level << ","
-                                         "\"state\":{\"awareness\":" << self_node->getSelfAwarenessLevel()
-                                            << ",\"identity\":\"" << self_node->getCurrentIdentity() << "\"},"
-                                         "\"confidence\":{\"cognitive\":" << cog.confidence_level
-                                            << ",\"emotional\":" << emo.confidence_level << "}"
-                                         << "}";
+                                    std::ostringstream self_state;
+                                    self_state.setf(std::ios::fixed);
+                                    self_state << std::setprecision(6) << "{"
+                                               << "\"awareness\":" << self_node->getSelfAwarenessLevel() << ","
+                                               << "\"identity\":\"" << self_node->getCurrentIdentity() << "\","
+                                               << "\"cognitive_conf\":" << cog.confidence_level << ","
+                                               << "\"emotional_conf\":" << emo.confidence_level
+                                               << "}";
+                                    double avg_conf = 0.5 * (cog.confidence_level + emo.confidence_level);
+                                    brain.logSelfModel(self_state.str(), avg_conf);
                                 } catch (...) { /* ignore */ }
                             }
-                            meta << "}";
-                            input_json = meta.str();
-                        } else {
-                            input_json = vec_to_json(obs);
-                        }
-                        std::string output_json = vec_to_json(region_acts);
-                        std::int64_t exp_id = -1;
-                        bool significant = false;
-                        auto gs = brain.getGlobalStatistics();
-                        std::uint64_t step_pc = static_cast<std::uint64_t>(gs.processing_cycles);
-                        (void)memdb->insertExperience(ts_ms,
-                                                      step_pc,
-                                                      tag,
-                                                      input_json,
-                                                      output_json,
-                                                      significant,
-                                                      memdb_run_id,
-                                                      exp_id);
-                        if (current_episode_id > 0 && exp_id > 0) {
-                            (void)memdb->linkExperienceToEpisode(exp_id, current_episode_id);
-                        }
-                        if (self_node) {
-                            try {
-                                auto cog = self_node->getSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Cognitive);
-                                auto emo = self_node->getSelfRepresentation(NeuroForge::Regions::SelfNode::SelfAspect::Emotional);
-                                std::ostringstream self_state;
-                                self_state.setf(std::ios::fixed);
-                                self_state << std::setprecision(6) << "{"
-                                           << "\"awareness\":" << self_node->getSelfAwarenessLevel() << ","
-                                           << "\"identity\":\"" << self_node->getCurrentIdentity() << "\"," 
-                                           << "\"cognitive_conf\":" << cog.confidence_level << ","
-                                           << "\"emotional_conf\":" << emo.confidence_level
-                                           << "}";
-                                double avg_conf = 0.5 * (cog.confidence_level + emo.confidence_level);
-                                brain.logSelfModel(self_state.str(), avg_conf);
-                            } catch (...) { /* ignore */ }
-                        }
-                    } catch (...) { /* swallow to avoid impacting realtime loop */ }
+                        } catch (...) { /* swallow to avoid impacting realtime loop */ }
+                    }
                 }
             }
             #ifdef _WIN32
