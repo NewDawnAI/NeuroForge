@@ -110,15 +110,15 @@ ReasonScore Phase6Reasoner::scoreOptions(const std::vector<ReasonOption>& option
     std::vector<double> pre_scores(options.size(), 0.0);
     for (std::size_t i = 0; i < options.size(); ++i) {
         const auto& opt = options[i];
-        double prior = 0.0;
-        auto it = posteriors_.find(opt.key);
-        if (it != posteriors_.end()) prior = it->second.mean;
+        double prior = getPosteriorMean(opt.key);
 
         // Hierarchical reasoning: boost score if subgoals have high expected value
         double h_bonus = scoreHierarchicalBonus(opt.key);
-        // Blend hierarchical bonus with prior (e.g. 50% mix or additive)
-        // Here we treat it as an additive shaping term
-        double s = prior + 0.5 * h_bonus - alpha_eff_trust * opt.complexity;
+        // Causal reasoning: boost score if it causes high-value effects
+        double c_bonus = scoreCausalBonus(opt.key);
+
+        // Blend bonuses with prior (additive shaping)
+        double s = prior + 0.5 * h_bonus + 0.5 * c_bonus - alpha_eff_trust * opt.complexity;
 
         pre_scores[i] = s;
         rs.scores[i] = s;
