@@ -23,6 +23,7 @@
 #include <unordered_map>
 
 #include <exception>
+#include <stdexcept>
 #include <new>
 #include <csignal>
 
@@ -142,14 +143,19 @@ namespace {
 // Helper: sanitizes shell arguments to prevent command injection
 std::string shell_escape(const std::string& arg) {
 #ifdef _WIN32
-    // Windows cmd.exe escaping: wrap in double quotes, escape double quotes inside
+    // Windows cmd.exe escaping: wrap in double quotes.
+    // NOTE: cmd.exe does NOT treat \" as an escaped quote inside double quotes.
+    // It is impossible to safely escape a double quote inside a double-quoted argument for cmd.exe
+    // in a way that is also compatible with typical C runtime argument parsing (CommandLineToArgvW).
+    // Since this helper is used for paths and simple enum strings where quotes are invalid anyway,
+    // we throw an exception if a quote is found to prevent command injection.
     std::string out = "\"";
     for (char c : arg) {
         if (c == '"') {
-            out += "\\\"";
+            throw std::invalid_argument("Security error: Double quotes are not allowed in shell arguments on Windows to prevent command injection.");
         } else if (c == '\\') {
             // Note: In some contexts (like before a quote), backslashes might need doubling,
-            // but for simple file paths this simple escaping is usually sufficient when wrapped in quotes.
+            // but since we ban quotes, simple backslashes are safe inside quotes.
             out += "\\";
         } else {
             out += c;

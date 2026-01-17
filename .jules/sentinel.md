@@ -1,0 +1,4 @@
+## 2025-05-15 - [Windows Command Injection in shell_escape]
+**Vulnerability:** The `shell_escape` function for Windows in `src/main.cpp` used `\"` to escape double quotes inside command arguments. However, `cmd.exe` does not treat `\"` as an escaped quote; it treats `"` as a toggle. This allowed attackers to break out of the quoted argument string using a double quote, leading to command injection via operators like `&`.
+**Learning:** Windows `cmd.exe` argument parsing rules are inconsistent with C runtime `CommandLineToArgvW` rules. Safely escaping double quotes inside a double-quoted argument for `cmd.exe` is notoriously difficult and context-dependent.
+**Prevention:** For file paths and simple strings on Windows, strictly forbid (throw exception) or strip double quotes rather than attempting to escape them. This is the only fail-safe way to prevent `cmd.exe` interpretation issues when using `std::system` or `cmd /c`.
