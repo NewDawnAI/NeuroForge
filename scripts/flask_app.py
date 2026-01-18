@@ -127,7 +127,8 @@ class Producer:
 # Flask + Socket.IO app
 # -----------------------------
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins='*')
+# Remove wildcard CORS to prevent cross-origin websocket hijacking
+socketio = SocketIO(app)
 
 INDEX_HTML = """
 <!DOCTYPE html>
@@ -383,6 +384,7 @@ def on_control(data):
 
 def main():
     ap = argparse.ArgumentParser(description='NeuroForge Phase 2 live dashboard (Flask + Socket.IO)')
+    ap.add_argument('--host', type=str, default='127.0.0.1', help='Bind address (default: 127.0.0.1)')
     ap.add_argument('--port', type=int, default=8020)
     ap.add_argument('--brand-color', type=str, default=None)
     ap.add_argument('--preset', type=str, choices=['accuracy','strength','max','avg'], default='accuracy')
@@ -393,8 +395,8 @@ def main():
     producer = Producer(socketio, brand_color=args.brand_color, preset=args.preset, extras=extras, no_artifacts=args.no_artifacts)
     producer.start()
 
-    print(f"[phase_c_flask] Socket.IO dashboard at http://localhost:{args.port}/", flush=True)
-    socketio.run(app, host='0.0.0.0', port=args.port)
+    print(f"[phase_c_flask] Socket.IO dashboard at http://{args.host}:{args.port}/", flush=True)
+    socketio.run(app, host=args.host, port=args.port)
 
 if __name__ == '__main__':
     main()
