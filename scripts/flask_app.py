@@ -128,7 +128,8 @@ class Producer:
 # -----------------------------
 app = Flask(__name__)
 # Remove wildcard CORS to prevent cross-origin websocket hijacking
-socketio = SocketIO(app)
+# Initialized in main() to configure strict CORS based on host/port
+socketio = SocketIO()
 
 INDEX_HTML = """
 <!DOCTYPE html>
@@ -390,6 +391,15 @@ def main():
     ap.add_argument('--preset', type=str, choices=['accuracy','strength','max','avg'], default='accuracy')
     ap.add_argument('--no-artifacts', action='store_true')
     args, extras = ap.parse_known_args()
+
+    # Configure strict CORS for localhost to prevent Cross-Site WebSocket Hijacking
+    cors_origins = '*'
+    if args.host in ['127.0.0.1', 'localhost']:
+        cors_origins = [
+            f"http://127.0.0.1:{args.port}",
+            f"http://localhost:{args.port}"
+        ]
+    socketio.init_app(app, cors_allowed_origins=cors_origins)
 
     global producer
     producer = Producer(socketio, brand_color=args.brand_color, preset=args.preset, extras=extras, no_artifacts=args.no_artifacts)
