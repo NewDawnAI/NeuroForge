@@ -154,12 +154,21 @@ std::string shell_escape(const std::string& arg) {
         if (c == '"') {
             throw std::invalid_argument("Security error: Double quotes are not allowed in shell arguments on Windows to prevent command injection.");
         } else if (c == '\\') {
-            // Note: In some contexts (like before a quote), backslashes might need doubling,
-            // but since we ban quotes, simple backslashes are safe inside quotes.
+            // Note: Internal backslashes don't need doubling inside quotes unless they precede a quote.
+            // Since quotes are banned, internal backslashes are safe.
             out += "\\";
         } else {
             out += c;
         }
+    }
+    // Escape trailing backslashes so they don't escape the closing quote
+    if (!arg.empty() && arg.back() == '\\') {
+        std::size_t backslash_count = 0;
+        for (auto it = arg.rbegin(); it != arg.rend(); ++it) {
+            if (*it == '\\') backslash_count++;
+            else break;
+        }
+        out.append(backslash_count, '\\');
     }
     out += "\"";
     return out;
