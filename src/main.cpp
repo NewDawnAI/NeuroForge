@@ -48,6 +48,9 @@
 #pragma comment(lib, "winmm.lib")
 #include <psapi.h>
 #pragma comment(lib, "Psapi.lib")
+#else
+#include <unistd.h>
+#include <sys/wait.h>
 #endif
 
 // Project headers
@@ -5271,16 +5274,47 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                         }
                     }).detach();
                 #else
-                    cmd = shell_escape(viewer_exe_path) +
-                          " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
-                          " --weight-threshold=" + std::to_string(viewer_threshold) +
-                          " --layout=" + shell_escape(viewer_layout) +
-                          " --refresh-ms=" + std::to_string(viewer_refresh_ms);
+                    // Prepare arguments in parent to avoid malloc in forked child (async-signal-safety)
+                    std::vector<std::string> args_storage;
+                    args_storage.reserve(6);
+                    args_storage.push_back(viewer_exe_path);
+                    args_storage.push_back("--snapshot-file=" + snapshot_path_for_viewer);
+                    args_storage.push_back("--weight-threshold=" + std::to_string(viewer_threshold));
+                    args_storage.push_back("--layout=" + viewer_layout);
+                    args_storage.push_back("--refresh-ms=" + std::to_string(viewer_refresh_ms));
                     if (!spikes_live_path.empty()) {
-                        cmd += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
+                        args_storage.push_back("--spikes-file=" + spikes_path_for_viewer);
                     }
-                    cmd += " &";
-                    std::thread([cmd]() { std::system(cmd.c_str()); }).detach();
+
+                    std::vector<char*> args_ptrs;
+                    args_ptrs.reserve(args_storage.size() + 1);
+                    for (auto& s : args_storage) {
+                        args_ptrs.push_back(s.data());
+                    }
+                    args_ptrs.push_back(nullptr);
+
+                    // Use fork/exec to avoid shell injection vulnerabilities
+                    pid_t pid = fork();
+                    if (pid == 0) {
+                        // First child
+                        // Double fork to avoid zombie processes (init adopts grandchild)
+                        if (fork() == 0) {
+                            // Grandchild: exec
+                            execvp(args_ptrs[0], args_ptrs.data());
+
+                            // If execvp returns, it failed
+                            perror("[Security] execvp failed to launch viewer");
+                            _exit(1);
+                        }
+                        // First child exits immediately
+                        _exit(0);
+                    } else if (pid > 0) {
+                        // Parent waits for first child to exit (reaping it immediately)
+                        int status;
+                        waitpid(pid, &status, 0);
+                    } else {
+                        std::cerr << "[Security] fork failed" << std::endl;
+                    }
                 #endif
                     std::cout << "Launched 3D viewer: " << viewer_exe_path << "\n  watching: " << snapshot_path_for_viewer << "\n  layout='" << viewer_layout << "' refresh=" << viewer_refresh_ms << " ms threshold=" << viewer_threshold;
                     if (!spikes_live_path.empty()) std::cout << " spikes=\"" << spikes_path_for_viewer << "\"";
