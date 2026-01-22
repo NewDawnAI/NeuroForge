@@ -5250,16 +5250,26 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                     // Compose command line with sanitized arguments
                     std::string cmd;
                 #ifdef _WIN32
-                    // On Windows, start takes a title first. We use shell_escape for paths.
-                    // Note: start handles arguments slightly differently, but escaping should hold for the launched process args.
-                    cmd = "cmd /c start \"NF Viewer\" " + shell_escape(viewer_exe_path) +
-                          " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
-                          " --weight-threshold=" + std::to_string(viewer_threshold) +
-                          " --layout=" + shell_escape(viewer_layout) +
-                          " --refresh-ms=" + std::to_string(viewer_refresh_ms);
+                    // Use CreateProcess directly to avoid cmd.exe injection risks
+                    std::string args = " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
+                                       " --weight-threshold=" + std::to_string(viewer_threshold) +
+                                       " --layout=" + shell_escape(viewer_layout) +
+                                       " --refresh-ms=" + std::to_string(viewer_refresh_ms);
                     if (!spikes_live_path.empty()) {
-                        cmd += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
+                        args += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
                     }
+                    // Construct full command line: "exe" args...
+                    std::string full_cmd = shell_escape(viewer_exe_path) + args;
+                    std::thread([full_cmd]() {
+                        STARTUPINFOA si; ZeroMemory(&si, sizeof(si)); si.cb = sizeof(si);
+                        PROCESS_INFORMATION pi; ZeroMemory(&pi, sizeof(pi));
+                        std::vector<char> buf(full_cmd.begin(), full_cmd.end()); buf.push_back(0);
+                        if (CreateProcessA(NULL, buf.data(), NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, NULL, &si, &pi)) {
+                            CloseHandle(pi.hProcess); CloseHandle(pi.hThread);
+                        } else {
+                            std::cerr << "[Security] Failed to launch viewer via CreateProcess. Error: " << GetLastError() << std::endl;
+                        }
+                    }).detach();
                 #else
                     cmd = shell_escape(viewer_exe_path) +
                           " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
@@ -5270,8 +5280,8 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                         cmd += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
                     }
                     cmd += " &";
-                #endif
                     std::thread([cmd]() { std::system(cmd.c_str()); }).detach();
+                #endif
                     std::cout << "Launched 3D viewer: " << viewer_exe_path << "\n  watching: " << snapshot_path_for_viewer << "\n  layout='" << viewer_layout << "' refresh=" << viewer_refresh_ms << " ms threshold=" << viewer_threshold;
                     if (!spikes_live_path.empty()) std::cout << " spikes=\"" << spikes_path_for_viewer << "\"";
                     std::cout << std::endl;
