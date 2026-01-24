@@ -17,3 +17,8 @@
 **Vulnerability:** `src/main.cpp` used `std::system("cmd /c start ...")` to launch the viewer process on Windows. Even with argument sanitization via `shell_escape`, relying on `cmd.exe` exposes the application to command injection risks if the escaping logic has subtle flaws or if future maintainers relax constraints. `cmd.exe` parsing is notoriously complex and difficult to secure completely.
 **Learning:** The safest way to launch subprocesses on Windows is to bypass `cmd.exe` entirely. Using `CreateProcess` (or `CreateProcessA`/`CreateProcessW`) directly invokes the OS process creation API, which uses standard C runtime argument parsing (CommandLineToArgvW) that is much more predictable and secure than shell interpretation.
 **Prevention:** Replace `std::system` calls with `CreateProcess` (Windows) or `posix_spawn`/`exec` (POSIX) whenever launching executables. This eliminates the shell as an attack surface.
+
+## 2025-05-28 - [POSIX Process Detachment & Zombie Prevention]
+**Vulnerability:** `src/main.cpp` used `std::system` to launch the viewer, which is vulnerable to shell injection. Replacing it with a single `fork()` + `execvp()` created zombie processes because the parent process did not `wait()` on the child.
+**Learning:** When replacing `std::system("cmd &")` with `fork/exec` to improve security, the process detachment mechanism of the shell is lost. A single `fork` without `wait` leaves the child as a zombie when it terminates.
+**Prevention:** Use the **Double-Fork Pattern** for detached processes on POSIX: Fork, then inside the child fork again and exit immediately. The grandchild (worker) becomes orphaned to `init` (PID 1), ensuring it is reaped automatically, while the original parent `wait`s for the first child to prevent zombies.
