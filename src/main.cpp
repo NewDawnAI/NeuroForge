@@ -50,6 +50,12 @@
 #pragma comment(lib, "Psapi.lib")
 #endif
 
+#ifndef _WIN32
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#endif
+
 // Project headers
 #include "audio_capture.h"
 #include "system_audio_capture.h"
@@ -5271,16 +5277,48 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                         }
                     }).detach();
                 #else
-                    cmd = shell_escape(viewer_exe_path) +
-                          " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
-                          " --weight-threshold=" + std::to_string(viewer_threshold) +
-                          " --layout=" + shell_escape(viewer_layout) +
-                          " --refresh-ms=" + std::to_string(viewer_refresh_ms);
+                    // Use fork/execvp to avoid shell injection
+                    std::vector<std::string> args_list;
+                    args_list.push_back(viewer_exe_path);
+                    args_list.push_back("--snapshot-file=" + snapshot_path_for_viewer);
+                    args_list.push_back("--weight-threshold=" + std::to_string(viewer_threshold));
+                    args_list.push_back("--layout=" + viewer_layout);
+                    args_list.push_back("--refresh-ms=" + std::to_string(viewer_refresh_ms));
                     if (!spikes_live_path.empty()) {
-                        cmd += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
+                        args_list.push_back("--spikes-file=" + spikes_path_for_viewer);
                     }
-                    cmd += " &";
-                    std::thread([cmd]() { std::system(cmd.c_str()); }).detach();
+
+                    std::vector<char*> argv;
+                    argv.reserve(args_list.size() + 1);
+                    for (const auto& s : args_list) {
+                        argv.push_back(const_cast<char*>(s.c_str()));
+                    }
+                    argv.push_back(nullptr);
+
+                    // Double-fork to detach process and avoid zombies
+                    pid_t pid1 = fork();
+                    if (pid1 == 0) {
+                        // First child
+                        if (setsid() < 0) {
+                            // Proceed even if setsid fails
+                        }
+                        pid_t pid2 = fork();
+                        if (pid2 == 0) {
+                            // Grandchild: execute viewer
+                            execvp(argv[0], argv.data());
+                            _exit(1);
+                        } else if (pid2 > 0) {
+                            // First child exits, orphaning grandchild to init
+                            _exit(0);
+                        } else {
+                            _exit(1);
+                        }
+                    } else if (pid1 > 0) {
+                        // Parent reaps first child immediately
+                        waitpid(pid1, nullptr, 0);
+                    } else {
+                        std::cerr << "Error: failed to fork viewer process" << std::endl;
+                    }
                 #endif
                     std::cout << "Launched 3D viewer: " << viewer_exe_path << "\n  watching: " << snapshot_path_for_viewer << "\n  layout='" << viewer_layout << "' refresh=" << viewer_refresh_ms << " ms threshold=" << viewer_threshold;
                     if (!spikes_live_path.empty()) std::cout << " spikes=\"" << spikes_path_for_viewer << "\"";
