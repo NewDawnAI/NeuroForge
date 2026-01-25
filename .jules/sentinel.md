@@ -17,3 +17,11 @@
 **Vulnerability:** `src/main.cpp` used `std::system("cmd /c start ...")` to launch the viewer process on Windows. Even with argument sanitization via `shell_escape`, relying on `cmd.exe` exposes the application to command injection risks if the escaping logic has subtle flaws or if future maintainers relax constraints. `cmd.exe` parsing is notoriously complex and difficult to secure completely.
 **Learning:** The safest way to launch subprocesses on Windows is to bypass `cmd.exe` entirely. Using `CreateProcess` (or `CreateProcessA`/`CreateProcessW`) directly invokes the OS process creation API, which uses standard C runtime argument parsing (CommandLineToArgvW) that is much more predictable and secure than shell interpretation.
 **Prevention:** Replace `std::system` calls with `CreateProcess` (Windows) or `posix_spawn`/`exec` (POSIX) whenever launching executables. This eliminates the shell as an attack surface.
+
+## 2025-05-28 - [Async-Signal-Safe Process Launch on POSIX]
+**Vulnerability:** `std::system` executes commands via a shell (`/bin/sh -c`), which introduces Command Injection risks even with argument escaping. Replacing it with `fork` + `exec` is safer but tricky in multi-threaded C++ applications.
+**Learning:** In a multi-threaded program, `fork()` only copies the calling thread. If other threads held locks (e.g., inside `malloc` or I/O buffers) during the fork, the child inherits those locks in a held state, leading to deadlocks if the child attempts to allocate memory or print to streams.
+**Prevention:** When using `fork` + `exec`:
+1. Prepare all data structures (argument vectors) in the **parent** process.
+2. Inside the child, strictly avoid memory allocation (`std::string`, `std::vector`) and buffered I/O (`std::cout`, `std::cerr`).
+3. Use only async-signal-safe functions (like `execvp`, `write`, `_exit`) until the new image is loaded.

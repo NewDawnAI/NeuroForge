@@ -27,6 +27,13 @@
 #include <new>
 #include <csignal>
 
+#ifndef _WIN32
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <cerrno>
+#endif
+
 
 #ifdef NF_HAVE_OPENCV
 #include <opencv2/core.hpp>
@@ -5271,16 +5278,62 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                         }
                     }).detach();
                 #else
-                    cmd = shell_escape(viewer_exe_path) +
-                          " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
-                          " --weight-threshold=" + std::to_string(viewer_threshold) +
-                          " --layout=" + shell_escape(viewer_layout) +
-                          " --refresh-ms=" + std::to_string(viewer_refresh_ms);
+                    // POSIX secure launch using fork() + execvp() to avoid shell injection
+                    // We use a double-fork technique to detach the grandchild process completely.
+                    // IMPORTANT: To ensure Async-Signal-Safety in a multi-threaded application,
+                    // we must NOT allocate memory (malloc) or use buffered I/O (std::cerr)
+                    // inside the child process between fork() and execvp().
+
+                    // 1. Prepare arguments in the parent process
+                    std::vector<std::string> args;
+                    args.reserve(10);
+                    args.push_back(viewer_exe_path);
+                    args.push_back("--snapshot-file=" + snapshot_path_for_viewer);
+                    args.push_back("--weight-threshold=" + std::to_string(viewer_threshold));
+                    args.push_back("--layout=" + viewer_layout);
+                    args.push_back("--refresh-ms=" + std::to_string(viewer_refresh_ms));
                     if (!spikes_live_path.empty()) {
-                        cmd += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
+                        args.push_back("--spikes-file=" + spikes_path_for_viewer);
                     }
-                    cmd += " &";
-                    std::thread([cmd]() { std::system(cmd.c_str()); }).detach();
+
+                    // 2. Create char* array for execvp
+                    std::vector<char*> argv;
+                    argv.reserve(args.size() + 1);
+                    for (const auto& arg : args) {
+                        argv.push_back(const_cast<char*>(arg.c_str()));
+                    }
+                    argv.push_back(nullptr);
+
+                    // 3. Fork (Double Fork)
+                    pid_t pid1 = fork();
+                    if (pid1 == 0) {
+                        // Child 1: Inherits memory image (including argv), so we can read it.
+                        // Must be async-signal-safe.
+                        setsid(); // New session
+                        pid_t pid2 = fork();
+                        if (pid2 == 0) {
+                            // Grandchild - the actual viewer
+                            execvp(argv[0], argv.data());
+
+                            // If execvp returns, it failed. Use raw write() to avoid malloc in std::cerr
+                            const char* msg = "[Security] Failed to launch viewer via execvp\n";
+                            if (write(STDERR_FILENO, msg, strlen(msg))) {} // Suppress unused result warning
+                            _exit(1);
+                        } else if (pid2 > 0) {
+                            // Child 1 exits immediately
+                            _exit(0);
+                        } else {
+                            const char* msg = "[Security] Second fork failed\n";
+                            if (write(STDERR_FILENO, msg, strlen(msg))) {}
+                            _exit(1);
+                        }
+                    } else if (pid1 > 0) {
+                        // Parent waits for first child (which exits immediately)
+                        int status;
+                        waitpid(pid1, &status, 0);
+                    } else {
+                        std::cerr << "[Security] Fork failed!" << std::endl;
+                    }
                 #endif
                     std::cout << "Launched 3D viewer: " << viewer_exe_path << "\n  watching: " << snapshot_path_for_viewer << "\n  layout='" << viewer_layout << "' refresh=" << viewer_refresh_ms << " ms threshold=" << viewer_threshold;
                     if (!spikes_live_path.empty()) std::cout << " spikes=\"" << spikes_path_for_viewer << "\"";
