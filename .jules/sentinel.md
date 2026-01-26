@@ -17,3 +17,8 @@
 **Vulnerability:** `src/main.cpp` used `std::system("cmd /c start ...")` to launch the viewer process on Windows. Even with argument sanitization via `shell_escape`, relying on `cmd.exe` exposes the application to command injection risks if the escaping logic has subtle flaws or if future maintainers relax constraints. `cmd.exe` parsing is notoriously complex and difficult to secure completely.
 **Learning:** The safest way to launch subprocesses on Windows is to bypass `cmd.exe` entirely. Using `CreateProcess` (or `CreateProcessA`/`CreateProcessW`) directly invokes the OS process creation API, which uses standard C runtime argument parsing (CommandLineToArgvW) that is much more predictable and secure than shell interpretation.
 **Prevention:** Replace `std::system` calls with `CreateProcess` (Windows) or `posix_spawn`/`exec` (POSIX) whenever launching executables. This eliminates the shell as an attack surface.
+
+## 2025-05-30 - [POSIX Command Injection via std::system]
+**Vulnerability:** `src/main.cpp` used `std::system(cmd.c_str())` to launch the viewer process on POSIX systems. The `viewer_exe_path` variable, which is user-controlled via CLI argument, was concatenated into the command string without proper escaping. This allowed arbitrary command execution if a malicious path was provided.
+**Learning:** Using `std::system` on POSIX systems is inherently risky because it invokes `/bin/sh`. Even if arguments are escaped, subtle bugs in escaping logic can lead to critical vulnerabilities. The best defense is to avoid the shell entirely.
+**Prevention:** Use `fork()` and `execvp()` (or `posix_spawn`) to launch subprocesses on POSIX. This passes arguments directly to the kernel, bypassing the shell and eliminating command injection risks by design.
