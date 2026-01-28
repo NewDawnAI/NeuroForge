@@ -2,6 +2,7 @@
 import argparse
 import json
 import os
+import secrets
 import signal
 import sys
 import threading
@@ -151,26 +152,27 @@ INDEX_HTML = """
     #heat { width:420px; height:420px; background:#0f1117; border:1px solid #23262d; border-radius:6px; }
     .meta { color:#aeb4bf; font-size:12px; }
   </style>
-  <!-- Try local Socket.IO first; if not available, fall back to CDN. Chart.js remains via CDN. -->
+  <!-- Try local Socket.IO first; if not available, fall back to CDN. Chart.js remains via CDN with SRI. -->
   <script>
     (function(){
-      function loadScript(src, onload, onerror){
+      function loadScript(src, integrity, onload, onerror){
         var s=document.createElement('script');
         s.src=src; s.async=true;
+        if (integrity) { s.integrity=integrity; s.crossOrigin="anonymous"; }
         s.onload=onload || function(){};
         s.onerror=onerror || function(){};
         document.head.appendChild(s);
       }
       if (typeof window.io === 'undefined'){
-        loadScript('/static/socket.io.min.js', function(){ /* local loaded */ }, function(){
-          loadScript('https://cdn.jsdelivr.net/npm/socket.io@4/dist/socket.io.min.js', function(){ /* CDN loaded */ }, function(){
+        loadScript('/static/socket.io.min.js', null, function(){ /* local loaded */ }, function(){
+          loadScript('https://cdn.jsdelivr.net/npm/socket.io-client@4.8.3/dist/socket.io.min.js', 'sha384-kzavj5fiMwLKzzD1f8S7TeoVIEi7uKHvbTA3ueZkrzYq75pNQUiUi6Dy98Q3fxb0', function(){ /* CDN loaded */ }, function(){
             console.warn('Socket.IO client unavailable; will use SSE fallback');
           });
         });
       }
     })();
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" integrity="sha384-9nhczxUqK87bcKHh20fSQcTGD4qq5GhayNYSYWqwBkINBhOfQLg/P5HG5lF1urn4" crossorigin="anonymous"></script>
 </head>
 <body>
   <header>
@@ -306,7 +308,18 @@ producer: Producer | None = None
 
 @app.route('/')
 def index():
-    return Response(INDEX_HTML, mimetype='text/html')
+    nonce = secrets.token_hex(16)
+    # Inject nonce into all script tags
+    html = INDEX_HTML.replace('<script>', f'<script nonce="{nonce}">')
+    resp = Response(html, mimetype='text/html')
+    # Content Security Policy
+    resp.headers['Content-Security-Policy'] = (
+        f"default-src 'self'; "
+        f"script-src 'self' 'nonce-{nonce}' https://cdn.jsdelivr.net; "
+        f"style-src 'self' 'unsafe-inline'; "
+        f"connect-src 'self' ws: wss:;"
+    )
+    return resp
 
 import sqlite3
 import json as _json
@@ -406,7 +419,7 @@ def main():
     producer.start()
 
     print(f"[phase_c_flask] Socket.IO dashboard at http://{args.host}:{args.port}/", flush=True)
-    socketio.run(app, host=args.host, port=args.port)
+    socketio.run(app, host=args.host, port=args.port, allow_unsafe_werkzeug=True)
 
 if __name__ == '__main__':
     main()
