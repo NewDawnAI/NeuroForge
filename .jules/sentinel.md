@@ -17,3 +17,8 @@
 **Vulnerability:** `src/main.cpp` used `std::system("cmd /c start ...")` to launch the viewer process on Windows. Even with argument sanitization via `shell_escape`, relying on `cmd.exe` exposes the application to command injection risks if the escaping logic has subtle flaws or if future maintainers relax constraints. `cmd.exe` parsing is notoriously complex and difficult to secure completely.
 **Learning:** The safest way to launch subprocesses on Windows is to bypass `cmd.exe` entirely. Using `CreateProcess` (or `CreateProcessA`/`CreateProcessW`) directly invokes the OS process creation API, which uses standard C runtime argument parsing (CommandLineToArgvW) that is much more predictable and secure than shell interpretation.
 **Prevention:** Replace `std::system` calls with `CreateProcess` (Windows) or `posix_spawn`/`exec` (POSIX) whenever launching executables. This eliminates the shell as an attack surface.
+
+## 2025-05-28 - [POSIX Command Injection via std::system]
+**Vulnerability:** `src/main.cpp` relied on `std::system()` to launch the 3D viewer on Linux/macOS. This invoked `/bin/sh`, exposing the application to shell injection vulnerabilities if argument sanitization (`shell_escape`) was imperfect or if environment-specific shell quirks existed.
+**Learning:** `shell_escape` logic is fragile and hard to audit. The `double-fork` pattern combined with `execvp` provides a robust, shell-free way to launch detached background processes in C++.
+**Prevention:** Always prefer `exec` family functions (like `execvp`) over `system()`. If process detachment is required, implement the double-fork pattern to prevent zombies while avoiding shell invocation.
