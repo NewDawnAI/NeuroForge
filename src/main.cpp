@@ -48,6 +48,11 @@
 #pragma comment(lib, "winmm.lib")
 #include <psapi.h>
 #pragma comment(lib, "Psapi.lib")
+#else
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <cerrno>
 #endif
 
 // Project headers
@@ -140,50 +145,79 @@ extern "C" void NF_ForceLink_PhaseARegion();
 
 namespace {
 
-// Helper: sanitizes shell arguments to prevent command injection
-std::string shell_escape(const std::string& arg) {
 #ifdef _WIN32
-    // Windows cmd.exe escaping: wrap in double quotes.
-    // NOTE: cmd.exe does NOT treat \" as an escaped quote inside double quotes.
-    // It is impossible to safely escape a double quote inside a double-quoted argument for cmd.exe
-    // in a way that is also compatible with typical C runtime argument parsing (CommandLineToArgvW).
-    // Since this helper is used for paths and simple enum strings where quotes are invalid anyway,
-    // we throw an exception if a quote is found to prevent command injection.
+// Helper: properly quote arguments for Windows CreateProcess (CommandLineToArgvW rules)
+std::string escape_arg_windows(const std::string& arg) {
+    if (arg.empty()) return "\"\"";
+    if (arg.find_first_of(" \t\n\v\"") == std::string::npos) return arg;
+
     std::string out = "\"";
-    for (char c : arg) {
-        if (c == '"') {
-            throw std::invalid_argument("Security error: Double quotes are not allowed in shell arguments on Windows to prevent command injection.");
-        } else if (c == '\\') {
-            // Note: Internal backslashes don't need doubling inside quotes unless they precede a quote.
-            // Since quotes are banned, internal backslashes are safe.
-            out += "\\";
+    for (size_t i = 0; i < arg.length(); ++i) {
+        size_t backslashes = 0;
+        while (i < arg.length() && arg[i] == '\\') {
+            backslashes++;
+            i++;
+        }
+        if (i == arg.length()) {
+            out.append(backslashes * 2, '\\');
+        } else if (arg[i] == '"') {
+            out.append(backslashes * 2 + 1, '\\');
+            out.push_back('"');
         } else {
-            out += c;
+            out.append(backslashes, '\\');
+            out.push_back(arg[i]);
         }
-    }
-    // Escape trailing backslashes so they don't escape the closing quote
-    if (!arg.empty() && arg.back() == '\\') {
-        std::size_t backslash_count = 0;
-        for (auto it = arg.rbegin(); it != arg.rend(); ++it) {
-            if (*it == '\\') backslash_count++;
-            else break;
-        }
-        out.append(backslash_count, '\\');
     }
     out += "\"";
     return out;
-#else
-    // POSIX sh escaping: wrap in single quotes, escape single quotes inside
-    std::string out = "'";
-    for (char c : arg) {
-        if (c == '\'') {
-            out += "'\\''";
-        } else {
-            out += c;
-        }
+}
+#endif
+
+void launch_viewer(const std::string& exe, const std::vector<std::string>& args) {
+#ifdef _WIN32
+    std::string cmd_line = escape_arg_windows(exe);
+    for (const auto& a : args) {
+        cmd_line += " " + escape_arg_windows(a);
     }
-    out += "'";
-    return out;
+
+    STARTUPINFOA si;
+    PROCESS_INFORMATION pi;
+    ZeroMemory(&si, sizeof(si));
+    si.cb = sizeof(si);
+    ZeroMemory(&pi, sizeof(pi));
+
+    // CreateProcess requires a mutable string
+    std::vector<char> cmd_buf(cmd_line.begin(), cmd_line.end());
+    cmd_buf.push_back(0);
+
+    if (CreateProcessA(NULL, cmd_buf.data(), NULL, NULL, FALSE, DETACHED_PROCESS, NULL, NULL, &si, &pi)) {
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+    } else {
+        std::cerr << "Failed to launch viewer: " << GetLastError() << std::endl;
+    }
+#else
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Child
+        std::vector<char*> argv;
+        // const_cast is safe here because execvp doesn't modify, but takes char* const*
+        std::string exe_str = exe;
+        argv.push_back(const_cast<char*>(exe_str.c_str()));
+
+        // We need copies of args that persist until execvp
+        std::vector<std::string> args_copy = args;
+        for (auto& s : args_copy) {
+            argv.push_back(const_cast<char*>(s.c_str()));
+        }
+        argv.push_back(nullptr);
+
+        execvp(exe.c_str(), argv.data());
+        std::cerr << "Failed to exec viewer: " << strerror(errno) << std::endl;
+        _exit(1);
+    } else if (pid < 0) {
+        std::cerr << "Failed to fork for viewer: " << strerror(errno) << std::endl;
+    }
 #endif
 }
 
@@ -5247,41 +5281,16 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                         viewer_layout = "shells";
                     }
 
-                    // Compose command line with sanitized arguments
-                    std::string cmd;
-                #ifdef _WIN32
-                    // Use CreateProcess directly to avoid cmd.exe injection risks
-                    std::string args = " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
-                                       " --weight-threshold=" + std::to_string(viewer_threshold) +
-                                       " --layout=" + shell_escape(viewer_layout) +
-                                       " --refresh-ms=" + std::to_string(viewer_refresh_ms);
+                    std::vector<std::string> args;
+                    args.push_back("--snapshot-file=" + snapshot_path_for_viewer);
+                    args.push_back("--weight-threshold=" + std::to_string(viewer_threshold));
+                    args.push_back("--layout=" + viewer_layout);
+                    args.push_back("--refresh-ms=" + std::to_string(viewer_refresh_ms));
                     if (!spikes_live_path.empty()) {
-                        args += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
+                        args.push_back("--spikes-file=" + spikes_path_for_viewer);
                     }
-                    // Construct full command line: "exe" args...
-                    std::string full_cmd = shell_escape(viewer_exe_path) + args;
-                    std::thread([full_cmd]() {
-                        STARTUPINFOA si; ZeroMemory(&si, sizeof(si)); si.cb = sizeof(si);
-                        PROCESS_INFORMATION pi; ZeroMemory(&pi, sizeof(pi));
-                        std::vector<char> buf(full_cmd.begin(), full_cmd.end()); buf.push_back(0);
-                        if (CreateProcessA(NULL, buf.data(), NULL, NULL, FALSE, CREATE_NEW_CONSOLE, NULL, NULL, &si, &pi)) {
-                            CloseHandle(pi.hProcess); CloseHandle(pi.hThread);
-                        } else {
-                            std::cerr << "[Security] Failed to launch viewer via CreateProcess. Error: " << GetLastError() << std::endl;
-                        }
-                    }).detach();
-                #else
-                    cmd = shell_escape(viewer_exe_path) +
-                          " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
-                          " --weight-threshold=" + std::to_string(viewer_threshold) +
-                          " --layout=" + shell_escape(viewer_layout) +
-                          " --refresh-ms=" + std::to_string(viewer_refresh_ms);
-                    if (!spikes_live_path.empty()) {
-                        cmd += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
-                    }
-                    cmd += " &";
-                    std::thread([cmd]() { std::system(cmd.c_str()); }).detach();
-                #endif
+
+                    launch_viewer(viewer_exe_path, args);
                     std::cout << "Launched 3D viewer: " << viewer_exe_path << "\n  watching: " << snapshot_path_for_viewer << "\n  layout='" << viewer_layout << "' refresh=" << viewer_refresh_ms << " ms threshold=" << viewer_threshold;
                     if (!spikes_live_path.empty()) std::cout << " spikes=\"" << spikes_path_for_viewer << "\"";
                     std::cout << std::endl;
