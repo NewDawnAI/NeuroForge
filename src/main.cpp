@@ -48,6 +48,11 @@
 #pragma comment(lib, "winmm.lib")
 #include <psapi.h>
 #pragma comment(lib, "Psapi.lib")
+#else
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <cerrno>
 #endif
 
 // Project headers
@@ -5271,16 +5276,40 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                         }
                     }).detach();
                 #else
-                    cmd = shell_escape(viewer_exe_path) +
-                          " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
-                          " --weight-threshold=" + std::to_string(viewer_threshold) +
-                          " --layout=" + shell_escape(viewer_layout) +
-                          " --refresh-ms=" + std::to_string(viewer_refresh_ms);
+                    std::vector<std::string> args_storage;
+                    args_storage.push_back(viewer_exe_path);
+                    args_storage.push_back("--snapshot-file=" + snapshot_path_for_viewer);
+                    args_storage.push_back("--weight-threshold=" + std::to_string(viewer_threshold));
+                    args_storage.push_back("--layout=" + viewer_layout);
+                    args_storage.push_back("--refresh-ms=" + std::to_string(viewer_refresh_ms));
                     if (!spikes_live_path.empty()) {
-                        cmd += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
+                        args_storage.push_back("--spikes-file=" + spikes_path_for_viewer);
                     }
-                    cmd += " &";
-                    std::thread([cmd]() { std::system(cmd.c_str()); }).detach();
+
+                    std::vector<char*> argv;
+                    for (const auto& s : args_storage) argv.push_back(const_cast<char*>(s.c_str()));
+                    argv.push_back(nullptr);
+
+                    // Double-fork to detach cleanly without zombies
+                    pid_t pid = fork();
+                    if (pid == 0) {
+                        // Child 1
+                        if (fork() == 0) {
+                            // Grandchild
+                            // Close standard file descriptors to avoid holding terminal?
+                            // For now, we leave them to allow viewing output if needed, or we could redirect to /dev/null.
+                            // Given this is a viewer launch, maybe inheriting stdout/stderr is desired for logging.
+                            execvp(argv[0], argv.data());
+                            _exit(127); // Failed to exec
+                        }
+                        _exit(0); // Child 1 exits immediately
+                    } else if (pid > 0) {
+                        // Parent waits for Child 1
+                        int status;
+                        waitpid(pid, &status, 0);
+                    } else {
+                        std::cerr << "Failed to fork viewer process: " << strerror(errno) << std::endl;
+                    }
                 #endif
                     std::cout << "Launched 3D viewer: " << viewer_exe_path << "\n  watching: " << snapshot_path_for_viewer << "\n  layout='" << viewer_layout << "' refresh=" << viewer_refresh_ms << " ms threshold=" << viewer_threshold;
                     if (!spikes_live_path.empty()) std::cout << " spikes=\"" << spikes_path_for_viewer << "\"";
