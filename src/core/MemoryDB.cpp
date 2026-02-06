@@ -1818,6 +1818,47 @@ bool MemoryDB::updateGoalStability(std::int64_t goal_id, double stability) {
 #endif
 }
 
+bool MemoryDB::updateGoalStabilities(const std::vector<std::pair<std::int64_t, double>>& updates) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_) return false;
+    if (updates.empty()) return true;
+    std::lock_guard<std::mutex> lg(m_);
+
+    if (!exec("BEGIN TRANSACTION;")) return false;
+
+    const char* sql = "UPDATE goal_nodes SET stability = ? WHERE goal_id = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for updateGoalStabilities: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        (void)exec("ROLLBACK;");
+        return false;
+    }
+
+    bool all_ok = true;
+    for (const auto& update : updates) {
+        sqlite3_bind_double(stmt, 1, update.second);
+        sqlite3_bind_int64(stmt, 2, update.first);
+        if (sqlite3_step(stmt) != SQLITE_DONE) {
+            if (debug_) std::cerr << "[MemoryDB] step failed for updateGoalStabilities: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+            all_ok = false;
+            break;
+        }
+        sqlite3_reset(stmt);
+    }
+
+    sqlite3_finalize(stmt);
+
+    if (all_ok) {
+        return exec("COMMIT;");
+    } else {
+        (void)exec("ROLLBACK;");
+        return false;
+    }
+#else
+    (void)updates; return false;
+#endif
+}
+
 bool MemoryDB::insertGoalEdge(std::int64_t goal_id,
                               std::int64_t subgoal_id,
                               double weight) {
