@@ -397,22 +397,19 @@ double Phase6Reasoner::scoreHierarchicalBonus(const std::string& key) {
     auto goal_id = phase8_goals_->findGoalByDescription(key);
     if (!goal_id.has_value()) return 0.0;
 
-    auto subgoals = phase8_goals_->getSubGoals(goal_id.value());
+    auto subgoals = phase8_goals_->getSubGoalsWithDescriptions(goal_id.value());
     if (subgoals.empty()) return 0.0;
 
     double total_score = 0.0;
     double total_weight = 0.0;
 
     for (const auto& pair : subgoals) {
-        std::int64_t sub_id = pair.first;
+        const std::string& desc = pair.first;
         double weight = pair.second;
 
-        auto desc = phase8_goals_->getGoalDescription(sub_id);
-        if (desc.has_value()) {
-            double sub_mean = getPosteriorMean(desc.value());
-            total_score += sub_mean * weight;
-            total_weight += weight;
-        }
+        double sub_mean = getPosteriorMean(desc);
+        total_score += sub_mean * weight;
+        total_weight += weight;
     }
 
     if (total_weight > 0.0) {

@@ -1868,6 +1868,34 @@ std::vector<std::pair<std::int64_t, double>> MemoryDB::getChildGoals(std::int64_
     return children;
 }
 
+std::vector<std::pair<std::string, double>> MemoryDB::getChildGoalsWithDescriptions(std::int64_t parent_goal_id) {
+    std::vector<std::pair<std::string, double>> children;
+#ifdef NF_HAVE_SQLITE3
+    if (!db_ || parent_goal_id <= 0) return children;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql = "SELECT n.description, e.weight FROM goal_edges e "
+                      "JOIN goal_nodes n ON e.subgoal_id = n.goal_id "
+                      "WHERE e.goal_id = ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getChildGoalsWithDescriptions: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return children;
+    }
+    sqlite3_bind_int64(stmt, 1, parent_goal_id);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        const unsigned char* text = sqlite3_column_text(stmt, 0);
+        double w = sqlite3_column_double(stmt, 1);
+        if (text) {
+            children.emplace_back(reinterpret_cast<const char*>(text), w);
+        }
+    }
+    sqlite3_finalize(stmt);
+#else
+    (void)parent_goal_id;
+#endif
+    return children;
+}
+
 bool MemoryDB::insertMotivationState(std::int64_t ts_ms,
                                      double motivation,
                                      double coherence,
