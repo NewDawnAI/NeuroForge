@@ -189,18 +189,20 @@ float IntrinsicMotivationSystem::calculateExplorationMotivation() {
     // Check for learning stagnation
     float learning_stagnation = 0.0f;
     if (motivation_history_.size() >= 5) {
-        // Calculate variance in recent competence scores
-        std::vector<float> recent_competence;
-        for (std::size_t i = motivation_history_.size() - 5; i < motivation_history_.size(); ++i) {
-            recent_competence.push_back(motivation_history_[i].competence);
+        // Calculate variance in recent competence scores without allocation
+        float sum = 0.0f;
+        std::size_t start_idx = motivation_history_.size() - 5;
+        for (std::size_t i = start_idx; i < motivation_history_.size(); ++i) {
+            sum += motivation_history_[i].competence;
         }
         
-        float mean = std::accumulate(recent_competence.begin(), recent_competence.end(), 0.0f) / recent_competence.size();
+        float mean = sum / 5.0f;
         float variance = 0.0f;
-        for (float comp : recent_competence) {
-            variance += (comp - mean) * (comp - mean);
+        for (std::size_t i = start_idx; i < motivation_history_.size(); ++i) {
+            float diff = motivation_history_[i].competence - mean;
+            variance += diff * diff;
         }
-        variance /= recent_competence.size();
+        variance /= 5.0f;
         
         // Low variance indicates stagnation, which increases exploration motivation
         learning_stagnation = 1.0f - std::clamp(variance * 10.0f, 0.0f, 1.0f);
@@ -399,27 +401,34 @@ IntrinsicMotivationSystem::getMotivationHistory(std::size_t count) const {
 float IntrinsicMotivationSystem::calculateActivationVariance() const {
     if (!brain_) return 0.0f;
     
-    std::vector<float> activations;
     const auto& regions = brain_->getRegionsMap();
+    if (regions.empty()) return 0.0f;
+
+    double sum = 0.0;
+    size_t count = 0;
     
+    // First pass to calculate mean
     for (const auto& region_pair : regions) {
         if (region_pair.second) {
-            activations.push_back(region_pair.second->getGlobalActivation());
+            sum += region_pair.second->getGlobalActivation();
+            count++;
         }
     }
     
-    if (activations.empty()) return 0.0f;
+    if (count == 0) return 0.0f;
     
-    float mean = std::accumulate(activations.begin(), activations.end(), 0.0f) / activations.size();
-    float variance = 0.0f;
+    double mean = sum / count;
+    double variance_sum = 0.0;
     
-    for (float activation : activations) {
-        float diff = activation - mean;
-        variance += diff * diff;
+    // Second pass to calculate variance (more numerically stable than single-pass)
+    for (const auto& region_pair : regions) {
+        if (region_pair.second) {
+            double diff = static_cast<double>(region_pair.second->getGlobalActivation()) - mean;
+            variance_sum += diff * diff;
+        }
     }
     
-    variance /= activations.size();
-    return std::sqrt(variance); // Return standard deviation
+    return std::sqrt(static_cast<float>(variance_sum / count)); // Return standard deviation
 }
 
 float IntrinsicMotivationSystem::calculateLearningRateDynamics() const {
