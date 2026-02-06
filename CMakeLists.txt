@@ -670,6 +670,16 @@ if(NEUROFORGE_ENABLE_TESTS)
     target_include_directories(benchmark_region_process PRIVATE include)
     # No test registration as this is a benchmark
 
+    # Goal decay benchmark
+    add_executable(benchmark_goal_decay tests/benchmark_goal_decay.cpp)
+    target_link_libraries(benchmark_goal_decay PRIVATE
+        neuroforge_core
+        neuroforge_regions
+        neuroforge_connectivity
+        neuroforge_encoders
+    )
+    target_include_directories(benchmark_goal_decay PRIVATE include)
+
     # Region optimization verification test
     add_executable(test_region_optimization tests/test_region_optimization.cpp)
     target_link_libraries(test_region_optimization PRIVATE

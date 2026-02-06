@@ -123,14 +123,20 @@ void Phase8GoalSystem::decayStability(double dt_seconds) {
     // Uniform decay across cached goals; clamp to [0,1]
     if (goal_stability_cache_.empty()) return;
 
+    std::vector<std::pair<std::int64_t, double>> updates;
+    updates.reserve(goal_stability_cache_.size());
+
     for (auto& kv : goal_stability_cache_) {
         const std::int64_t goal_id = kv.first;
         double s = kv.second;
         s = std::clamp(s - dt_seconds, 0.0, 1.0);
-        // Persist and update cache
-        memory_db_->updateGoalStability(goal_id, s);
         kv.second = s;
+        updates.emplace_back(goal_id, s);
     }
+
+    // Persist batch to DB
+    memory_db_->updateGoalStabilities(updates);
+
     last_decay_ms_ = now_ms();
 }
 

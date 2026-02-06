@@ -291,6 +291,7 @@ public:
     std::optional<std::string> getGoalDescription(std::int64_t goal_id);
 
     bool updateGoalStability(std::int64_t goal_id, double stability);
+    bool updateGoalStabilities(const std::vector<std::pair<std::int64_t, double>>& updates);
 
     bool insertGoalEdge(std::int64_t parent_id, std::int64_t child_id, double weight);
 
