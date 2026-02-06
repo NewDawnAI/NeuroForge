@@ -48,6 +48,11 @@
 #pragma comment(lib, "winmm.lib")
 #include <psapi.h>
 #pragma comment(lib, "Psapi.lib")
+#else
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <cerrno>
 #endif
 
 // Project headers
@@ -141,8 +146,8 @@ extern "C" void NF_ForceLink_PhaseARegion();
 namespace {
 
 // Helper: sanitizes shell arguments to prevent command injection
-std::string shell_escape(const std::string& arg) {
 #ifdef _WIN32
+std::string shell_escape(const std::string& arg) {
     // Windows cmd.exe escaping: wrap in double quotes.
     // NOTE: cmd.exe does NOT treat \" as an escaped quote inside double quotes.
     // It is impossible to safely escape a double quote inside a double-quoted argument for cmd.exe
@@ -172,20 +177,8 @@ std::string shell_escape(const std::string& arg) {
     }
     out += "\"";
     return out;
-#else
-    // POSIX sh escaping: wrap in single quotes, escape single quotes inside
-    std::string out = "'";
-    for (char c : arg) {
-        if (c == '\'') {
-            out += "'\\''";
-        } else {
-            out += c;
-        }
-    }
-    out += "'";
-    return out;
-#endif
 }
+#endif
 
 void print_usage() {
     std::cout << "NeuroForge demo\n"
@@ -5271,16 +5264,35 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
                         }
                     }).detach();
                 #else
-                    cmd = shell_escape(viewer_exe_path) +
-                          " --snapshot-file=" + shell_escape(snapshot_path_for_viewer) +
-                          " --weight-threshold=" + std::to_string(viewer_threshold) +
-                          " --layout=" + shell_escape(viewer_layout) +
-                          " --refresh-ms=" + std::to_string(viewer_refresh_ms);
-                    if (!spikes_live_path.empty()) {
-                        cmd += " --spikes-file=" + shell_escape(spikes_path_for_viewer);
+                    pid_t pid = fork();
+                    if (pid == 0) {
+                        // Child 1
+                        if (fork() == 0) {
+                            // Grandchild (daemonize)
+                            setsid();
+                            std::vector<std::string> args;
+                            args.push_back(viewer_exe_path);
+                            args.push_back("--snapshot-file=" + snapshot_path_for_viewer);
+                            args.push_back("--weight-threshold=" + std::to_string(viewer_threshold));
+                            args.push_back("--layout=" + viewer_layout);
+                            args.push_back("--refresh-ms=" + std::to_string(viewer_refresh_ms));
+                            if (!spikes_live_path.empty()) {
+                                args.push_back("--spikes-file=" + spikes_path_for_viewer);
+                            }
+                            std::vector<char*> argv;
+                            argv.reserve(args.size() + 1);
+                            for (const auto& s : args) argv.push_back(const_cast<char*>(s.c_str()));
+                            argv.push_back(nullptr);
+                            execvp(argv[0], argv.data());
+                            std::cerr << "Error: failed to exec viewer (errno=" << errno << ")" << std::endl;
+                            _exit(1);
+                        }
+                        _exit(0);
                     }
-                    cmd += " &";
-                    std::thread([cmd]() { std::system(cmd.c_str()); }).detach();
+                    if (pid > 0) {
+                        int status;
+                        waitpid(pid, &status, 0);
+                    }
                 #endif
                     std::cout << "Launched 3D viewer: " << viewer_exe_path << "\n  watching: " << snapshot_path_for_viewer << "\n  layout='" << viewer_layout << "' refresh=" << viewer_refresh_ms << " ms threshold=" << viewer_threshold;
                     if (!spikes_live_path.empty()) std::cout << " spikes=\"" << spikes_path_for_viewer << "\"";
