@@ -296,6 +296,9 @@ public:
 
     std::vector<std::pair<std::int64_t, double>> getChildGoals(std::int64_t parent_goal_id);
 
+    // Optimized bulk retrieval to avoid N+1 SELECT pattern in Phase 6 Reasoner
+    std::vector<std::pair<std::string, double>> getChildGoalsWithDescriptions(std::int64_t parent_goal_id);
+
     bool insertMotivationState(std::int64_t ts_ms,
                                double motivation,
                                double coherence,

@@ -41,6 +41,7 @@ public:
     bool updateGoalStability(std::int64_t goal_id, double stability);
 
     std::vector<std::pair<std::int64_t, double>> getSubGoals(std::int64_t goal_id);
+    std::vector<std::pair<std::string, double>> getSubGoalsWithDescriptions(std::int64_t goal_id);
 
     // Background decay for unused goals (uniform slow decay)
     void decayStability(double dt_seconds);

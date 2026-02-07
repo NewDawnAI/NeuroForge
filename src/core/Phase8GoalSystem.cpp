@@ -119,6 +119,11 @@ std::vector<std::pair<std::int64_t, double>> Phase8GoalSystem::getSubGoals(std::
     return memory_db_->getChildGoals(goal_id);
 }
 
+std::vector<std::pair<std::string, double>> Phase8GoalSystem::getSubGoalsWithDescriptions(std::int64_t goal_id) {
+    if (!memory_db_) return {};
+    return memory_db_->getChildGoalsWithDescriptions(goal_id);
+}
+
 void Phase8GoalSystem::decayStability(double dt_seconds) {
     // Uniform decay across cached goals; clamp to [0,1]
     if (goal_stability_cache_.empty()) return;
