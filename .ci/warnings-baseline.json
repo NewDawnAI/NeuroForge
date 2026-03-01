@@ -1,0 +1,16 @@
+{
+  "total": 196,
+  "by_type": {
+    "gcc_clang:maybe-uninitialized": 2,
+    "gcc_clang:misleading-indentation": 12,
+    "gcc_clang:missing-field-initializers": 8,
+    "gcc_clang:reorder": 18,
+    "gcc_clang:sign-compare": 14,
+    "gcc_clang:switch": 1,
+    "gcc_clang:type-limits": 7,
+    "gcc_clang:unused-but-set-variable": 16,
+    "gcc_clang:unused-function": 2,
+    "gcc_clang:unused-parameter": 89,
+    "gcc_clang:unused-variable": 27
+  }
+}
