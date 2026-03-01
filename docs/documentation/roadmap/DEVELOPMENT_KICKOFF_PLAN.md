@@ -75,3 +75,15 @@ Begin execution of post-freeze development with production-grade reliability and
 4. Checkpoint parity and replay test.
 5. Governance self-exemption regression test.
 6. Cap'n Proto schema compatibility suite.
+
+
+## Initial Implementations
+- `tools/check_warning_regression.py`: warning regression gate using build logs and a JSON baseline.
+- `tools/ci_deterministic_smoke.py`: deterministic smoke harness that runs the engine twice and compares snapshot hashes.
+
+### Suggested CI Commands
+```bash
+python tools/check_warning_regression.py --build-log build.log --write-baseline .ci/warnings-baseline.json
+python tools/check_warning_regression.py --build-log build.log --baseline .ci/warnings-baseline.json
+python tools/ci_deterministic_smoke.py --exe build/neuroforge --seed 123 --steps 5 --step-ms 1
+```
