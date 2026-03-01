@@ -10,5 +10,7 @@ NeuroForge exposes read-only application adapters for evaluation, benchmarking, 
 ## Development Status
 The project has moved beyond the Stage C v1 freeze. Development is now active on **Phase 6 (Hybrid Reasoning Engine)** and **M7+ (Autonomy Loop)**, focusing on hierarchical reasoning, causal graph generation, intrinsic motivation, controlled autonomy expansion, and learned governance behaviors within rigorous governance envelopes (Phase 13/15).
 
+See `docs/documentation/roadmap/DEVELOPMENT_KICKOFF_PLAN.md` for the initial execution plan.
+
 ## License
 NeuroForge is source-available for research and non-commercial use. See `LICENSE.md` for details.
