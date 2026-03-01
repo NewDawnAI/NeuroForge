@@ -7,6 +7,11 @@ NeuroForge development is active beyond Stage C v1, currently advancing **Phase 
 - Continuous parallel cognitive loops and richer memory integration are in scope when they remain auditable.
 - Schema-backed state portability (including Cap’n Proto state pathways) is in scope when versioned and reversible.
 
+## Adaptive Governance (Learned, Bounded)
+- Governance policy may improve through learning (e.g., better risk estimates, confidence calibration, context-aware throttling).
+- Learned governance must remain interpretable and auditable.
+- Learned governance cannot override non-negotiable hard constraints.
+
 ## Non-Negotiable Constraints
 Safety is enforced via governance layers including **Phase 13 (Autonomy Envelope)**, **Phase 15 (Ethics Regulator)**, and action filtering.
 

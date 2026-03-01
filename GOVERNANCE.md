@@ -20,9 +20,11 @@ This document is normative and binding with respect to the project’s intent.
 
 NeuroForge adopts a **governance-by-design** approach:
 
-> Certain classes of system behavior are constrained through architectural mechanisms, not only through policy or post-hoc review.
+> Certain classes of system behavior are constrained through architectural mechanisms, while governance policy inside those boundaries can adapt through learning.
 
-Governance is treated as a **property of the system itself**, with measurable and auditable controls.
+Governance is treated as a **property of the system itself**, combining:
+- **Constitutional constraints** (hard limits that are non-bypassable), and
+- **Adaptive governance signals** (learned risk and confidence estimates that can improve over time).
 
 ---
 
@@ -40,6 +42,14 @@ At this stage:
 
 This stage represents **progressive capability development under enforced control**.
 
+### 3.1 Adaptive Governance Model
+
+NeuroForge supports **learning-driven governance behavior** within fixed architectural constraints:
+
+- The system may learn better risk scoring, context sensitivity, and intervention timing.
+- The system may not learn to bypass action gates, authority checks, shutdown controls, or audit logging.
+- Governance learning is valid only when decisions remain explainable, replayable, and externally reviewable.
+
 ---
 
 ## 4. Transitional Guardrails
@@ -50,6 +60,7 @@ As NeuroForge advances, the following guardrails are mandatory:
 - **No unlogged authority changes**: governance state transitions must be persisted in telemetry.
 - **No ungated action paths**: all external action pathways must remain gate-controlled.
 - **No unverifiable self-modification**: revision pathways must emit audit artifacts.
+- **No self-exemption learning**: learned policies cannot disable or weaken constitutional safety checks.
 
 ---
 
