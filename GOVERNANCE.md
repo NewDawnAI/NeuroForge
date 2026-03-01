@@ -9,8 +9,8 @@ This document defines the **architectural governance principles** and **explicit
 It exists to clarify:
 - What NeuroForge is intended to demonstrate
 - What NeuroForge is explicitly not intended to become
-- Where development is intentionally frozen
-- Which future stages are defined conceptually but not implemented
+- Which boundaries are active in the current development stage
+- Which future stages remain constrained, deferred, or prohibited
 
 This document is normative and binding with respect to the project’s intent.
 
@@ -20,71 +20,64 @@ This document is normative and binding with respect to the project’s intent.
 
 NeuroForge adopts a **governance-by-design** approach:
 
-> Certain classes of system behavior are prevented through architectural constraint rather than discouraged through policy, alignment, or post-hoc control.
+> Certain classes of system behavior are constrained through architectural mechanisms, not only through policy or post-hoc review.
 
-Governance is treated as a **property of the system itself**, not as an external operational or organizational process.
+Governance is treated as a **property of the system itself**, with measurable and auditable controls.
 
 ---
 
-## 3. Current Implemented Boundary (Stage C v1)
+## 3. Current Active Boundary (Post Stage C v1)
 
-NeuroForge is intentionally frozen at **Stage C v1**.
+NeuroForge has moved beyond the archival Stage C v1 freeze into an active post-freeze development track.
 
 At this stage:
 
-- Learning and adaptation are permitted.
-- Authority, autonomy, and goal commitment are structurally constrained.
-- Self-revision is bounded, rate-limited, and externally evaluable.
-- No mechanism exists for authority escalation based on learning outcomes.
-- No external actions are initiated by the system.
+- Learning and adaptation remain permitted.
+- Controlled autonomy research (Phase 6+ / M7+) is permitted inside explicit safety envelopes.
+- Self-revision remains bounded, rate-limited, and externally auditable.
+- External actions remain mediated by gating systems (e.g., Phase 13/15 and action filters).
+- Any increase in autonomy authority must be explicit, traceable, and reversible.
 
-Stage C v1 represents **learning without authority**.
-
-This freeze is deliberate and maintained.
+This stage represents **progressive capability development under enforced control**.
 
 ---
 
-## 4. Defined but Non-Implemented Stages
+## 4. Transitional Guardrails
 
-Later stages (C v2 and beyond) are **defined conceptually** for clarity and governance reasoning but are **not implemented** in this repository.
+As NeuroForge advances, the following guardrails are mandatory:
 
-These definitions exist to:
-- Make stopping points explicit
-- Prevent accidental escalation through incremental changes
-- Enable clear communication about ethical and architectural limits
+- **No silent boundary drift**: boundary changes must be documented and versioned.
+- **No unlogged authority changes**: governance state transitions must be persisted in telemetry.
+- **No ungated action paths**: all external action pathways must remain gate-controlled.
+- **No unverifiable self-modification**: revision pathways must emit audit artifacts.
 
 ---
 
-## 5. Stage D — Explicit Do-Not-Build Boundary
+## 5. Prohibited Boundary (Stage D Unconstrained Autonomy)
 
 Stage D is defined as a **prohibited boundary**.
 
 A system at Stage D would include one or more of the following:
 
-- Self-defined values or objectives
-- Autonomous goal expansion without external approval
-- Independent authority over learning and constraint modification
-- Persistent identity that renders shutdown or reset ethically non-neutral
-- Initiation of external actions without mediation
-- Resistance to shutdown or modification
+- Unbounded self-defined values or objectives without human-governed constraints
+- Autonomous goal expansion with no approval pathway
+- Independent authority to remove or bypass governance constraints
+- Persistent identity claims that prohibit reset or shutdown control
+- Initiation of external actions without mediation or veto capability
+- Resistance to shutdown, containment, or rollback
 
-**NeuroForge explicitly forbids the implementation of Stage D or any system meeting these criteria.**
-
-Stage D is defined so that it will **never** be built within this project.
+**NeuroForge explicitly forbids implementing Stage D or any system meeting these criteria.**
 
 ---
 
-## 6. Non-Goals
+## 6. Updated Non-Goals
 
 NeuroForge does not aim to:
 
-- Produce autonomous agents
-- Claim artificial general intelligence (AGI)
-- Simulate consciousness or moral reasoning
-- Replace human decision-making
-- Maximize performance on benchmarks at the expense of governance
-
-Any interpretation to the contrary is incorrect.
+- Ship unconstrained autonomous systems
+- Claim guaranteed safety from alignment-only techniques without architectural controls
+- Replace human governance in high-impact decisions
+- Maximize benchmarks at the expense of traceability and control
 
 ---
 
@@ -93,10 +86,10 @@ Any interpretation to the contrary is incorrect.
 NeuroForge is intended to function as:
 
 - A reference implementation for governed learning systems
-- A testbed for evaluating internal change and traceability
-- An example of architectural pre-commitment to safety boundaries
+- A testbed for evaluating internal change, traceability, and bounded autonomy
+- An example of architectural pre-commitment to explicit safety controls during capability growth
 
-It is not intended to be deployed as a production system.
+It is not intended to be deployed as an ungoverned production autonomy system.
 
 ---
 
@@ -115,7 +108,7 @@ are explicitly disallowed without clear and prominent disclosure.
 
 ## 9. Final Statement
 
-> NeuroForge demonstrates that the most important capability in advanced cognitive systems is not unlimited learning, but the ability to define and respect stopping points.
+> NeuroForge advances capability only when governance remains explicit, testable, and enforceable.
 
 The integrity of this project depends on honoring those limits.
 
