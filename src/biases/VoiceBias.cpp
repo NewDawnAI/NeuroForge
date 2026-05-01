@@ -30,7 +30,6 @@ VoiceBias::VoiceBias(const Config& config) : config_(config) {
     
     // Initialize voice continuity
     voice_continuity_ = VoiceContinuity{};
-    recent_features_.reserve(20); // Keep last 20 feature frames
 }
 
 bool VoiceBias::applyVoiceBias(std::vector<float>& features,
@@ -69,7 +68,7 @@ bool VoiceBias::applyVoiceBias(std::vector<float>& features,
         // Store recent features for continuity analysis
         recent_features_.push_back(voice_features);
         if (recent_features_.size() > 20) {
-            recent_features_.erase(recent_features_.begin());
+            recent_features_.pop_front();
         }
         
         // Update running statistics
@@ -346,7 +345,7 @@ std::vector<VoiceBias::VoiceFeatures> VoiceBias::getRecentVoiceFeatures(size_t m
     std::lock_guard<std::mutex> lock(voice_mutex_);
     
     if (recent_features_.size() <= max_history) {
-        return recent_features_;
+        return std::vector<VoiceFeatures>(recent_features_.begin(), recent_features_.end());
     }
     
     return std::vector<VoiceFeatures>(

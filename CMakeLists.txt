@@ -691,6 +691,27 @@ if(NEUROFORGE_ENABLE_TESTS)
     target_include_directories(test_region_optimization PRIVATE include)
     add_test(NAME test_region_optimization COMMAND $<TARGET_FILE:test_region_optimization>)
 
+    # VoiceBias optimized test
+    add_executable(test_voice_bias_optimized tests/test_voice_bias_optimized.cpp)
+    target_link_libraries(test_voice_bias_optimized PRIVATE
+        neuroforge_core
+        neuroforge_regions
+        neuroforge_connectivity
+        neuroforge_encoders
+    )
+    target_include_directories(test_voice_bias_optimized PRIVATE include src)
+    add_test(NAME test_voice_bias_optimized COMMAND $<TARGET_FILE:test_voice_bias_optimized>)
+
+    # VoiceBias features benchmark
+    add_executable(benchmark_voice_features tests/benchmark_voice_features.cpp)
+    target_link_libraries(benchmark_voice_features PRIVATE
+        neuroforge_core
+        neuroforge_regions
+        neuroforge_connectivity
+        neuroforge_encoders
+    )
+    target_include_directories(benchmark_voice_features PRIVATE include src)
+
     # Demo executables
     add_executable(phase5_language_demo src/phase5_language_demo.cpp)
     target_link_libraries(phase5_language_demo PRIVATE

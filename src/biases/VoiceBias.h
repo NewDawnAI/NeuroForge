@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include <string>
+#include <deque>
 
 namespace NeuroForge {
 namespace Biases {
@@ -104,7 +105,7 @@ private:
     
     // Voice analysis state
     VoiceContinuity voice_continuity_;
-    std::vector<VoiceFeatures> recent_features_;
+    std::deque<VoiceFeatures> recent_features_;
     std::unordered_map<std::string, PhonemeTemplate> phoneme_templates_;
     
     // Frequency analysis buffers
