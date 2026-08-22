@@ -4825,6 +4825,21 @@ std::unique_ptr<NeuroForge::Core::Phase11SelfRevision> phase11_revision;
             if (!consolidation_interval_set) {
                 lconf.update_interval = std::chrono::milliseconds(step_ms > 0 ? step_ms : 0);
             }
+            // Apply the same default learning rates the Phase C path already
+            // uses (see the matching block above the
+            // phasec_brain_shared->initializeLearning call).
+            // LearningSystem::Config declares hebbian_rate and stdp_rate as
+            // 0.0f, so without this `--enable-learning` on its own initialises
+            // the learning system with zero rates: it runs, reports
+            // "Total Updates: 0" and changes no weight. Measured 2026-08-22:
+            // `--steps=200 --enable-learning` gave 0 updates, while adding
+            // `--hebbian-rate=0.1 --stdp-rate=0.1` gave 63,006. The documented
+            // flag silently did nothing on its own.
+            if (!hebbian_rate_set && !stdp_rate_set && enable_learning) {
+                lconf.hebbian_rate = 0.001f;        // matches Phase C default
+                lconf.stdp_rate = 0.002f;           // matches Phase C default
+                lconf.global_learning_rate = 0.01f; // matches Phase C default
+            }
             if (!brain.initializeLearning(lconf)) {
                 // If already initialized, it's fine; otherwise, report
                 // For this demo we proceed regardless
