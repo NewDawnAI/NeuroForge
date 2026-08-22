@@ -120,6 +120,8 @@ private:
             std::size_t word_token = language_system_->createToken("hello", LanguageSystem::TokenType::Word);
             std::size_t action_token = language_system_->createToken("walk", LanguageSystem::TokenType::Action);
             std::size_t phoneme_token = language_system_->createToken("ba", LanguageSystem::TokenType::Phoneme);
+            (void)action_token;
+            (void)phoneme_token;
             
             // Test token retrieval
             auto* hello_token = language_system_->getToken("hello");
@@ -182,6 +184,7 @@ private:
         try {
             // Test stage advancement
             auto initial_stage = language_system_->getCurrentStage();
+            (void)initial_stage;
             
             language_system_->advanceToStage(LanguageSystem::DevelopmentalStage::Babbling);
             auto babbling_stage = language_system_->getCurrentStage();

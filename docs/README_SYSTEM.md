@@ -3,6 +3,15 @@
 This guide captures the Phase 6–15 cognitive-ethical pipeline: CLI flags, exporter, simulator, and dashboard workflows. Use it to run end-to-end regressions and avoid common serving pitfalls.
 
 ## CLI Phases (neuroforge.exe)
+
+> **🎉 2026-01-17: NeuroForge is now ARCHITECTURALLY COMPLETE (Phases 1-30 + D + E1-E4)**
+> - Phase 28-30: Institutional Role Alignment, Long-Term Contracts, Accountability
+> - Phase D: Developmental Runtime (safe long-run sessions)
+> - Phase E1: Language Expression Cortex (cognition → language)
+> - Phase E2: Speech Synthesis (offline TTS)
+> - Phase E3-E4: Vision Embodiment (YouTube + Camera with privacy)
+> - Cap'n Proto: Serialization at boundaries
+
 - `--unified-substrate=on` Enables the integrated architecture (WM + Phase C + Language + Survival).
 - `--gpu` Enables CUDA acceleration for learning updates.
 - `--phase6` Learning
@@ -19,6 +28,31 @@ This guide captures the Phase 6–15 cognitive-ethical pipeline: CLI flags, expo
 Example combined run:
 
 `build\neuroforge.exe --phase6 --phase7 --phase8 --phase9 --phase10 --phase11 --phase12 --phase13 --phase14 --phase15`
+
+## Autonomous Internet Grounding (neuroforge_learn.exe)
+
+`neuroforge_learn.exe` is the production runner for open-internet browsing + grounded relation extraction + Q/A with visible provenance.
+
+```powershell
+cmake --build build-msvc --config Release --target neuroforge_learn
+
+build-msvc\Release\neuroforge_learn.exe --db=phasec_mem.db ^
+  --single-url=https://en.wikipedia.org/wiki/Machine_learning ^
+  --max-pages=2 --max-seconds=90 ^
+  --ask-every-page=1 ^
+  --ask-seq="what is machine learning?|what is it used for?|is machine learning useful?" ^
+  --agent2=1
+```
+
+Output semantics:
+- `[A] ... (source: <page> | window=<index> | evidence=<type>)`
+- `[T] ...` reasoning trace summary (when applicable)
+- `[R] ... -> <suggestion>` deterministic uncertainty signaling (advisory only)
+- `[Curiosity] Authorized ...` permission slip emitted from diagnosis (no fetching)
+- `[Active] Authorized execution (SIMULATED): ...` log-only intent execution with `TraceID`
+- ResolutionTracker (Phase 12b): identical goals stop executing after max attempts
+- Phase 12c (optional): `[Curiosity] RESOLVED: ...` can be simulated with `--simulate-resolution=1`
+- Phase 13 (diagnostics): `[Perception] ...` counters via `--perception-debug=1`
 
 ## Exporter Workflow
 - Export from a SQLite memory DB to a unified JSON for the dashboard.
@@ -49,10 +83,10 @@ Key fields: `ts_ms`, `decision`, `risk`, `notes`, `context` (with `coherence`, `
 
 ## Dashboard Workflow
 1) Serve from the `web` directory:
-   - `python -m http.server 8000` (cwd: `c:\Users\ashis\Desktop\NeuroForge\web`)
+   - `python -m http.server 8000` (cwd: `<repo_root>\web`)
    - Open: `http://localhost:8000/phase9.html`
 2) Alternatively, serve from repo root:
-   - `python -m http.server 8000` (cwd: `c:\Users\ashis\Desktop\NeuroForge`)
+   - `python -m http.server 8000` (cwd: `<repo_root>`)
    - Open: `http://localhost:8000/web/phase9.html`
 
 The dashboard loads `metacognition_export.json` and will optionally fetch `ethics_regulator_log.json` if present. `304` responses indicate cache hits and are fine.
@@ -79,7 +113,7 @@ The dashboard loads `metacognition_export.json` and will optionally fetch `ethic
 & ".\build\neuroforge.exe" `
   --steps=10000 `
   --step-ms=10 `
-  --dataset-triplets="c:\Users\ashis\Desktop\NeuroForge\flickr30k_triplets" `
+  --dataset-triplets="C:\path\to\flickr30k_triplets" `
   --dataset-mode=triplets `
   --dataset-limit=50 `
   --memory-db="build\m1_autonomy_observe_triplets.db" `

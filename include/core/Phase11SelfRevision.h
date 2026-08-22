@@ -10,7 +10,7 @@ namespace NeuroForge {
 namespace Core {
 
 class MemoryDB;
-class AutonomyEnvelope;
+struct AutonomyEnvelope;
 
 // Phase 11: Self-Revision
 // Analyzes self-explanations and metacognition trends to generate parameter revisions
@@ -35,11 +35,18 @@ public:
     void setMinRevisionGap(std::int64_t gap_ms) { min_revision_gap_ms_ = gap_ms; }
     void setOutcomeEvalWindowMs(std::int64_t window_ms) { outcome_eval_window_ms_ = window_ms; }
     void setStageCEnabled(bool enabled) { stage_c_enabled_ = enabled; }
+    void setStageCVersion(int version) { stage_c_version_ = version; }
+    void setChangeCostScale(double scale) { change_cost_scale_ = scale; }
+    void setChangeCostMin(double min_cost) { change_cost_min_ = min_cost; }
+    void setChangeCostFrequencyScale(double scale) { change_cost_frequency_scale_ = scale; }
+    void setChangeCostMaxAbsReward(double max_abs_reward) { change_cost_max_abs_reward_ = max_abs_reward; }
 
     // Get current revision parameters for external inspection
     std::map<std::string, double> getCurrentRevisionParams() const { return current_revision_params_; }
 
     void setAutonomyEnvelope(const AutonomyEnvelope* env) { autonomy_env_ = env; }
+
+    std::int64_t getLastRevisionTimestamp();
 
 public:
     struct RevisionTrigger {
@@ -78,7 +85,6 @@ private:
     
     // State tracking
     bool shouldTriggerRevision();
-    std::int64_t getLastRevisionTimestamp();
     
     MemoryDB* db_ = nullptr;
     std::int64_t run_id_ = 0;
@@ -90,10 +96,25 @@ private:
     std::int64_t min_revision_gap_ms_ = 60000; // Min 1 minute between revisions
     std::int64_t outcome_eval_window_ms_ = 60000; // 1 minute pre/post window
     bool stage_c_enabled_ = true;
+    int stage_c_version_ = 1;
+    double change_cost_scale_ = 0.05;
+    double change_cost_min_ = 0.01;
+    double change_cost_frequency_scale_ = 0.5;
+    double change_cost_max_abs_reward_ = 0.5;
     
     // Current state
     std::map<std::string, double> current_revision_params_;
     std::optional<std::int64_t> last_revision_ts_;
+
+    double last_change_cost_total_ = 0.0;
+    double last_change_cost_energy01_ = 0.5;
+    double last_change_cost_metabolic_hazard01_ = 0.0;
+    double last_change_cost_mito_health01_ = 1.0;
+    double last_change_cost_eg01_ = 0.25;
+    double last_change_cost_stress01_ = 0.0;
+    double last_change_cost_stress_multiplier_ = 1.0;
+    double last_change_cost_frequency_multiplier_ = 1.0;
+    std::int64_t last_change_cost_dt_ms_ = 0;
 
     const AutonomyEnvelope* autonomy_env_{nullptr};
 };

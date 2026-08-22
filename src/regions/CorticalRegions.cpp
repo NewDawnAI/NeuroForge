@@ -2,7 +2,48 @@
 #include <algorithm>
 #include <random>
 #include <cmath>
+#include <complex>
 #include "core/RegionRegistry.h"
+
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+namespace {
+    // Simple FFT implementation (Cooley-Tukey)
+    // Input: data (real), Output: complex spectrum
+    // Note: data size must be power of 2
+    void fft(std::vector<std::complex<float>>& x) {
+        const size_t N = x.size();
+        if (N <= 1) return;
+
+        std::vector<std::complex<float>> even(N / 2);
+        std::vector<std::complex<float>> odd(N / 2);
+
+        for (size_t i = 0; i < N / 2; ++i) {
+            even[i] = x[2 * i];
+            odd[i] = x[2 * i + 1];
+        }
+
+        fft(even);
+        fft(odd);
+
+        for (size_t k = 0; k < N / 2; ++k) {
+            std::complex<float> t = std::polar(1.0f, -2.0f * (float)M_PI * k / N) * odd[k];
+            x[k] = even[k] + t;
+            x[k + N / 2] = even[k] - t;
+        }
+    }
+
+    // Apply Hanning Window
+    void applyWindow(std::vector<float>& data) {
+        const size_t N = data.size();
+        for (size_t i = 0; i < N; ++i) {
+            float multiplier = 0.5f * (1.0f - std::cos(2.0f * (float)M_PI * i / (N - 1)));
+            data[i] *= multiplier;
+        }
+    }
+}
 
 namespace NeuroForge {
     namespace Regions {
@@ -154,36 +195,157 @@ namespace NeuroForge {
         void AuditoryCortex::processAudioInput(const std::vector<float>& audio_input) {
             if (audio_input.empty()) return;
             
-            // Drive neuron activations from audio features so spikes are produced in process()
-            for (auto& [area, neurons] : area_neurons_) {
-                for (std::size_t i = 0; i < neurons.size() && i < audio_input.size(); ++i) {
-                    if (neurons[i]) {
-                        float v = std::clamp(audio_input[i], 0.0f, 1.0f);
-                        neurons[i]->setActivation(v);
-                        // Ensure process() can register a threshold crossing and emit a spike callback
-                        neurons[i]->setState(Core::Neuron::State::Inactive);
-                    }
-                }
+            // 1. Prepare data for FFT (Pad to power of 2)
+            size_t n = 1;
+            while (n < audio_input.size()) n <<= 1;
+            
+            std::vector<std::complex<float>> spectrum(n);
+            std::vector<float> windowed_input = audio_input;
+            windowed_input.resize(n, 0.0f);
+            
+            // 2. Apply Window
+            applyWindow(windowed_input);
+            
+            for (size_t i = 0; i < n; ++i) {
+                spectrum[i] = windowed_input[i];
             }
+            
+            // 3. Compute FFT
+            fft(spectrum);
+            
+            // 4. Compute Magnitude Spectrum (only first half needed)
+            std::vector<float> magnitudes(n / 2);
+            float max_mag = 0.0f;
+            for (size_t i = 0; i < n / 2; ++i) {
+                magnitudes[i] = std::abs(spectrum[i]);
+                if (magnitudes[i] > max_mag) max_mag = magnitudes[i];
+            }
+            
+            // Normalize
+            if (max_mag > 0.0f) {
+                for (auto& m : magnitudes) m /= max_mag;
+            }
+            
+            // 5. Map to Neurons (Tonotopic Mapping)
+            // Assuming 16kHz sample rate for mapping context, 
+            // Nyquist is 8kHz. frequency_map_ goes up to 20kHz, so we clip.
+            float sample_rate = 16000.0f; 
+            float hz_per_bin = sample_rate / n;
+            
+            auto& a1_neurons = area_neurons_[AuditoryArea::A1];
+            
+            for (std::size_t i = 0; i < a1_neurons.size(); ++i) {
+                if (!a1_neurons[i]) continue;
+                
+                // Get preferred frequency from map (mapped 1:1 with neurons index for now)
+                // In reality, A1 neurons would be a subset, but let's assume direct mapping 
+                // or we use the global frequency_map_ if it aligns.
+                // The initializeTonotopicMap() logic maps ALL neurons to frequencies.
+                // Let's look up the frequency for this specific neuron index.
+                // Since A1 is a subset, we need to find which global index it corresponds to.
+                // Simplified: We'll re-calculate preferred frequency for A1 specifically.
+                
+                float normalized_pos = static_cast<float>(i) / a1_neurons.size();
+                float preferred_freq = 20.0f * std::pow(1000.0f, normalized_pos); // 20Hz - 20kHz
+                
+                // Find FFT bin
+                size_t bin = static_cast<size_t>(preferred_freq / hz_per_bin);
+                
+                float activation = 0.0f;
+                if (bin < magnitudes.size()) {
+                    activation = magnitudes[bin];
+                    
+                    // Add some spectral spreading (leakage simulation / overlapping receptive fields)
+                    // Reduced spreading to maintain peak sharpness for detection
+                    if (bin > 0) activation += 0.2f * magnitudes[bin-1];
+                    if (bin < magnitudes.size() - 1) activation += 0.2f * magnitudes[bin+1];
+                    activation = std::min(1.0f, activation);
+                }
+                
+                a1_neurons[i]->setActivation(activation);
+                a1_neurons[i]->setState(Core::Neuron::State::Inactive); // Ready to fire in process()
+            }
+            
+            // 6. Process Higher Areas (A2, Planum, STG)
+            // In a real brain, A1 feeds A2. Here we simulate "feature extraction" driving higher areas.
+            // detecting features will populate detected_sounds_, which we can then use to drive higher areas.
+            detectFeatures();
         }
 
         std::vector<float> AuditoryCortex::analyzeFrequencies(const std::vector<float>& frequencies) {
-            std::vector<float> analysis_results;
+            // Deprecated helper, but keeping for interface compatibility
+            // Just returns the frequencies that match our tonotopic map
+            return frequencies;
+        }
+
+        std::vector<AuditoryCortex::SoundFeature> AuditoryCortex::detectFeatures() {
+            detected_sounds_.clear();
             
-            // Simple frequency analysis - in a full implementation, this would be FFT-based
-            for (float freq : frequencies) {
-                // Find closest frequency in tonotopic map
-                auto closest_it = std::min_element(frequency_map_.begin(), frequency_map_.end(),
-                    [freq](float a, float b) {
-                        return std::abs(a - freq) < std::abs(b - freq);
-                    });
-                
-                if (closest_it != frequency_map_.end()) {
-                    analysis_results.push_back(*closest_it);
+            // Analyze A1 activity to find features
+            const auto& a1_neurons = area_neurons_[AuditoryArea::A1];
+            if (a1_neurons.empty()) return detected_sounds_;
+            
+            // 1. Peak Detection (Formants)
+            std::vector<std::pair<float, float>> peaks; // (frequency, magnitude)
+            
+            for (size_t i = 2; i < a1_neurons.size() - 2; ++i) {
+                float v = a1_neurons[i]->getActivation();
+                if (v > 0.2f && // Lower threshold slightly 
+                    v >= a1_neurons[i-1]->getActivation() && // Allow equal (plateau)
+                    v >= a1_neurons[i+1]->getActivation()) {
+                    
+                    // Check neighbors further out to ensure it's a local peak/plateau
+                    if (v > a1_neurons[i-2]->getActivation() && v > a1_neurons[i+2]->getActivation()) {
+                        float normalized_pos = static_cast<float>(i) / a1_neurons.size();
+                        float freq = 20.0f * std::pow(1000.0f, normalized_pos);
+                        peaks.push_back({freq, v});
+                    }
                 }
             }
             
-            return analysis_results;
+            // 2. Feature Classification
+            if (peaks.empty()) return detected_sounds_;
+            
+            // Sort by magnitude
+            std::sort(peaks.begin(), peaks.end(), [](const auto& a, const auto& b) {
+                return a.second > b.second;
+            });
+            
+            // Check for Pitch (Fundamental Frequency) - usually the lowest strong peak
+            // Increased threshold to 1000Hz to cover female/child speech and music
+            if (peaks[0].first < 1000.0f) {
+                detected_sounds_.push_back(SoundFeature::Pitch);
+            }
+            
+            // Check for Formants (Vowel-like structure)
+            // Needs at least 2 distinct peaks in speech range
+            int speech_peaks = 0;
+            for (const auto& p : peaks) {
+                if (p.first > 200.0f && p.first < 4000.0f) speech_peaks++;
+            }
+            
+            if (speech_peaks >= 2) {
+                detected_sounds_.push_back(SoundFeature::Phoneme);
+                
+                // Activate Planum Temporale (Language Area)
+                auto& pt_neurons = area_neurons_[AuditoryArea::Planum];
+                thread_local std::mt19937 rng(1337u);
+                std::bernoulli_distribution fire(0.1);
+                for (auto& n : pt_neurons) {
+                    // Random sparse activation to simulate phoneme recognition
+                    if (fire(rng)) {
+                        n->setActivation(0.8f); 
+                    }
+                }
+            }
+            
+            // Check for Rhythm (Broadband bursts)
+            // If many peaks across spectrum
+            if (peaks.size() > 5) {
+                detected_sounds_.push_back(SoundFeature::Timbre);
+            }
+            
+            return detected_sounds_;
         }
 
         void AuditoryCortex::processRegionSpecific(float delta_time) {
@@ -196,9 +358,12 @@ namespace NeuroForge {
                 }
             }
             
+            // Continuous feature detection
+            // detectFeatures(); // Already called in processAudioInput for efficiency
+            
             // Apply auditory attention
             if (auditory_attention_ > 0.0f) {
-                // Enhance processing based on attention
+                // Enhance processing in attended areas
             }
         }
 

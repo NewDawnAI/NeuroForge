@@ -181,7 +181,7 @@ double Phase8GoalSystem::calculateGoalCoherence() {
 
 std::int64_t Phase8GoalSystem::now_ms() const {
     using namespace std::chrono;
-    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
 } // namespace Core

@@ -150,6 +150,18 @@ namespace NeuroForge {
             void processAudioInput(const std::vector<float>& audio_input);
 
             /**
+             * @brief Detect auditory features
+             * @return Detected sound features
+             */
+            std::vector<SoundFeature> detectFeatures();
+
+            /**
+             * @brief Get detected sound features
+             * @return List of detected features
+             */
+            const std::vector<SoundFeature>& getDetectedFeatures() const { return detected_sounds_; }
+
+            /**
              * @brief Analyze frequency spectrum
              * @param frequencies Input frequencies
              * @return Frequency analysis results

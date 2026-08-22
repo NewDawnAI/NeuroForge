@@ -1,0 +1,185 @@
+[1/3] Building CXX object CMakeFiles/neuroforge_core.dir/src/sandbox/WebSandbox.cpp.obj
+FAILED: CMakeFiles/neuroforge_core.dir/src/sandbox/WebSandbox.cpp.obj 
+C:\Strawberry\c\bin\c++.exe -DNDEBUG -DNF_HAVE_SQLITE3=1 -DNF_HAVE_WEBVIEW2=1 -IC:/Users/ashis/Desktop/NeuroForge/include -IC:/Users/ashis/Desktop/NeuroForge/src -IC:/Users/ashis/Desktop/NeuroForge/build -IC:/Users/ashis/Desktop/NeuroForge/build/schemas -isystem C:/vcpkg/buildtrees/eigen3/src/a8c0519f1c-ba17d9986c.clean -isystem C:/Users/ashis/Desktop/NeuroForge/external/vcpkg/installed/x64-windows/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -MD -MT CMakeFiles/neuroforge_core.dir/src/sandbox/WebSandbox.cpp.obj -MF CMakeFiles\neuroforge_core.dir\src\sandbox\WebSandbox.cpp.obj.d -o CMakeFiles/neuroforge_core.dir/src/sandbox/WebSandbox.cpp.obj -c C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp
+In file included from C:/Users/ashis/Desktop/NeuroForge/include/sandbox/WebSandbox.h:6,
+                 from C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:1:
+C:/Users/ashis/Desktop/NeuroForge/include/sandbox/ScreenshotCapture.h:19: warning: "NOMINMAX" redefined
+   19 | #define NOMINMAX
+      | 
+In file included from C:/Strawberry/c/include/c++/13.2.0/x86_64-w64-mingw32/bits/c++config.h:679,
+                 from C:/Strawberry/c/include/c++/13.2.0/utility:67,
+                 from C:/Users/ashis/Desktop/NeuroForge/include/sandbox/WebSandbox.h:3:
+C:/Strawberry/c/include/c++/13.2.0/x86_64-w64-mingw32/bits/os_defines.h:45: note: this is the location of the previous definition
+   45 | #define NOMINMAX 1
+      | 
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:21: warning: ignoring '#pragma comment ' [-Wunknown-pragmas]
+   21 | #pragma comment(lib, "Shcore.lib")
+      | 
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:22: warning: ignoring '#pragma comment ' [-Wunknown-pragmas]
+   22 | #pragma comment(lib, "Shell32.lib")
+      | 
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:29:2: error: #endif without #if
+   29 | #endif
+      |  ^~~~~
+In file included from C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:24:
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:18:45: error: 'ICoreWebView2' was not declared in this scope
+   18 |   using HandlerFunc = std::function<HRESULT(ICoreWebView2 *, TArgs *)>;
+      |                                             ^~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:18:45: error: 'ICoreWebView2' was not declared in this scope
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:18:70: error: template argument 1 is invalid
+   18 |   using HandlerFunc = std::function<HRESULT(ICoreWebView2 *, TArgs *)>;
+      |                                                                      ^
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:18:28: error: '<expression error>' in namespace 'std' does not name a type
+   18 |   using HandlerFunc = std::function<HRESULT(ICoreWebView2 *, TArgs *)>;
+      |                            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:21:38: error: 'ICoreWebView2Environment' was not declared in this scope
+   21 |       std::function<HRESULT(HRESULT, ICoreWebView2Environment *)>;
+      |                                      ^~~~~~~~~~~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:21:38: error: 'ICoreWebView2Environment' was not declared in this scope
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:21:65: error: template argument 1 is invalid
+   21 |       std::function<HRESULT(HRESULT, ICoreWebView2Environment *)>;
+      |                                                                 ^
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:21:12: error: '<expression error>' in namespace 'std' does not name a type
+   21 |       std::function<HRESULT(HRESULT, ICoreWebView2Environment *)>;
+      |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:23:38: error: 'ICoreWebView2Controller' was not declared in this scope
+   23 |       std::function<HRESULT(HRESULT, ICoreWebView2Controller *)>;
+      |                                      ^~~~~~~~~~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:23:38: error: 'ICoreWebView2Controller' was not declared in this scope
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:23:64: error: template argument 1 is invalid
+   23 |       std::function<HRESULT(HRESULT, ICoreWebView2Controller *)>;
+      |                                                                ^
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:23:12: error: '<expression error>' in namespace 'std' does not name a type
+   23 |       std::function<HRESULT(HRESULT, ICoreWebView2Controller *)>;
+      |            ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:25:39: error: expected ')' before 'handler'
+   25 |   explicit ComEventHandler(HandlerFunc handler) : handler_(handler) {}
+      |                           ~           ^~~~~~~~
+      |                                       )
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:27:42: error: expected ')' before 'handler'
+   27 |   explicit ComEventHandler(EnvHandlerFunc handler) : envHandler_(handler) {}
+      |                           ~              ^~~~~~~~
+      |                                          )
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:28:43: error: expected ')' before 'handler'
+   28 |   explicit ComEventHandler(CtrlHandlerFunc handler) : ctrlHandler_(handler) {}
+      |                           ~               ^~~~~~~~
+      |                                           )
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:61:23: error: 'ICoreWebView2' has not been declared
+   61 |   STDMETHODIMP Invoke(ICoreWebView2 *sender, TArgs *args) {
+      |                       ^~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:70:36: error: 'ICoreWebView2Environment' has not been declared
+   70 |                                    ICoreWebView2Environment *env) {
+      |                                    ^~~~~~~~~~~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:78:36: error: 'ICoreWebView2Controller' has not been declared
+   78 |                                    ICoreWebView2Controller *ctrl) {
+      |                                    ^~~~~~~~~~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:77:29: error: 'HRESULT NeuroForge::Sandbox::ComEventHandler<THandler, TArgs>::Invoke(HRESULT, int*)' cannot be overloaded with 'HRESULT NeuroForge::Sandbox::ComEventHandler<THandler, TArgs>::Invoke(HRESULT, int*)'
+   77 |   HRESULT STDMETHODCALLTYPE Invoke(HRESULT result,
+      |                             ^~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:69:29: note: previous declaration 'HRESULT NeuroForge::Sandbox::ComEventHandler<THandler, TArgs>::Invoke(HRESULT, int*)'
+   69 |   HRESULT STDMETHODCALLTYPE Invoke(HRESULT result,
+      |                             ^~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:86:3: error: 'HandlerFunc' does not name a type
+   86 |   HandlerFunc handler_;
+      |   ^~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:87:3: error: 'EnvHandlerFunc' does not name a type
+   87 |   EnvHandlerFunc envHandler_;
+      |   ^~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:88:3: error: 'CtrlHandlerFunc' does not name a type
+   88 |   CtrlHandlerFunc ctrlHandler_;
+      |   ^~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h: In member function 'HRESULT NeuroForge::Sandbox::ComEventHandler<THandler, TArgs>::Invoke(int*, TArgs*)':
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:62:9: error: 'handler_' was not declared in this scope; did you mean 'handle_t'?
+   62 |     if (handler_)
+      |         ^~~~~~~~
+      |         handle_t
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h: In member function 'HRESULT NeuroForge::Sandbox::ComEventHandler<THandler, TArgs>::Invoke(HRESULT, int*)':
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:71:9: error: 'envHandler_' was not declared in this scope; did you mean 'THandler'?
+   71 |     if (envHandler_)
+      |         ^~~~~~~~~~~
+      |         THandler
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h: In member function 'HRESULT NeuroForge::Sandbox::ComEventHandler<THandler, TArgs>::Invoke(HRESULT, int*)':
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:79:9: error: 'ctrlHandler_' was not declared in this scope; did you mean 'THandler'?
+   79 |     if (ctrlHandler_)
+      |         ^~~~~~~~~~~~
+      |         THandler
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp: In member function 'bool NeuroForge::Sandbox::WebSandbox::create(int, int, const std::string&)':
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:218:21: warning: cast between incompatible function types from 'FARPROC' {aka 'long long int (*)()'} to 'SetDpiCtx' {aka 'int (*)(void*)'} [-Wcast-function-type]
+  218 |       auto setCtx = reinterpret_cast<SetDpiCtx>(
+      |                     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  219 |           GetProcAddress(user32, "SetProcessDpiAwarenessContext"));
+      |           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:228:22: warning: cast between incompatible function types from 'FARPROC' {aka 'long long int (*)()'} to 'SetProcAwareness' {aka 'long int (*)(PROCESS_DPI_AWARENESS)'} [-Wcast-function-type]
+  228 |         auto setAw = reinterpret_cast<SetProcAwareness>(
+      |                      ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  229 |             GetProcAddress(shcore, "SetProcessDpiAwareness"));
+      |             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp: In lambda function:
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:459:28: error: invalid new-expression of abstract class type 'NeuroForge::Sandbox::ComEventHandler<ICoreWebView2NavigationCompletedEventHandler, ICoreWebView2NavigationCompletedEventArgs>'
+  459 |                           });
+      |                            ^
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:16:7: note:   because the following virtual functions are pure within 'NeuroForge::Sandbox::ComEventHandler<ICoreWebView2NavigationCompletedEventHandler, ICoreWebView2NavigationCompletedEventArgs>':
+   16 | class ComEventHandler : public THandler {
+      |       ^~~~~~~~~~~~~~~
+In file included from C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:25:
+C:/Users/ashis/Desktop/NeuroForge/external/vcpkg/installed/x64-windows/include/WebView2.h:3788:43: note:     'virtual HRESULT ICoreWebView2NavigationCompletedEventHandler::Invoke(ICoreWebView2*, ICoreWebView2NavigationCompletedEventArgs*)'
+ 3788 |         virtual HRESULT STDMETHODCALLTYPE Invoke(
+      |                                           ^~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:493:28: error: invalid new-expression of abstract class type 'NeuroForge::Sandbox::ComEventHandler<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2NavigationStartingEventArgs>'
+  493 |                           });
+      |                            ^
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:16:7: note:   because the following virtual functions are pure within 'NeuroForge::Sandbox::ComEventHandler<ICoreWebView2NavigationStartingEventHandler, ICoreWebView2NavigationStartingEventArgs>':
+   16 | class ComEventHandler : public THandler {
+      |       ^~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/external/vcpkg/installed/x64-windows/include/WebView2.h:3874:43: note:     'virtual HRESULT ICoreWebView2NavigationStartingEventHandler::Invoke(ICoreWebView2*, ICoreWebView2NavigationStartingEventArgs*)'
+ 3874 |         virtual HRESULT STDMETHODCALLTYPE Invoke(
+      |                                           ^~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:520:28: error: invalid new-expression of abstract class type 'NeuroForge::Sandbox::ComEventHandler<ICoreWebView2ProcessFailedEventHandler, ICoreWebView2ProcessFailedEventArgs>'
+  520 |                           });
+      |                            ^
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:16:7: note:   because the following virtual functions are pure within 'NeuroForge::Sandbox::ComEventHandler<ICoreWebView2ProcessFailedEventHandler, ICoreWebView2ProcessFailedEventArgs>':
+   16 | class ComEventHandler : public THandler {
+      |       ^~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/external/vcpkg/installed/x64-windows/include/WebView2.h:4132:43: note:     'virtual HRESULT ICoreWebView2ProcessFailedEventHandler::Invoke(ICoreWebView2*, ICoreWebView2ProcessFailedEventArgs*)'
+ 4132 |         virtual HRESULT STDMETHODCALLTYPE Invoke(
+      |                                           ^~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp: In lambda function:
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:549:16: error: invalid new-expression of abstract class type 'NeuroForge::Sandbox::ComEventHandler<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, void>'
+  549 |               }));
+      |                ^
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:16:7: note:   because the following virtual functions are pure within 'NeuroForge::Sandbox::ComEventHandler<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler, void>':
+   16 | class ComEventHandler : public THandler {
+      |       ^~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/external/vcpkg/installed/x64-windows/include/WebView2.h:40269:43: note:     'virtual HRESULT ICoreWebView2CreateCoreWebView2ControllerCompletedHandler::Invoke(HRESULT, ICoreWebView2Controller*)'
+40269 |         virtual HRESULT STDMETHODCALLTYPE Invoke(
+      |                                           ^~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp: In member function 'bool NeuroForge::Sandbox::WebSandbox::create(int, int, const std::string&)':
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:563:8: error: invalid new-expression of abstract class type 'NeuroForge::Sandbox::ComEventHandler<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, void>'
+  563 |       }));
+      |        ^
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/ComHelpers.h:16:7: note:   because the following virtual functions are pure within 'NeuroForge::Sandbox::ComEventHandler<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, void>':
+   16 | class ComEventHandler : public THandler {
+      |       ^~~~~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/external/vcpkg/installed/x64-windows/include/WebView2.h:39957:43: note:     'virtual HRESULT ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler::Invoke(HRESULT, ICoreWebView2Environment*)'
+39957 |         virtual HRESULT STDMETHODCALLTYPE Invoke(
+      |                                           ^~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp: In member function 'bool NeuroForge::Sandbox::WebSandbox::navigate(const std::string&)':
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:671:46: warning: unused parameter 'url' [-Wunused-parameter]
+  671 | bool WebSandbox::navigate(const std::string &url) {
+      |                           ~~~~~~~~~~~~~~~~~~~^~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp: In member function 'std::string NeuroForge::Sandbox::WebSandbox::executeScriptBlocking(const std::wstring&)':
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:846:67: warning: unused parameter 'script' [-Wunused-parameter]
+  846 | std::string WebSandbox::executeScriptBlocking(const std::wstring &script) {
+      |                                               ~~~~~~~~~~~~~~~~~~~~^~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp: In member function 'std::pair<int, int> NeuroForge::Sandbox::WebSandbox::getScrollPosition()':
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:901:7: warning: unused variable 'x' [-Wunused-variable]
+  901 |   int x = 0, y = 0;
+      |       ^
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:901:14: warning: unused variable 'y' [-Wunused-variable]
+  901 |   int x = 0, y = 0;
+      |              ^
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp: At global scope:
+C:/Users/ashis/Desktop/NeuroForge/src/sandbox/WebSandbox.cpp:835:20: warning: 'std::string NeuroForge::Sandbox::WideToUtf8(const std::wstring&)' defined but not used [-Wunused-function]
+  835 | static std::string WideToUtf8(const std::wstring &wstr) {
+      |                    ^~~~~~~~~~
+ninja: build stopped: subcommand failed.

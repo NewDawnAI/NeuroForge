@@ -35,8 +35,9 @@ struct EnhancedEpisode {
 
     // Convenience helpers used by various subsystems
     std::uint64_t getAge() const {
-        const auto now_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        const auto now_ms_signed = std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch()).count();
+        const std::uint64_t now_ms = (now_ms_signed < 0) ? 0ULL : static_cast<std::uint64_t>(now_ms_signed);
         return (timestamp_ms <= now_ms) ? (now_ms - timestamp_ms) : 0ULL;
     }
 

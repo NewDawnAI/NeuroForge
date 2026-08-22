@@ -356,8 +356,8 @@ Teacher embedding loader (robust format support)
 ### Triplet‑Grounding Evaluation
 - Per‑triplet ingestion events enable recall@1/5 and stability metrics.
 - Ingestion logging references:
-  - Initial load: `src/main.cpp:6107`–`6188` (`triplet_ingestion` on dataset activation)
-  - Autonomous loop: `src/main.cpp:6250`–`6336` and `src/main.cpp:6451`–`6530` (`triplet_ingestion` per item)
+  - Initial load: `src/main.cpp` (search for `dataset-mode=triplets` and `triplet_ingestion`)
+  - Autonomous loop: `src/main.cpp` (search for `triplet_ingestion` and `snapshot:phase_a`)
 - Phase A norms logging: `src/core/PhaseAMimicry.cpp:486`–`497` (`phase_a_norms` entries).
 - Evaluation script: `tools/eval_triplet_grounding.py` computes `recall@1`, `recall@5`, `similarity_mean`, and per‑teacher stats.
 - Recommended run: use ADS‑2 script and enable hippocampal snapshots.
@@ -366,8 +366,9 @@ Teacher embedding loader (robust format support)
 ### Dataset Triplets Ingestion
 ```powershell
 # Deliver teacher embeddings from image/audio/text triplets with reward logging
-& ".\neuroforge.exe" --substrate-mode=native --dataset-mode=triplets ^
-  --dataset-triplets "C:\Data\flickr30k_triplets" --dataset-limit 2000 ^
+& ".\build\neuroforge.exe" `
+  --substrate-mode=native --dataset-mode=triplets `
+  --dataset-triplets "C:\Data\flickr30k_triplets" --dataset-limit 2000 `
   --dataset-shuffle=on --reward-scale 1.0 --memory-db phasec_mem.db --steps 5000
 ```
 

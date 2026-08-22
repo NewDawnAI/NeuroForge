@@ -813,8 +813,87 @@ config.enable_speech_output = true;
 
 ---
 
-**Last Updated**: December 2024  
-**API Version**: 2.0.0  
+## Relation Scoring API (v2.1.0)
+
+New in v2.1.0: TransE-style relation scoring for Autonomous Internet Grounding.
+
+### scoreRelationTriple()
+```cpp
+float scoreRelationTriple(
+    const std::string& subject,
+    const std::string& relation, 
+    const std::string& object) const;
+```
+**Description**: Scores a relation triple using TransE distance.
+
+**Parameters**:
+- `subject`: Subject token symbol
+- `relation`: Relation token symbol
+- `object`: Object token symbol
+
+**Returns**: Score [0.0-1.0] where higher = more plausible
+
+**Example**:
+```cpp
+float score = lang_system.scoreRelationTriple("cat", "is_a", "mammal");
+std::cout << "Score: " << score << std::endl;
+// Output: Score: 0.72
+```
+
+### proposeRelationsFor()
+```cpp
+std::vector<std::pair<std::string, float>> proposeRelationsFor(
+    const std::string& subject,
+    const std::string& object,
+    int top_k = 5) const;
+```
+**Description**: Proposes candidate relations between subject and object.
+
+**Parameters**:
+- `subject`: Subject token symbol
+- `object`: Object token symbol
+- `top_k`: Maximum relations to return
+
+**Returns**: Vector of (relation, score) pairs sorted by score descending
+
+**Example**:
+```cpp
+auto proposals = lang_system.proposeRelationsFor("cat", "mat", 3);
+for (const auto& [rel, score] : proposals) {
+    std::cout << rel << ": " << score << std::endl;
+}
+// Output: on: 0.68, near: 0.52, under: 0.41
+```
+
+### getAllRelationTokens()
+```cpp
+std::vector<std::string> getAllRelationTokens() const;
+```
+**Description**: Gets all tokens of type Relation.
+
+**Returns**: Vector of relation symbols
+
+### transeDistance()
+```cpp
+float transeDistance(
+    const std::vector<float>& subj_emb,
+    const std::vector<float>& rel_emb,
+    const std::vector<float>& obj_emb) const;
+```
+**Description**: Computes raw TransE distance ||s + r - o||.
+
+**Parameters**:
+- `subj_emb`: Subject embedding
+- `rel_emb`: Relation embedding
+- `obj_emb`: Object embedding
+
+**Returns**: L2 distance (lower = more plausible)
+
+---
+
+**Last Updated**: January 2026  
+**API Version**: 2.1.0  
 **Documentation Status**: Complete
 
 For implementation examples and integration guides, see [Language_System_Integration_Guide.md](Language_System_Integration_Guide.md).
+

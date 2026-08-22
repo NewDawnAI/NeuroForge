@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <deque>
 #include <array>
+#include <cstdint>
 
 namespace NeuroForge {
 namespace Biases {
@@ -83,6 +84,8 @@ public:
         bool enable_vector_navigation = true;     // Enable vector-based navigation
         bool enable_route_learning = true;        // Enable route memorization
         bool enable_spatial_inference = true;     // Enable spatial reasoning
+
+        std::uint32_t random_seed = 1337;
     };
     
     struct SpatialLocation {

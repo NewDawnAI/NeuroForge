@@ -18,7 +18,7 @@ class Phase7Reflection;
 class Phase8GoalSystem;
 class Phase9Metacognition;
 class SelfModel;
-class AutonomyEnvelope;
+struct AutonomyEnvelope;
 
 struct ReasonOption {
     std::string key;            // semantic key, e.g. action label

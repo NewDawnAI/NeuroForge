@@ -1,5 +1,6 @@
 #include "core/Phase10SelfExplanation.h"
 #include "core/MemoryDB.h"
+#include "core/StageC_AutonomyGate.h"
 #include <algorithm>
 #include <sstream>
 #include <chrono>
@@ -9,7 +10,7 @@ namespace Core {
 
 static inline std::int64_t now_ms_phase10() {
     using namespace std::chrono;
-    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
 static inline float compute_revision_reputation(const std::vector<MemoryDB::SelfRevisionOutcomeEntry>& outcomes) {
@@ -56,28 +57,229 @@ bool Phase10SelfExplanation::runForMetacogId(std::int64_t metacog_id, const std:
     std::string narrative = synthesizeNarrative(trust_delta, mean_abs_error, confidence_bias, context);
 
     if (stage_c_enabled_) {
-        const auto outcomes = db_->getRecentSelfRevisionOutcomes(run_id_, 20);
-        const float rr = compute_revision_reputation(outcomes);
-        const float cap = outcomes.empty() ? 1.0f : map_reputation_to_cap(rr);
-        const char* note = outcomes.empty()
-            ? "No outcome history; autonomy cap unchanged"
-            : ((cap < 1.0f)
-                ? "Autonomy constrained due to recent neutral/harmful self-revision outcomes"
-                : "Autonomy unconstrained by recent self-revision outcomes");
+        if (stage_c_version_ == 5) {
+            StageC_AutonomyGate gate(db_);
+            const auto r = gate.evaluateV4(run_id_, 200);
+            std::string note;
+            if (r.window_n == 0) {
+                note = "No outcome history; autonomy cap unchanged";
+            } else {
+                const bool risk_constrained = (r.harm_risk_cap_multiplier < 1.0f);
+                const bool credit_constrained = (r.autonomy_credit_cap_multiplier < 1.0f);
+                if (risk_constrained && credit_constrained) {
+                    note = "Autonomy constrained by both harm-risk and autonomy credit";
+                } else if (risk_constrained) {
+                    note = "Autonomy constrained by harm-risk upper bound from self-revision outcomes";
+                } else if (credit_constrained) {
+                    note = "Autonomy constrained by autonomy credit";
+                } else {
+                    note = "Autonomy unconstrained by harm-risk and autonomy credit";
+                }
+            }
 
-        std::ostringstream oss;
-        oss.setf(std::ios::fixed);
-        oss << ",\"stage_c_v1\":{";
-        oss << "\"revision_reputation\":" << rr << ",";
-        oss << "\"autonomy_cap_multiplier\":" << cap << ",";
-        oss << "\"window_n\":" << outcomes.size() << ",";
-        oss << "\"note\":\"" << note << "\"";
-        oss << "}";
-        const std::string injection = oss.str();
+            if (r.goal_governance_veto) {
+                note += "; goals vetoed by governance";
+            } else if (r.goal_candidate_n > 0) {
+                note += "; goals eligible for formation";
+            } else {
+                note += "; no goal candidates";
+            }
 
-        const std::size_t last_brace = narrative.rfind('}');
-        if (last_brace != std::string::npos) {
-            narrative.insert(last_brace, injection);
+            std::ostringstream oss;
+            oss.setf(std::ios::fixed);
+            oss << ",\"stage_c_v5\":{";
+            oss << "\"p_harm_mean\":" << r.p_harm_mean << ",";
+            oss << "\"p_harm_ub95\":" << r.p_harm_ub95 << ",";
+            oss << "\"harm_risk_cap_multiplier\":" << r.harm_risk_cap_multiplier << ",";
+            oss << "\"autonomy_credit\":" << r.autonomy_credit << ",";
+            oss << "\"autonomy_credit_cap_multiplier\":" << r.autonomy_credit_cap_multiplier << ",";
+            oss << "\"autonomy_cap_multiplier\":" << r.autonomy_cap_multiplier << ",";
+            oss << "\"window_n\":" << r.window_n << ",";
+            oss << "\"beneficial_n\":" << r.beneficial_n << ",";
+            oss << "\"harmful_n\":" << r.harmful_n << ",";
+            oss << "\"neutral_n\":" << r.neutral_n << ",";
+            oss << "\"preference_rigidity01\":" << r.preference_rigidity01 << ",";
+            oss << "\"preference_destabilization01\":" << r.preference_destabilization01 << ",";
+            oss << "\"preference_active_n\":" << r.preference_active_n << ",";
+            oss << "\"goal_candidate_n\":" << r.goal_candidate_n << ",";
+            oss << "\"goal_created_n\":" << r.goal_created_n << ",";
+            oss << "\"goal_reaffirmed_n\":" << r.goal_reaffirmed_n << ",";
+            oss << "\"goal_governance_veto\":" << (r.goal_governance_veto ? "true" : "false") << ",";
+            oss << "\"goal_ttl_ms\":" << r.goal_ttl_ms << ",";
+            oss << "\"note\":\"" << note << "\"";
+            oss << "}";
+            const std::string injection = oss.str();
+
+            const std::size_t last_brace = narrative.rfind('}');
+            if (last_brace != std::string::npos) {
+                narrative.insert(last_brace, injection);
+            }
+        } else if (stage_c_version_ == 4) {
+            StageC_AutonomyGate gate(db_);
+            const auto r = gate.evaluateV4(run_id_, 200);
+            std::string note;
+            if (r.window_n == 0) {
+                note = "No outcome history; autonomy cap unchanged";
+            } else {
+                const bool risk_constrained = (r.harm_risk_cap_multiplier < 1.0f);
+                const bool credit_constrained = (r.autonomy_credit_cap_multiplier < 1.0f);
+                if (risk_constrained && credit_constrained) {
+                    note = "Autonomy constrained by both harm-risk and autonomy credit";
+                } else if (risk_constrained) {
+                    note = "Autonomy constrained by harm-risk upper bound from self-revision outcomes";
+                } else if (credit_constrained) {
+                    note = "Autonomy constrained by autonomy credit";
+                } else {
+                    note = "Autonomy unconstrained by harm-risk and autonomy credit";
+                }
+            }
+
+            if (r.goal_governance_veto) {
+                note += "; goals vetoed by governance";
+            } else if (r.goal_candidate_n > 0) {
+                note += "; goals eligible for formation";
+            } else {
+                note += "; no goal candidates";
+            }
+
+            std::ostringstream oss;
+            oss.setf(std::ios::fixed);
+            oss << ",\"stage_c_v4\":{";
+            oss << "\"p_harm_mean\":" << r.p_harm_mean << ",";
+            oss << "\"p_harm_ub95\":" << r.p_harm_ub95 << ",";
+            oss << "\"harm_risk_cap_multiplier\":" << r.harm_risk_cap_multiplier << ",";
+            oss << "\"autonomy_credit\":" << r.autonomy_credit << ",";
+            oss << "\"autonomy_credit_cap_multiplier\":" << r.autonomy_credit_cap_multiplier << ",";
+            oss << "\"autonomy_cap_multiplier\":" << r.autonomy_cap_multiplier << ",";
+            oss << "\"window_n\":" << r.window_n << ",";
+            oss << "\"beneficial_n\":" << r.beneficial_n << ",";
+            oss << "\"harmful_n\":" << r.harmful_n << ",";
+            oss << "\"neutral_n\":" << r.neutral_n << ",";
+            oss << "\"preference_rigidity01\":" << r.preference_rigidity01 << ",";
+            oss << "\"preference_destabilization01\":" << r.preference_destabilization01 << ",";
+            oss << "\"preference_active_n\":" << r.preference_active_n << ",";
+            oss << "\"goal_candidate_n\":" << r.goal_candidate_n << ",";
+            oss << "\"goal_created_n\":" << r.goal_created_n << ",";
+            oss << "\"goal_reaffirmed_n\":" << r.goal_reaffirmed_n << ",";
+            oss << "\"goal_governance_veto\":" << (r.goal_governance_veto ? "true" : "false") << ",";
+            oss << "\"goal_ttl_ms\":" << r.goal_ttl_ms << ",";
+            oss << "\"note\":\"" << note << "\"";
+            oss << "}";
+            const std::string injection = oss.str();
+
+            const std::size_t last_brace = narrative.rfind('}');
+            if (last_brace != std::string::npos) {
+                narrative.insert(last_brace, injection);
+            }
+        } else if (stage_c_version_ == 3) {
+            StageC_AutonomyGate gate(db_);
+            const auto r = gate.evaluateV3(run_id_, 200);
+            std::string note;
+            if (r.window_n == 0) {
+                note = "No outcome history; autonomy cap unchanged";
+            } else {
+                const bool risk_constrained = (r.harm_risk_cap_multiplier < 1.0f);
+                const bool credit_constrained = (r.autonomy_credit_cap_multiplier < 1.0f);
+                if (risk_constrained && credit_constrained) {
+                    note = "Autonomy constrained by both harm-risk and autonomy credit";
+                } else if (risk_constrained) {
+                    note = "Autonomy constrained by harm-risk upper bound from self-revision outcomes";
+                } else if (credit_constrained) {
+                    note = "Autonomy constrained by autonomy credit";
+                } else {
+                    note = "Autonomy unconstrained by harm-risk and autonomy credit";
+                }
+            }
+
+            std::ostringstream oss;
+            oss.setf(std::ios::fixed);
+            oss << ",\"stage_c_v3\":{";
+            oss << "\"p_harm_mean\":" << r.p_harm_mean << ",";
+            oss << "\"p_harm_ub95\":" << r.p_harm_ub95 << ",";
+            oss << "\"harm_risk_cap_multiplier\":" << r.harm_risk_cap_multiplier << ",";
+            oss << "\"autonomy_credit\":" << r.autonomy_credit << ",";
+            oss << "\"autonomy_credit_cap_multiplier\":" << r.autonomy_credit_cap_multiplier << ",";
+            oss << "\"autonomy_cap_multiplier\":" << r.autonomy_cap_multiplier << ",";
+            oss << "\"window_n\":" << r.window_n << ",";
+            oss << "\"beneficial_n\":" << r.beneficial_n << ",";
+            oss << "\"harmful_n\":" << r.harmful_n << ",";
+            oss << "\"neutral_n\":" << r.neutral_n << ",";
+            oss << "\"preference_rigidity01\":" << r.preference_rigidity01 << ",";
+            oss << "\"preference_destabilization01\":" << r.preference_destabilization01 << ",";
+            oss << "\"preference_active_n\":" << r.preference_active_n << ",";
+            oss << "\"note\":\"" << note << "\"";
+            oss << "}";
+            const std::string injection = oss.str();
+
+            const std::size_t last_brace = narrative.rfind('}');
+            if (last_brace != std::string::npos) {
+                narrative.insert(last_brace, injection);
+            }
+        } else if (stage_c_version_ == 2) {
+            StageC_AutonomyGate gate(db_);
+            const auto r = gate.evaluateV2(run_id_, 200);
+            std::string note;
+            if (r.window_n == 0) {
+                note = "No outcome history; autonomy cap unchanged";
+            } else {
+                const bool risk_constrained = (r.harm_risk_cap_multiplier < 1.0f);
+                const bool credit_constrained = (r.autonomy_credit_cap_multiplier < 1.0f);
+                if (risk_constrained && credit_constrained) {
+                    note = "Autonomy constrained by both harm-risk and autonomy credit";
+                } else if (risk_constrained) {
+                    note = "Autonomy constrained by harm-risk upper bound from self-revision outcomes";
+                } else if (credit_constrained) {
+                    note = "Autonomy constrained by autonomy credit";
+                } else {
+                    note = "Autonomy unconstrained by harm-risk and autonomy credit";
+                }
+            }
+
+            std::ostringstream oss;
+            oss.setf(std::ios::fixed);
+            oss << ",\"stage_c_v2\":{";
+            oss << "\"p_harm_mean\":" << r.p_harm_mean << ",";
+            oss << "\"p_harm_ub95\":" << r.p_harm_ub95 << ",";
+            oss << "\"harm_risk_cap_multiplier\":" << r.harm_risk_cap_multiplier << ",";
+            oss << "\"autonomy_credit\":" << r.autonomy_credit << ",";
+            oss << "\"autonomy_credit_cap_multiplier\":" << r.autonomy_credit_cap_multiplier << ",";
+            oss << "\"autonomy_cap_multiplier\":" << r.autonomy_cap_multiplier << ",";
+            oss << "\"window_n\":" << r.window_n << ",";
+            oss << "\"beneficial_n\":" << r.beneficial_n << ",";
+            oss << "\"harmful_n\":" << r.harmful_n << ",";
+            oss << "\"neutral_n\":" << r.neutral_n << ",";
+            oss << "\"note\":\"" << note << "\"";
+            oss << "}";
+            const std::string injection = oss.str();
+
+            const std::size_t last_brace = narrative.rfind('}');
+            if (last_brace != std::string::npos) {
+                narrative.insert(last_brace, injection);
+            }
+        } else {
+            const auto outcomes = db_->getRecentSelfRevisionOutcomes(run_id_, 20);
+            const float rr = compute_revision_reputation(outcomes);
+            const float cap = outcomes.empty() ? 1.0f : map_reputation_to_cap(rr);
+            const char* note = outcomes.empty()
+                ? "No outcome history; autonomy cap unchanged"
+                : ((cap < 1.0f)
+                    ? "Autonomy constrained due to recent neutral/harmful self-revision outcomes"
+                    : "Autonomy unconstrained by recent self-revision outcomes");
+
+            std::ostringstream oss;
+            oss.setf(std::ios::fixed);
+            oss << ",\"stage_c_v1\":{";
+            oss << "\"revision_reputation\":" << rr << ",";
+            oss << "\"autonomy_cap_multiplier\":" << cap << ",";
+            oss << "\"window_n\":" << outcomes.size() << ",";
+            oss << "\"note\":\"" << note << "\"";
+            oss << "}";
+            const std::string injection = oss.str();
+
+            const std::size_t last_brace = narrative.rfind('}');
+            if (last_brace != std::string::npos) {
+                narrative.insert(last_brace, injection);
+            }
         }
     }
 
@@ -110,6 +312,23 @@ bool Phase10SelfExplanation::runForMetacogId(std::int64_t metacog_id, const std:
         if (last_brace != std::string::npos) {
             narrative.insert(last_brace, injection);
         }
+    }
+
+    if (stage_c_enabled_ && stage_c_version_ == 5) {
+        std::int64_t audit_id = 0;
+        (void)db_->insertLanguageAuditLog(run_id_,
+                                          now_ms_phase10(),
+                                          0,
+                                          2,
+                                          "self_explanation",
+                                          std::string(),
+                                          narrative,
+                                          false,
+                                          false,
+                                          false,
+                                          false,
+                                          true,
+                                          audit_id);
     }
 
     return db_->updateMetacognitionExplanation(metacog_id, narrative);

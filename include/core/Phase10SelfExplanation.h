@@ -17,6 +17,7 @@ public:
         : db_(db), run_id_(run_id) {}
 
     void setStageCEnabled(bool enabled) { stage_c_enabled_ = enabled; }
+    void setStageCVersion(int version) { stage_c_version_ = version; }
 
     // Generate and persist explanation for the latest metacognition row
     bool runForLatest(const std::string& context = "");
@@ -36,6 +37,7 @@ private:
     MemoryDB* db_ = nullptr;
     std::int64_t run_id_ = 0;
     bool stage_c_enabled_ = true;
+    int stage_c_version_ = 1;
 };
 
 } // namespace Core

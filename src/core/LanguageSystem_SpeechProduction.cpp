@@ -22,7 +22,9 @@ LanguageSystem::SpeechProductionFeatures LanguageSystem::generateSpeechOutput(
         tokens.push_back(token);
     }
     
-    return generateSpeechOutput(tokens);
+    auto features = generateSpeechOutput(tokens);
+    features.original_text = text;
+    return features;
 }
 
 LanguageSystem::SpeechProductionFeatures LanguageSystem::generateSpeechOutput(
@@ -30,6 +32,12 @@ LanguageSystem::SpeechProductionFeatures LanguageSystem::generateSpeechOutput(
     
     SpeechProductionFeatures features;
     
+    // Reconstruct original text from tokens if not already set
+    features.original_text = std::accumulate(token_sequence.begin(), token_sequence.end(), std::string(),
+        [](const std::string& a, const std::string& b) {
+            return a.empty() ? b : a + " " + b;
+        });
+
     // Generate phoneme sequence from tokens
     features.phoneme_sequence = generatePhonemeSequence(
         std::accumulate(token_sequence.begin(), token_sequence.end(), std::string(),
@@ -248,6 +256,15 @@ void LanguageSystem::startSpeechProduction(const SpeechProductionFeatures& speec
     
     // Add to production queue
     speech_production_queue_.push_back(speech_features);
+    
+    // Trigger external speech output callback if registered
+    if (speech_output_callback_ && !speech_features.original_text.empty()) {
+        speech_output_callback_(speech_features.original_text);
+    } else if (speech_output_callback_) {
+        // Fallback: reconstruct text from phonemes or token sequence if original text is missing
+        // For now, just send a placeholder or try to reconstruct from tokens if available in features
+        // But SpeechProductionFeatures struct needs original_text populated in generateSpeechOutput
+    }
     
     // Limit queue size
     if (speech_production_queue_.size() > 5) {

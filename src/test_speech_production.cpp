@@ -293,7 +293,8 @@ public:
             std::vector<float> acoustic_feedback(1600, 0.0f); // 100ms at 16kHz
             for (std::size_t i = 0; i < acoustic_feedback.size(); ++i) {
                 float t = i / 16000.0f;
-                acoustic_feedback[i] = 0.5f * std::sin(2.0f * M_PI * 150.0f * t); // 150Hz tone
+                const double phase = 2.0 * M_PI * 150.0 * static_cast<double>(t);
+                acoustic_feedback[i] = 0.5f * static_cast<float>(std::sin(phase)); // 150Hz tone
             }
             
             auto initial_state = language_system_->getCurrentSpeechState();

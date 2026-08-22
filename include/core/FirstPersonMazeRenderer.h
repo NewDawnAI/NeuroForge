@@ -102,6 +102,16 @@ public:
      */
     const RenderConfig& getConfig() const { return config_; }
 
+    /**
+     * @brief Get the maze wall layout
+     */
+    const std::vector<bool>& getMazeWalls() const { return maze_walls_; }
+
+    /**
+     * @brief Get the maze size
+     */
+    int getMazeSize() const { return maze_size_; }
+
 private:
     RenderConfig config_;
     std::vector<bool> maze_walls_;

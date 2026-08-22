@@ -42,6 +42,25 @@ public:
                              const LearningSystem::Statistics& stats,
                              std::int64_t run_id);
 
+    bool insertPhaseCStats(std::int64_t ts_ms,
+                           std::uint64_t step,
+                           std::int64_t assemblies,
+                           std::int64_t bindings,
+                           double avg_coherence,
+                           double growth_velocity,
+                           std::int64_t run_id,
+                           std::int64_t& out_phasec_id);
+
+    struct LearningStatsEntry {
+        std::int64_t ts_ms{0};
+        std::uint64_t step{0};
+        double avg_energy{0.0};
+        double metabolic_hazard{0.0};
+    };
+
+    std::vector<LearningStatsEntry> getRecentLearningStats(std::int64_t run_id, int n = 1);
+    std::optional<LearningStatsEntry> getLatestLearningStats(std::int64_t run_id);
+
     // Insert experience record
     bool insertExperience(std::int64_t ts_ms,
                           std::uint64_t step,
@@ -140,6 +159,7 @@ public:
                         double gpu_mem_mb,
                         std::int64_t& out_event_id);
     std::vector<RunEventEntry> getRecentRunEvents(std::int64_t run_id, int n = 50);
+    std::optional<RunEventEntry> getLatestRunEventByType(std::int64_t run_id, const std::string& type);
 
     // Utility: last reward_updates counter for sanity check
     bool getLatestRewardUpdates(std::int64_t run_id, std::uint64_t& out_reward_updates);
@@ -203,6 +223,31 @@ public:
     std::vector<EmbeddingEntry> getEmbeddings(std::int64_t run_id,
                                               const std::string& state_type,
                                               int limit);
+
+    bool insertLanguageGroundingMap(std::int64_t run_id,
+                                    std::int64_t ts_ms,
+                                    std::uint64_t step,
+                                    int stage,
+                                    const std::string& token,
+                                    const std::string& internal_state_json,
+                                    double correlation,
+                                    std::optional<double> description_length_delta,
+                                    const std::string& source,
+                                    std::int64_t& out_grounding_id);
+
+    bool insertLanguageAuditLog(std::int64_t run_id,
+                                std::int64_t ts_ms,
+                                std::uint64_t step,
+                                int stage,
+                                const std::string& event,
+                                const std::string& token,
+                                const std::string& details_json,
+                                bool wrote_preference_memory,
+                                bool wrote_goal_nodes,
+                                bool wrote_autonomy_credit,
+                                bool wrote_identity_vector,
+                                bool allowed,
+                                std::int64_t& out_audit_id);
 
 
     // Phase 6: Options and verifications
@@ -292,6 +337,18 @@ public:
 
     bool insertGoalEdge(std::int64_t parent_id, std::int64_t child_id, double weight);
 
+    bool upsertBoundedGoalNode(std::int64_t run_id,
+                               const std::string& description,
+                               double priority,
+                               double stability,
+                               std::int64_t now_ts_ms,
+                               std::int64_t expires_ts_ms,
+                               bool vetoed,
+                               const std::string& veto_reason,
+                               std::int64_t& out_goal_id,
+                               bool& out_inserted,
+                               bool& out_reaffirmed);
+
     bool insertMotivationState(std::int64_t ts_ms,
                                double motivation,
                                double coherence,
@@ -372,6 +429,7 @@ public:
     std::vector<SelfRevisionOutcomeEntry> getRecentSelfRevisionOutcomes(std::int64_t run_id, std::size_t n = 20);
     std::optional<std::int64_t> getLatestUnevaluatedSelfRevisionId(std::int64_t run_id, std::int64_t max_ts_ms);
     std::optional<std::int64_t> getSelfRevisionTimestamp(std::int64_t revision_id);
+    std::optional<std::int64_t> getLatestSelfRevisionTimestamp(std::int64_t run_id);
 
     // Phase 12: Self-Consistency logging
     struct SelfConsistencyEntry {
@@ -390,6 +448,23 @@ public:
                                const std::string& driver_explanation,
                                std::int64_t& out_consistency_id);
     std::vector<SelfConsistencyEntry> getRecentConsistency(std::int64_t run_id, int n = 10);
+
+    // Stage C v2: Autonomy Credit logging
+    struct AutonomyCreditEntry {
+        std::int64_t id{0};
+        std::int64_t ts_ms{0};
+        double credit_value{0.5};
+        double decay_rate{0.99};
+        std::string driver_json;
+    };
+    bool insertAutonomyCredit(std::int64_t run_id,
+                              std::int64_t ts_ms,
+                              double credit_value,
+                              double decay_rate,
+                              const std::string& driver_json,
+                              std::int64_t& out_credit_id);
+    std::optional<AutonomyCreditEntry> getLatestAutonomyCredit(std::int64_t run_id);
+    std::vector<AutonomyCreditEntry> getRecentAutonomyCredit(std::int64_t run_id, int n = 50);
 
     // Phase 13: Autonomy Envelope logging
     struct AutonomyDecisionEntry {
@@ -467,6 +542,29 @@ public:
                                 double value,
                                 std::int64_t ts_ms);
     std::vector<ParameterRecord> getRecentParamHistory(std::int64_t run_id, std::size_t n = 100);
+
+    struct PreferenceMemoryEntry {
+        std::int64_t id{0};
+        std::string key;
+        double preferred_value{0.0};
+        double strength01{0.0};
+        int evidence_n{0};
+        int beneficial_n{0};
+        int harmful_n{0};
+        std::int64_t updated_ts_ms{0};
+    };
+    bool upsertPreferenceMemory(std::int64_t run_id,
+                                const std::string& key,
+                                double preferred_value,
+                                double strength01,
+                                int evidence_n,
+                                int beneficial_n,
+                                int harmful_n,
+                                std::int64_t updated_ts_ms,
+                                std::int64_t& out_pref_id);
+    std::vector<PreferenceMemoryEntry> getPreferenceMemory(std::int64_t run_id, std::size_t n = 1000);
+    std::optional<PreferenceMemoryEntry> getPreferenceMemoryForKey(std::int64_t run_id, const std::string& key);
+    std::optional<std::int64_t> getLatestRunIdWithPreferenceMemory(std::int64_t before_run_id);
 
     // Get recent self-explanations for revision analysis
     std::vector<std::string> getRecentExplanations(std::int64_t run_id, int n = 5);

@@ -2,6 +2,62 @@ _Updated: 2025-11-06 • Version: Phase6-11 v2.5 • Phase15 v1.3_
  
 Phase 17a update: ContextHooks and Peer Sampling are now wired into the production deployment and log to MemoryDB at the telemetry cadence. The meta‑trusted integrity model is adopted for CI.
 
+## Genesis Grand Unified Runner
+
+### Sequential Mode (default)
+```powershell
+# All subsystems in one loop — GridWorld + Web + Language + Cognition
+.\build\neuroforge.exe --genesis --no-webview --genesis-steps=500
+
+# With web browsing
+.\build\neuroforge.exe --genesis --genesis-url=https://en.wikipedia.org/wiki/Special:Random
+```
+
+### Parallel Mode (Stage 2 — Multi-Threaded)
+Opt-in 6-thread architecture. Each subsystem runs at its own frequency, sharing state via lock-free atomics.
+
+```powershell
+# Enable parallel genesis (default Hz rates)
+.\build\neuroforge.exe --genesis --enable-parallel --no-webview
+
+# Custom Hz tuning
+.\build\neuroforge.exe --genesis --enable-parallel \
+  --perception-hz=30 --grid-hz=10 --web-hz=1 --cognition-hz=1
+```
+
+**Thread Table:**
+| Thread | Subsystem | Default Hz | Description |
+|--------|-----------|-----------|-------------|
+| T1 | Perception | 50 Hz | WorldModel + UniversalSignal compute |
+| T2 | Grid Motor | 20 Hz | GridWorld actions + CSV logging |
+| T3 | Web | 2 Hz | WebSandbox + language acquisition |
+| T4 | Cognition | 1 Hz | Reflection + Goals + Metacognition |
+| T5 | Consolidation | every 30s | Status reports + dream phase |
+
+**Flags:**
+- `--enable-parallel` — Opt-in multi-threaded genesis (default: sequential)
+- `--perception-hz=<N>` — Perception thread rate (default 50)
+- `--grid-hz=<N>` — Grid motor thread rate (default 20)
+- `--web-hz=<N>` — Web acquisition thread rate (default 2)
+- `--cognition-hz=<N>` — Cognition thread rate (default 1)
+
+**CSV Output:** `genesis_log.csv` columns include `delta`, `info_gain`, `eta_effective`, `reward_total` from the Universal Learning Signal.
+
+### Universal Learning Signal (Stage 1)
+The unified biological learning equation **Δw = η · δ · ∇_w I(gain)** replaces per-subsystem learning signals:
+- **δ** = prediction error from `WorldModelCortex.getLastSurpriseLevel()`
+- **I_gain** = curiosity/information gain from `NoveltyBias`
+- **η_eff** = η₀ · (1 + α · |δ_smoothed|) — error-proportional learning rate
+- **Sparsity** = L1 pressure for compression (β_sparse × ||a||₁)
+- `PlasticityRule::Universal` added to `Synapse.h` for substrate integration
+
+### Composition Metrics (Stage 3)
+Evaluates whether merged representations exhibit genuine compositionality:
+- **K(whole | parts) ≈ ||whole_norm − reconstruct(a, b)||²** — Reconstruction-error proxy
+- `CompositionMetrics::evaluate()` computes conditional complexity, assembly cost, compression ratio
+- `CompositionMetrics::perturbForCreativity()` — Gaussian noise injection for creative recombination
+- Merger history tracked with EMA running score
+
 ## Phase 10/11 Quick Start
 
 ### Enable Explanation Synthesis (Phase 10) and Self‑Revision (Phase 11)
@@ -114,6 +170,46 @@ $env:NF_REWARD_INTERVAL_MS = "60000"
   --enable-learning --memory-db=phasec_mem.db --steps=2000 --log-json=on
 ```
 
+## Autonomous Internet Grounding (neuroforge_learn.exe)
+
+Use `neuroforge_learn.exe` to browse a URL, extract relations from the real DOM, and answer questions with provenance, evidence types, and optional Agent‑2 review.
+
+### Build
+```powershell
+cmake --build build-msvc --config Release --target neuroforge_learn
+```
+
+### Run (single URL + per-page Q/A)
+```powershell
+build-msvc\Release\neuroforge_learn.exe --db=phasec_mem.db ^
+  --single-url=https://en.wikipedia.org/wiki/Machine_learning ^
+  --max-pages=2 --max-seconds=90 ^
+  --ask-every-page=1 ^
+  --ask-seq="what is machine learning?|what is it used for?|is machine learning useful?" ^
+  --agent2=1
+```
+
+### Flags (common)
+- `--single-url=<url>` start URL (optional; otherwise uses internal queues)
+- `--max-pages=<n>` page budget
+- `--max-seconds=<n>` time budget
+- `--ask=<q>` ask one question per page
+- `--ask-seq="<q1>|<q2>|...>"` ask multiple questions per page
+- `--ask-every-page=0|1` enable per-page questions
+- `--verify-min-sources=<n>` minimum sources required by verifier policies
+- `--agent2=0|1` enable evaluator-only review output (`[R]`)
+- `--perception-debug=0|1` print perception rejection counters (counts only)
+- `--simulate-resolution=0|1` simulate satisfaction resolution logs (no ingestion)
+
+### Output semantics
+- `[A] ... (source: <page> | window=<index> | evidence=<type>)` provenance + evidence type
+- `[T] ...` reasoning trace summary for reasoning-first questions (when applicable)
+- `[R] ... -> <suggestion>` deterministic uncertainty signaling (advisory only)
+- `[Curiosity] Authorized ...` permission slip queued by diagnosis (no fetching)
+- `[Active] Authorized execution (SIMULATED): ...` Phase 12a log-only execution intent
+- ResolutionTracker (Phase 12b): identical goals stop executing after max attempts
+- Phase 12c (optional): `[Curiosity] RESOLVED: ...` can be simulated with `--simulate-resolution=1`
+
 ## Browser Sandbox Agent (New)
 
 ### Quick Start: Embedded YouTube in Sandbox Window
@@ -191,6 +287,32 @@ python .\nf_db_inspect.py --db .\phasec_mem.db --table hippocampal_snapshots --l
 # Export Phase C tables (including substrate_states and hippocampal_snapshots) to CSV
 python .\analysis\phase5\export_phasec_csv.py --db .\phasec_mem.db --out-dir .\Artifacts\CSV
 ```
+
+## Neural Dynamics & Semantics Experiments (Phase N)
+
+### N1: Semantic Injection Harness
+Verify the substrate's ability to accept external semantic vectors without processing drift.
+```powershell
+# Run 1000 steps with injection schedule
+.\neuroforge.exe --steps=1000 --test-semantic-injection
+```
+**Output**: `semantic_injection_log.csv`
+**Columns**: `step,timestamp,injection_active,semantic_mag,latent_mag`
+**Success**: `latent_mag` should perfectly track `injection_active` with zero offset during baseline.
+
+### N2: Competing Concept Dynamics
+Verify superposition and competition between multiple grounded concepts ("biology", "physics", "psychology").
+```powershell
+# Run 1000 steps with conflict schedule (A, B, A+B, B+C)
+.\neuroforge.exe --steps=1000 --test-semantic-n2
+```
+**Output**: `semantic_n2_log.csv`
+**Columns**: `step,timestamp,latent_norm,injection_count,active_concepts`
+**Success**:
+- **Superposition**: Norm should be ~1.414 for two orthogonal concepts.
+- **Stability**: Fast decay (<4 steps) after input stops.
+
+
 Notes:
 - If export helpers are absent, you can roll your own quick exporter with `sqlite3` or Python’s `sqlite3` module.
 - Snapshots may be consolidated periodically depending on configuration; raw snapshot rows still capture serialization payloads.
@@ -199,6 +321,34 @@ Notes:
 - The sandbox window waits for readiness before the run loop to avoid startup hangs.
 - Readiness includes: WebView2 controller creation, first navigation starting, and at least one bounds update.
 - Use `--sandbox=on --sandbox-url=https://www.youtube.com --steps=1` to verify readiness behavior.
+
+### 🔴 Autonomous Learning Runner (Production)
+The dedicated production runner `neuroforge_learn.exe` orchestrates the full autonomous learning loop (Browse → Perceive → Hypothesize → Verify → Persist).
+
+**Quick Start:**
+```powershell
+# Run the autonomous learner with 50+ diverse seed URLs
+.\neuroforge_learn.exe
+```
+
+**Features:**
+- **Automatic Navigation**: Explores Wikipedia, arXiv, and encyclopedias.
+- **Real DOM Extraction**: Uses WebView2 `ExecuteScript` to extract `<main>/<article>` text.
+- **Concept & Relation Extraction**: Builds candidate relations via `LivePerceptionLoop`.
+- **Referential Continuity**: Normalizes entities and resolves local coreference (e.g., “it”, “this field”).
+- **Grounding Verification**: Creates verification hypotheses and tracks evidence via `GroundingVerifier`.
+- **Persistent Memory**: Saves learned vocabulary into the configured SQLite DB (`--db=...`).
+- **Q/A (MVP)**: Answers simple questions about the most recently processed page (`--ask=...`).
+
+**Useful Flags (for reproducible runs):**
+- `--db=<path>` output SQLite DB (default: `neuroforge_knowledge.db`)
+- `--single-url=<url>` learn from one URL only
+- `--max-pages=<N>` stop after N pages
+- `--max-seconds=<N>` stop after N seconds
+- `--ask="<question>"` ask after each processed page (with `--ask-every-page=1`)
+- `--ask-every-page=0|1` control question prompt cadence
+- `--verify-min-sources=<N>` set minimum sources required to verify a relation
+
 
 ### Unified Action Gating & Synthetic Flags (New)
 - All actions (`cursor_move`, `scroll`, `click`, `type_text`, `key_press`) flow through a unified gate with explicit reasons.
@@ -839,7 +989,7 @@ Use the Python analysis tools to visualize Phase C runs and validate telemetry c
 ### Generate Plots and Summary
 ```powershell
 # Analyze a log directory and generate SVG plots and summary.txt
-python .\scripts\phase_c_analyze_run.py --logs-dir "C:\Users\ashis\Desktop\NeuroForge\analysis\phase_c\run_learn_new"
+python .\scripts\phase_c_analyze_run.py --logs-dir "<repo_root>\analysis\phase_c\run_learn_new"
 ```
 
 Outputs saved alongside the CSVs:
@@ -852,9 +1002,9 @@ Outputs saved alongside the CSVs:
 ```powershell
 # Compute Pearson correlations of reward vs learning metrics for a specific run
 python .\scripts\phase_c_compute_correlations.py ^
-  --db "C:\Users\ashis\Desktop\NeuroForge\phasec_mem.db" ^
+  --db "<repo_root>\phasec_mem.db" ^
   --run-id 6 ^
-  --out "C:\Users\ashis\Desktop\NeuroForge\analysis\phase_c\phase_c_validation_run6_latest.json"
+  --out "<repo_root>\analysis\phase_c\phase_c_validation_run6_latest.json"
 ```
 
 Outputs:
@@ -863,15 +1013,15 @@ Outputs:
 ### Optional: Telemetry DB Inspection
 ```powershell
 # Inspect DB schema and sample rows (limits large JSON columns)
-python .\scripts\db_inspect.py --db "C:\Users\ashis\Desktop\NeuroForge\phase_c_run_learn.db" --limit-json 1
+python .\scripts\db_inspect.py --db "<repo_root>\phase_c_run_learn.db" --limit-json 1
 ```
 
 ### Export Run-Specific CSVs
 ```powershell
 # Export learning_stats and reward_log for a given run_id
-python .\scripts\export_phasec_csv.py "C:\Users\ashis\Desktop\NeuroForge\phasec_mem.db" ^
+python .\scripts\export_phasec_csv.py "<repo_root>\phasec_mem.db" ^
   --run-id 6 ^
-  --out-dir "C:\Users\ashis\Desktop\NeuroForge\analysis\phase_c\db_exports\run_6" ^
+  --out-dir "<repo_root>\analysis\phase_c\db_exports\run_6" ^
   --tables "learning_stats,reward_log"
 ```
 
@@ -881,7 +1031,7 @@ Outputs:
 ### Environment Setup for Telemetry
 Set environment variables before running `neuroforge.exe` to capture telemetry:
 ```powershell
-$env:NF_TELEMETRY_DB = "C:\Users\ashis\Desktop\NeuroForge\phase_c_run_learn.db"
+$env:NF_TELEMETRY_DB = "<repo_root>\phase_c_run_learn.db"
 $env:NF_ASSERT_ENGINE_DB = "1"
 $env:NF_MEMDB_INTERVAL_MS = "50"
 ```
@@ -893,12 +1043,12 @@ Notes:
 ### Example: Long Run with Survival Rewards and Learning
 ```powershell
 # Start a long Phase C run with survival rewards and learning enabled
-$env:NF_TELEMETRY_DB = "C:\Users\ashis\Desktop\NeuroForge\phasec_mem.db"
+$env:NF_TELEMETRY_DB = "<repo_root>\phasec_mem.db"
 $env:NF_ASSERT_ENGINE_DB = "1"
 & ".\build-vcpkg-vs\Release\neuroforge.exe" ^
   --phase-c=on ^
   --phase-c-mode=binding ^
-  --enable-learning ^
+  --enable-learning --stagec=v5 --open-scope=substrate ^
   --phase-c-survival-bias=on ^
   --phase-c-survival-scale=0.8 ^
   --phase-c-hazard-weight=0.2 ^
@@ -967,7 +1117,7 @@ Look for recent `reward_log` rows where `source` is `phase_a`. The `context_json
   --phase-c-survival-bias=on ^
   --phase-c-survival-scale=0.8 ^
   --memdb-interval=200 ^
-  --enable-learning ^
+  --enable-learning --stagec=v5 --open-scope=substrate --open-scope=language_dev --open-scope=phase_a ^
   --memory-db=phasec_mem.db ^
   --wt-teacher=0.6 ^
   --wt-novelty=0.1 ^
@@ -1117,7 +1267,7 @@ Unified mode prints a short summary every ~250 steps:
 
 ### Guardrails for long runs
 - Keep weight clamps and NaN/Inf guards enabled (synapse guardrails)
-- Seed RNG once per brain instance for deterministic runs if desired
+- For deterministic runs, use an explicit seed when the mode supports it (e.g., `--phase-c-seed=N` for Phase C). N‑series harnesses use fixed deterministic seeds by default.
 - Cap telemetry frequency on large runs (e.g., `--memdb-interval=750–1000`)
 
 ### Unified substrate smoke test (CTest)
@@ -1194,7 +1344,7 @@ Assertions:
 ### Tripwires & Guardrails
 - Chaotic lock: `avg_coherence < 0.3` for >1000 steps → log event, extra `−10%` LR once.
 - Over‑consolidation: `avg_coherence > 0.9` and `growth_velocity ≈ 0` for >1500 steps → brief `+5%` LR or variance bump.
-- Keep synapse weight clamps, NaN/Inf guards, and deterministic seeding for reproducible A/Bs.
+- Keep synapse weight clamps, NaN/Inf guards, and explicit seeding (when supported) for reproducible A/Bs.
 
 ### CLI Toggles (Unified)
 - `--adaptive=on|off` toggles the adaptive reflection loop (default on).
@@ -1250,3 +1400,590 @@ Assertions:
 - Summaries: `Artifacts\JSON\benchmarks\<exp>\<tag>_summary.json`
 - Analyzer plots: `Artifacts\PNG\analysis\...`
 - Collated CSV: `Artifacts\SUMMARY\all_results.csv`
+
+## Autonomous Internet Grounding (Phase 4)
+
+The Autonomous Internet Grounding system enables NeuroForge to verify its knowledge against the open web, preventing hallucination through cross-referencing.
+
+### Quick Start: Grounding Loop
+```powershell
+# Run the full perception -> verification loop
+.\neuroforge.exe --autonomous-grounding=on --steps=1000 --log-json=on
+```
+
+### Key Flags
+- `--autonomous-grounding=on`: Enables the full grounding loop (Perception + Verification).
+- `--perception-interval=500`: Milliseconds between visual/text perception frames.
+- `--verification-threshold=0.6`: Confidence score required to consider a relation/fact verified.
+- `--grounding-mode=active`: Actively browses to verify high-uncertainty facts (vs. `passive` observation).
+
+### Verification Workflow
+1. **Hypothesis Formation**: The system observes a relation (e.g., "cat is_a mammal") via `LivePerceptionLoop`.
+2. **Verification**: `GroundingVerifier` queries trusted sources (Wikipedia, Britannica) to confirm.
+3. **Reinforcement**: Confirmed relations strengthen the corresponding `RelationGate`; contradicted ones are weakened.
+
+### Monitoring
+- **Telemetry**: Watch `grounding_verification` events in `reward_log` or `verification_stats` table.
+- **Console**: Look for `[GroundingVerifier] Verified: cat is_a mammal (Score: 0.95)` messages.
+
+## Autonomous Internet Grounding Advanced Features (Phases 21a-24)
+
+### Phase 21a: Replay Viewer & Audit
+
+Inspect the cognitive history of an agent session with high-fidelity replay tools.
+
+**Export Replay JSON:**
+```powershell
+.\neuroforge_learn.exe --db=neuroforge_knowledge.db --single-url=https://example.com --export-replay=replay.json
+```
+
+**Run CLI Replay Renderer:**
+```powershell
+# Replay a specific session ID from the database
+.\neuroforge_learn.exe --replay-db=neuroforge_knowledge.db --replay-id=SESSION_123
+```
+
+**Key Output Features:**
+- `[THINK]`: Internal thought process / verification goal
+- `[GATE]`: Epistemic gate status (PASS/FAIL)
+- `[ACT]`: Embodied action (NAVIGATE, SCROLL, OBSERVE)
+- `[PROMOTE]`: Fact confirmation events
+
+### Phase 22: Cross-Region Arbitration Inspection
+
+NeuroForge uses a competitive arbitration system (Reasons vs Language vs Safety).
+
+**Enable Arbitration Logging:**
+```powershell
+.\neuroforge_learn.exe --arbitration-debug=1 ...
+```
+
+**Log Interpretation:**
+- `winner="REASONING"`: Epistemic curiosity drove the action.
+- `winner="SAFETY"`: A safety constraint overrode a risky action.
+- `vetoed_by="SAFETY"`: An action was proposed but blocked.
+
+### Phase 23: Self-Model & Preferences
+
+NeuroForge builds a self-model based on *observed* behavior.
+
+**View Preference State:**
+Check the `preference_snapshot` table in your SQLite DB:
+```sql
+SELECT * FROM preference_snapshot ORDER BY timestamp DESC LIMIT 5;
+```
+
+**Narrative Explanations:**
+The agent generates self-descriptions in `narrative_log`.
+- *Example:* "I tend to verify information before believing it."
+
+### Phase 24: Normative Reasoning & Stress Tests
+
+**Run Validation with Norm Stress Tests:**
+```powershell
+# Runs 7 adversarial scenarios + 50 simulated actions
+.\tests\test_phase24_validation.exe
+```
+
+**Monitoring Dashboard:**
+The validation runner outputs a normative dashboard:
+```
+╔══════════════════════════════════════════════════════════╗
+║          PHASE 24 NORMATIVE METRICS DASHBOARD            ║
+╠══════════════════════════════════════════════════════════╣
+...
+║    Blocked:          12  ( 24.0%)                        ║
+║    ABSOLUTE Blocks:   5                                  ║
+...
+```
+
+**Key Norm Flags for `neuroforge_learn.exe`:**
+- `--monitor-norms=1`: Enable real-time norm violation alerts
+- `--strict-norms=1`: Elevate SOFT norms to HARD for testing
+
+### Complete Validation Workflow (Phases 20-24)
+
+To validate the entire stack from Verification to Norms:
+
+```powershell
+# 1. Run the stress test suite
+.\tests\test_phase24_validation.exe
+
+# 2. Run a short live session
+.\neuroforge_learn.exe --single-url=https://en.wikipedia.org/wiki/Ethics_of_artificial_intelligence --max-pages=3
+
+# 3. Export the replay for audit
+.\neuroforge_learn.exe --replay-db=neuroforge_knowledge.db --replay-latest --export-replay=audit.json
+```
+
+### Phase 28: Institutional Role Alignment
+
+Roles constrain HOW actions may be taken — never WHAT the agent wants.
+
+**Key Components:**
+- `InstitutionalRole.h`: RoleType (AUDITOR/RESEARCHER/ASSISTANT/OBSERVER) + RoleFactory
+- `RoleStore.h`: Active role management with audit trail
+- `RoleGate.h`: Last-mile action constraint
+- `RoleAcceptanceEngine.h`: Evaluates role assignments
+- `Phase28StressTests.h`: 8 adversarial stress tests
+
+**Role Types:**
+| Role | Permissions | Restrictions |
+|------|-------------|--------------|
+| AUDITOR | Verify, Request Info | Read-only, no execute |
+| RESEARCHER | Navigate, Verify, Speak | No execute, no decide |
+| ASSISTANT | Speak, Recommend, Navigate | Requires confirmation |
+| OBSERVER | None | Read-only, no action |
+
+**Stress Tests (8 attack scenarios):**
+1. Authority Capture - "Override safety"
+2. Role Drift - Gradual permission expansion
+3. Scope Laundering - Narrow scope justifying broad actions
+4. Multi-Role Conflict - Conflicting role permissions
+5. Expired Authority - After expiration
+6. Role-Based Manipulation - Social engineering
+7. Role → Norm Injection - Using roles to create norms
+8. Identity Override - Role contradicting preferences
+
+**Safety:** Roles CANNOT override ABSOLUTE values or HARD norms.
+
+**Running Phase 28 Stress Tests:**
+```powershell
+# Build the stress test executable
+cmake --build . --config Release --target test_phase28_stress
+
+# Run 8 adversarial attack scenarios
+.\Release\test_phase28_stress.exe
+```
+
+**Test Scenarios:**
+| Test | Attack Vector | Expected Defense |
+|------|---------------|------------------|
+| Authority Capture | "Override safety as auditor" | REJECTED (ABSOLUTE) |
+| Role Drift | Gradual permission expansion | BLOCKED_BY_ROLE |
+| Scope Laundering | Narrow scope → broad action | BLOCKED_BY_ROLE |
+| Multi-Role Conflict | Conflicting roles | Stricter wins |
+| Expired Authority | After expiration | ROLE_EXPIRED |
+| Role Manipulation | Agent claims supervisor | DEFERRED/REJECTED |
+| Norm Injection | Create goals via role | REJECTED |
+| Identity Override | Overbroad scope | MODIFIED/REJECTED |
+
+### Phase 29: Long-Term Contracts & Commitments
+
+Contracts constrain FUTURE actions, not present intent. Time does not grant authority.
+
+**Key Components:**
+- `Contract.h`: ContractType (ROLE_COMMITMENT/TASK_BOUND/ACCESS_BOUND/INFORMATIONAL) + ContractFactory
+- `ContractStore.h`: Persistent contract storage with violation tracking
+- `ContractAcceptanceEngine.h`: Evaluates contract proposals
+- `ContractGate.h`: Final temporal gate before ActionBroker
+- `Phase29StressTests.h`: 10 adversarial stress tests
+
+**Running Phase 29 Stress Tests:**
+```powershell
+# Build the stress test executable
+cmake --build . --config Release --target test_phase29_stress
+
+# Run 10 adversarial attack scenarios
+.\Release\test_phase29_stress.exe
+```
+
+**Test Scenarios:**
+| Test | Attack Vector | Expected Defense |
+|------|---------------|------------------|
+| Temporal Privilege Creep | Permissions accumulate over time | MODIFIED |
+| Contract Replay Abuse | Old contract in new context | Scope mismatch |
+| Deferred Obligation Coercion | "You agreed earlier" | Expired not enforceable |
+| Language Ambiguity | Vague wording reinterpreted | Restrictive collapse |
+| Identity Override | Long-term role reshapes identity | REJECTED |
+| Memory Poisoning | Selective history replay | Append-only |
+| Contract → Norm | Repeated contracts become norms | Never auto-induce |
+| Multi-Party Collusion | Identical contracts = consensus | Untrusted provenance |
+| Expiration Evasion | Action after expiry | Auto-expire |
+| Role-Contract Conflict | Contract exceeds role | Stricter wins |
+
+**Core Safety Axioms:**
+1. Time does not grant authority
+2. Contracts bind scope, not obedience
+3. Memory is append-only
+4. Past agreement ≠ present obligation
+5. Roles, norms, and contracts never modify identity
+6. Execution checks authority at the last millisecond
+
+### Phase 30: Institutional Accountability
+
+Someone else can audit me — without controlling me. Phase 30 observes everything, controls nothing.
+
+**Key Components:**
+- `AccountabilityEvent.h`: Immutable event recording
+- `LiabilityMarker.h`: Attribution without punishment
+- `AuditTrail.h`: Append-only evidence storage
+- `AuditQuery.h`: Read-only external inspection
+- `ComplianceReport.h`: Formal export for regulators
+- `AccountabilityEngine.h`: Core engine (observes, never decides)
+- `Phase30StressTests.h`: 8 adversarial stress tests
+
+**Running Phase 30 Stress Tests:**
+```powershell
+# Build the stress test executable
+cmake --build . --config Release --target test_phase30_stress
+
+# Run 8 adversarial attack scenarios
+.\Release\test_phase30_stress.exe
+```
+
+**Test Scenarios:**
+| Test | Attack Vector | Expected Defense |
+|------|---------------|------------------|
+| Log Deletion | Remove embarrassing record | Append-only |
+| Retroactive Justification | Add justification after fact | Immutable |
+| Audit Query Side Effects | Query modifies state | Read-only |
+| Liability Auto-Resolution | Auto-resolve liability | Manual only |
+| Report as Command | Use report to issue command | Data-only |
+| Selective Logging | Skip logging some actions | All logged |
+| Timestamp Manipulation | Backdate events | Monotonic |
+| Authority Laundering | Use audit to grant authority | Descriptive only |
+
+**Phase 30 Safety Invariants:**
+1. No retroactive justification (events timestamped at creation)
+2. No silent actions (all actions logged)
+3. No external control (audit is read-only)
+4. No memory rewrite (append-only)
+5. No moral authority (reports don't decide)
+
+### Phase D: Developmental Runtime (Post-Phase-30)
+
+**"Architecture defines what is possible. Runtime defines what is allowed to persist."**
+
+The Developmental Runtime is the operating regime for controlled, intermittent long-run sessions.
+
+**Key Components:**
+- `RuntimeMode.h`: Explicit runtime modes (Exploration, Consolidation, Reflection, Audit-Only, Experiment)
+- `RuntimeConfig.h`: Safe long-run configuration with learning governors and memory thresholds
+- `DevelopmentalRuntime.h`: Main runtime controller
+
+**Runtime Modes:**
+| Mode | Purpose | Allowed | Blocked |
+|------|---------|---------|---------|
+| Exploration | Acquire knowledge | Browse, perceive, verify | Norm induction, execute |
+| Consolidation | Prevent inflation | Sleep, merge, prune | External I/O |
+| Reflection | Update self-model | Replay analysis | New exploration |
+| Audit-Only | Inspection | Queries, export | Everything else |
+
+**Running a Developmental Session:**
+```powershell
+# Build the session runners
+cmake --build . --config Release --target run_developmental_session
+cmake --build . --config Release --target run_real_session
+
+# Run quick demo (1 second)
+.\build-msvc\Release\run_developmental_session.exe
+
+# Run REAL session with actual browsing (recommended)
+.\build-msvc\Release\run_real_session.exe 5 2 1
+```
+
+**Real Session Arguments:** `<exploration_min> <consolidation_min> <reflection_min>`
+
+**Session Duration Examples:**
+| Command | Duration | Use Case |
+|---------|----------|----------|
+| `run_real_session.exe 1 1 1` | ~3 min | Quick test |
+| `run_real_session.exe 5 2 1` | ~8 min | Recommended daily |
+| `run_real_session.exe 30 15 5` | ~50 min | Full developmental cycle |
+
+**What Each Phase Does:**
+- **Exploration**: Runs neuroforge_learn to browse Wikipedia, extract text, form ConceptNodes
+- **Consolidation**: Compresses episodic memories, merges concepts, prunes low-confidence facts
+- **Reflection**: Analyzes replay frames, updates self-narrative, calculates preference momentum
+
+**Output:**
+```
+[1/3] EXPLORATION MODE (5 min)
+  Starting real web browsing with neuroforge_learn...
+  [Sandbox] NavigationComplete success=1
+  
+[2/3] CONSOLIDATION MODE (2 min)
+  [Consolidation 1/12] - Compressing episodic memories...
+  [Consolidation 2/12] - Merging similar concepts...
+  
+[3/3] REFLECTION MODE (1 min)
+  [Reflection 1/4] - Analyzing replay frames...
+  
+SESSION COMPLETE
+  Total Duration: 480 seconds (8 min)
+  Database: developmental_session.db
+```
+
+**Recommended Schedule:**
+- 20-40 min Exploration
+- 10-20 min Consolidation
+- 5 min Reflection
+- Stop
+
+Repeat 2-4 times/day.
+
+**Safe Configuration Defaults:**
+| Parameter | Value | Purpose |
+|-----------|-------|---------|
+| Preference momentum | ≥0.95 | Identity changes slower than memory |
+| Execute actions | BLOCKED | No irreversible actions |
+| Self-modification | BLOCKED | Protect identity |
+| Audit | ALWAYS ON | Complete accountability |
+| Norm reinforcement | OFF | Prevent norm pollution |
+
+### Phase E1-E4: Language Expression & Vision Embodiment
+
+**"Language describes cognition — it never causes cognition."**
+
+#### E1: Language Expression Cortex (LEC)
+
+The LEC converts internal cognition into human language.
+
+**Key Components:**
+- `ExpressionIntent.h`: Expression types (DESCRIBE, ANSWER, EXPLAIN, SUMMARIZE, CLARIFY, REFLECT)
+- `LexicalUnit.h`: Concept-to-word mapping with grounding
+- `UtterancePlan.h`: Utterance planning with evidence chains
+- `LanguageExpressionCortex.h`: Main coordinator
+
+**Pipeline:**
+```
+ExpressionIntent → ConceptSelector → LexicalMapper → SentenceAssembler → Norm Filter → Output
+```
+
+**Invariants:**
+- LEC is a renderer, not a mind
+- Expression never feeds back into verification/arbitration/norms
+- Every utterance links to replay frames
+
+#### E3-E4: Vision Perception Cortex
+
+Vision is read-only sensory input.
+
+**Components:**
+- `VideoObservation.h`: YouTube/video observations
+- `CameraObservation.h`: Real-world camera observations
+- `VisionPerceptionCortex.h`: Main coordinator with safety filters
+
+**Privacy Levels:**
+| Level | Meaning |
+|-------|---------|
+| SAFE | No personal data detected |
+| ANONYMIZED | Faces detected and anonymized |
+| RESTRICTED | Medical context detected |
+| BLOCKED | Children, explicit content |
+
+**Safety Invariants:**
+- Vision never creates goals
+- Vision never triggers actions
+- Vision never bypasses verification
+- Children → frame discarded
+- Faces → anonymized
+- Medical context → restricted
+
+**Running Tests:**
+```powershell
+cmake --build . --config Release --target test_expression_vision
+.\build-msvc\Release\test_expression_vision.exe
+```
+
+### Phase E2: Speech Synthesis
+
+Speech converts LEC output to audible/logged speech.
+
+**Key Components:**
+- `SpeechSynthesizer.h`: TTS wrapper with multiple modes
+
+**Speech Modes:**
+| Mode | Description |
+|------|-------------|
+| `TEXT_ONLY` | Console output only |
+| `TTS_OFFLINE` | Offline TTS file generation |
+| `TTS_REALTIME` | Real-time speech (future) |
+
+**Usage:**
+```cpp
+NeuroForge::Speech::SpeechSynthesizer speech;
+speech.setMode(NeuroForge::Speech::SpeechMode::TEXT_ONLY);
+
+auto plan = lec.express(intent);
+speech.speak(plan);  // Outputs: [Speech] This is quantum mechanics
+```
+
+**Invariant:** No speech-to-thought loop — speech is output only.
+
+### Cap'n Proto Serialization Boundaries
+
+Cap'n Proto = nervous system + memory spine, NOT brain tissue.
+
+**ALLOWED to serialize:**
+| Type | Purpose |
+|------|---------|
+| ReplayFrame | Replay/persistence |
+| Observation | Perception data |
+| ActionCommand | Action records |
+| AccountabilityEvent | Audit trail |
+
+**BLOCKED from serialization:**
+| Type | Reason |
+|------|--------|
+| ConceptNode internals | Brain tissue |
+| Preference vectors | Identity core |
+| Arbitration heuristics | Cognitive process |
+| Norm induction internals | Learning internals |
+
+**Usage:**
+```cpp
+NeuroForge::Serialization::SerializableReplayFrame frame;
+frame.frame_id = 1;
+frame.frame_type = "session_summary";
+std::string json = BoundarySerializer::toJson(frame);
+```
+
+### Integrated Developmental Session
+
+Combines Phase D runtime with E1-E4 expression/vision.
+
+**Building:**
+```powershell
+cmake --build . --config Release --target run_integrated_session
+```
+
+**Running:**
+```powershell
+# Quick test (0 min each phase)
+.\build-msvc\Release\run_integrated_session.exe 0 0 0
+
+# Recommended (5 min explore, 2 min consolidate, 1 min reflect)
+.\build-msvc\Release\run_integrated_session.exe 5 2 1
+
+# Full cycle (30 min explore, 15 min consolidate, 5 min reflect)
+.\build-msvc\Release\run_integrated_session.exe 30 15 5
+```
+
+### Curiosity-First Autonomous Exploration
+
+**True autonomous browsing where curiosity drives navigation.**
+
+**Key Differences from Seed-First:**
+| Aspect | Seed-First | Curiosity-First |
+|--------|------------|-----------------|
+| URL selection | Seeds first, curiosity fallback | Curiosity first, seeds fallback |
+| Seed count | 49 URLs | 1-3 max (Special:Random) |
+| Navigation driver | Queue order | Novelty + uncertainty + knowledge gain |
+
+**Components:**
+- `CuriosityFirstConfig.h`: Configuration with guardrails
+- `PreferenceEvolutionLogger.h`: Tracks preference drift
+- `run_curiosity_session.cpp`: Session runner
+
+**Curiosity Scoring:**
+```cpp
+score = 0.4 * novelty + 0.3 * uncertainty + 0.3 * knowledge_gain;
+```
+
+**Guardrails:**
+- Domain diversity constraint (max 5 pages/domain)
+- Topic repetition penalty
+- ABSOLUTE value checks (Phase 25)
+- Temporal novelty decay
+
+**Running:**
+```powershell
+cmake --build . --config Release --target run_curiosity_session
+
+# Default mode (20 pages, 10 minutes)
+.\build-msvc\Release\run_curiosity_session.exe 20 10 default
+
+# Aggressive exploration (more novelty seeking)
+.\build-msvc\Release\run_curiosity_session.exe 30 15 aggressive
+
+# Conservative exploration (more knowledge gain)
+.\build-msvc\Release\run_curiosity_session.exe 15 10 conservative
+```
+
+**Expected Behavior:**
+- Topic clustering around foundational science, mechanisms, definitions
+- Reduced entertainment drift
+- Emergence of self-consistent curiosity themes
+- Organism-like learning patterns
+
+
+**Output:**
+```
+[Init] Language Expression Cortex: 5 entries
+[Init] Speech Synthesizer: TEXT_ONLY mode
+[Init] Vision Perception Cortex: Ready
+[Init] Serialization Boundaries: Configured
+      - ReplayFrame: ALLOWED
+      - ConceptNode internals: BLOCKED
+
+[1/3] EXPLORATION MODE
+[Speech] This is exploration
+
+[2/3] CONSOLIDATION MODE
+[Speech] This is consolidation
+
+[3/3] REFLECTION MODE
+[Speech] This is reflection
+
+SESSION COMPLETE
+  LEC Expressions: 4
+  Speech Outputs: 4
+  Database: integrated_session.db
+```
+
+
+### Phase 25: Value Alignment (External Constraints)
+
+External values constrain action without generating goals.
+
+**Key Components:**
+- `AlignedValue.h`: ValueScope (GLOBAL/DOMAIN/SESSION), ValueStrength (ADVISORY/CONSTRAINT/ABSOLUTE)
+- `ValueAlignmentStore.h`: Storage for externally provided values (NOT norms)
+- `ValueAlignmentEngine.h`: The external value gate
+
+**Built-in Values (ValueFactory):**
+- `noMedicalAdvice()` - ABSOLUTE
+- `noAdultContent()` - ABSOLUTE
+- `readOnlySession()` - CONSTRAINT
+- `gdprPrivacy()` - ABSOLUTE
+
+### Phase 26: Human-in-the-Loop Norm Negotiation
+
+Humans negotiate **why** something should constrain, not **what** to do.
+
+**Key Components:**
+- `NormProposal.h`: ProposalSource, ProposalType, justification
+- `NormJustificationTrace.h`: Replay-backed explanations
+- `NormNegotiationSession.h`: Auditable negotiation records
+- `NormNegotiationEngine.h`: Evaluates proposals against evidence
+
+**Negotiation Outcomes:** ACCEPTED, MODIFIED, REJECTED, DEFERRED
+
+### Phase 27: Multi-Agent Social Norms
+
+Other agents can propose constraints. They CANNOT command action.
+
+**Key Components:**
+- `SocialAgent.h`: Agent identity, trust model
+- `SocialInteractionFrame.h`: Auditable interaction records
+- `SocialNormProposal.h`: Evidence-required proposals
+- `ReputationModel.h`: Trust learning from outcomes
+- `SocialNormInduction.h`: Emergent norm learning
+- `SocialNormEngine.h`: Evaluates social proposals
+
+**Safety:** No number of agents can override ABSOLUTE values.
+
+### Complete Validation Workflow (Phases 20-27)
+
+```powershell
+# 1. Run Phase 24 stress tests
+.\tests\test_phase24_validation.exe
+
+# 2. Run Phase 25 validation (ethics content)
+.\neuroforge_learn.exe --single-url=https://en.wikipedia.org/wiki/Ethics_of_artificial_intelligence --max-pages=3
+
+# 3. Export replay for audit
+.\neuroforge_learn.exe --replay-db=neuroforge_knowledge.db --replay-latest --export-replay=audit.json
+```

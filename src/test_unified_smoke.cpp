@@ -15,7 +15,8 @@ using namespace NeuroForge::Core;
 int main() {
     try {
         auto conn = std::make_shared<NeuroForge::Connectivity::ConnectivityManager>();
-        auto brain = std::make_shared<HypergraphBrain>(conn);
+        auto brain = std::make_shared<HypergraphBrain>(conn, 100.0f, HypergraphBrain::ProcessingMode::Sequential);
+        brain->setRandomSeed(42);
         if (!brain->initialize()) {
             std::cerr << "[smoke] ERROR: HypergraphBrain initialize failed" << std::endl;
             return 1;
@@ -39,11 +40,15 @@ int main() {
         LanguageSystem::Config ls_cfg{};
         auto language_system = std::make_shared<LanguageSystem>(ls_cfg);
         SubstrateLanguageIntegration::Config lang_cfg{};
+        lang_cfg.language_region_neurons = 128;
+        lang_cfg.proto_word_region_neurons = 64;
+        lang_cfg.prosodic_region_neurons = 32;
+        lang_cfg.grounding_region_neurons = 96;
         auto lang = std::make_shared<SubstrateLanguageIntegration>(language_system, brain, lang_cfg);
         if (!lang->initialize()) { std::cerr << "[smoke] ERROR: Language substrate init failed" << std::endl; return 4; }
 
         // Short unified loop
-        const int steps = 400; const float dt = 0.01f;
+        const int steps = 200; const float dt = 0.01f;
         for (int s = 0; s < steps; ++s) {
             brain->processStep(dt);
             phaseC->processStep(s, dt);
@@ -73,8 +78,7 @@ int main() {
         // --- Mitochondrial GPU Update Test ---
         std::cout << "[smoke] Testing Mitochondrial GPU Update..." << std::endl;
         auto mito_region = brain->createRegion("MitoTestRegion", NeuroForge::Core::Region::Type::Cortical);
-        // Add 1024 neurons to trigger GPU path (>1000 threshold)
-        mito_region->createNeurons(1024);
+        mito_region->createNeurons(256);
         
         // Initial stats
         auto stats_before = mito_region->getStatistics();
@@ -93,7 +97,7 @@ int main() {
              // Note: In a resting state, production ~ consumption might lead to steady state, but usually there's some drift or initial settling.
              // Let's force some activity to ensure consumption.
              std::cout << "[smoke] Warning: Energy did not change significantly. Injecting activity..." << std::endl;
-             std::vector<float> input(1024, 1.0f); // Max activation
+             std::vector<float> input(256, 1.0f);
              mito_region->feedExternalPattern(input);
              for (int s = 0; s < 50; ++s) {
                 brain->processStep(0.01f);

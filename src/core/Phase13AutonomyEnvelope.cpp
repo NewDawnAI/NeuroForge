@@ -9,7 +9,7 @@ namespace Core {
 
 static inline std::int64_t now_ms_p13() {
     using namespace std::chrono;
-    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
 std::string Phase13AutonomyEnvelope::maybeAdjustEnvelope(const std::string& context) {

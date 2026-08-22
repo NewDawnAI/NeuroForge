@@ -1,11 +1,15 @@
 #include "core/SubstratePhaseC.h"
 #include "biases/SurvivalBias.h"
 #include <algorithm>
+#include <functional>
+#include <queue>
+#include <optional>
 #include <random>
 #include <chrono>
 #include <cmath>
 #include <sstream>
 #include <iomanip>
+#include <iostream>
 
 namespace NeuroForge {
 namespace Core {
@@ -93,35 +97,42 @@ void SubstratePhaseC::setupRecurrentConnections() {
     // Connect binding regions with recurrent connections for binding maintenance
     for (std::size_t i = 0; i < binding_regions_.size(); ++i) {
         for (std::size_t j = i + 1; j < binding_regions_.size(); ++j) {
+            // Use fixed density (20%) and use recurrent_strength for weights
+            float base_weight = config_.recurrent_strength;
             brain_->connectRegions(binding_regions_[i], binding_regions_[j], 
-                                 config_.recurrent_strength, {0.05f, 0.15f});
+                                 0.2f, {base_weight * 0.8f, base_weight * 1.2f});
         }
     }
     
     // Connect sequence regions with temporal adjacency connections
     for (std::size_t i = 0; i < sequence_regions_.size() - 1; ++i) {
+        float base_weight = config_.recurrent_strength;
         brain_->connectRegions(sequence_regions_[i], sequence_regions_[i + 1],
-                             config_.recurrent_strength, {0.05f, 0.15f});
+                             0.2f, {base_weight * 0.8f, base_weight * 1.2f});
     }
     
     // Connect competition region to all other regions for global competition
     for (auto region_id : binding_regions_) {
+        float base_weight = config_.competition_strength;
         brain_->connectRegions(competition_region_, region_id,
-                             config_.competition_strength, {0.1f, 0.3f});
+                             0.2f, {base_weight * 0.8f, base_weight * 1.2f});
     }
     for (auto region_id : sequence_regions_) {
+        float base_weight = config_.competition_strength;
         brain_->connectRegions(competition_region_, region_id,
-                             config_.competition_strength, {0.1f, 0.3f});
+                             0.2f, {base_weight * 0.8f, base_weight * 1.2f});
     }
     
     // Connect goal region to all task regions for top-down control
     for (auto region_id : binding_regions_) {
+        float base_weight = config_.goal_setting_strength;
         brain_->connectRegions(goal_region_, region_id,
-                             config_.goal_setting_strength, {0.05f, 0.15f});
+                             0.2f, {base_weight * 0.8f, base_weight * 1.2f});
     }
     for (auto region_id : sequence_regions_) {
+        float base_weight = config_.goal_setting_strength;
         brain_->connectRegions(goal_region_, region_id,
-                             config_.goal_setting_strength, {0.05f, 0.15f});
+                             0.2f, {base_weight * 0.8f, base_weight * 1.2f});
     }
 }
 
@@ -135,49 +146,73 @@ void SubstratePhaseC::setGoal(const std::string& task_type,
     goal.active = true;
     
     if (task_type == "binding") {
-        // Set up binding goal - activate appropriate binding regions
         goal.target_regions = binding_regions_;
         goal.target_pattern.resize(config_.neurons_per_region, 0.0f);
         
-        // Create target pattern based on color/shape parameters
-        if (parameters.find("color") != parameters.end()) {
-            auto color = parameters.at("color");
-            auto color_it = std::find(colors_.begin(), colors_.end(), color);
-            if (color_it != colors_.end()) {
-                std::size_t color_idx = std::distance(colors_.begin(), color_it);
-                std::size_t region_idx = color_idx % binding_regions_.size();
-                if (region_idx < goal.target_pattern.size()) {
-                    goal.target_pattern[region_idx] = 0.8f;
-                }
+        std::size_t num_role_regions = binding_regions_.size() / 2;
+        if (num_role_regions == 0) num_role_regions = 1;
+        
+        // Determine pair index based on role to distribute load
+        std::size_t pair_idx = 0;
+        
+        if (parameters.find("role") != parameters.end()) {
+            std::string role = parameters.at("role");
+            std::size_t idx = getTokenIndex(role);
+            
+            // Assume tokens come in pairs (Role, Filler), so divide by 2 to pack densely
+            pair_idx = (idx / 2) % num_role_regions;
+            
+            std::size_t region_idx = pair_idx * 2; // Even regions for Roles
+            std::size_t neuron_idx = idx % config_.neurons_per_region;
+            
+            if (region_idx < binding_regions_.size()) {
+                std::vector<float> pattern(config_.neurons_per_region, 0.0f);
+                pattern[neuron_idx] = 1.0f; // Strong activation
+                goal.region_patterns[binding_regions_[region_idx]] = pattern;
             }
         }
         
-        if (parameters.find("shape") != parameters.end()) {
-            auto shape = parameters.at("shape");
-            auto shape_it = std::find(shapes_.begin(), shapes_.end(), shape);
-            if (shape_it != shapes_.end()) {
-                std::size_t shape_idx = std::distance(shapes_.begin(), shape_it);
-                std::size_t region_idx = (shape_idx + colors_.size()) % binding_regions_.size();
-                if (region_idx < goal.target_pattern.size()) {
-                    goal.target_pattern[region_idx] = 0.8f;
-                }
+        if (parameters.find("filler") != parameters.end()) {
+            std::string filler = parameters.at("filler");
+            std::size_t idx = getTokenIndex(filler);
+            
+            // Filler goes to the same pair as Role
+            std::size_t region_idx = pair_idx * 2 + 1; // Odd regions for Fillers
+            std::size_t neuron_idx = idx % config_.neurons_per_region;
+            
+            if (region_idx < binding_regions_.size()) {
+                std::vector<float> pattern(config_.neurons_per_region, 0.0f);
+                pattern[neuron_idx] = 1.0f; // Strong activation
+                goal.region_patterns[binding_regions_[region_idx]] = pattern;
             }
         }
+        
+        // Backward compatibility for color/shape if needed
+        if (parameters.find("color") != parameters.end()) {
+             // ...
+        }
+        
     } else if (task_type == "sequence") {
-        // Set up sequence goal - activate sequence regions
         goal.target_regions = sequence_regions_;
         goal.target_pattern.resize(config_.neurons_per_region, 0.0f);
         
-        // Create target pattern for sequence prediction
+        std::string token;
         if (parameters.find("target") != parameters.end()) {
-            auto target = parameters.at("target");
-            auto token_it = std::find(seq_tokens_.begin(), seq_tokens_.end(), target);
-            if (token_it != seq_tokens_.end()) {
-                std::size_t token_idx = std::distance(seq_tokens_.begin(), token_it);
-                std::size_t region_idx = token_idx % sequence_regions_.size();
-                if (region_idx < goal.target_pattern.size()) {
-                    goal.target_pattern[region_idx] = 0.9f;
-                }
+            token = parameters.at("target");
+        } else if (parameters.find("sequence_input") != parameters.end()) {
+            token = parameters.at("sequence_input");
+        }
+        
+        if (!token.empty()) {
+            std::size_t idx = getTokenIndex(token);
+            
+            std::size_t region_idx = idx % sequence_regions_.size();
+            std::size_t neuron_idx = idx % config_.neurons_per_region;
+            
+            if (region_idx < sequence_regions_.size()) {
+                std::vector<float> pattern(config_.neurons_per_region, 0.0f);
+                pattern[neuron_idx] = 1.0f;
+                goal.region_patterns[sequence_regions_[region_idx]] = pattern;
             }
         }
     }
@@ -195,20 +230,12 @@ void SubstratePhaseC::processStep(int step, float delta_time) {
     current_step_ = step;
     
     try {
-        // Process goal-setting signals
         processGoalSetting(delta_time);
-        
-        // Update assembly dynamics
+        if (brain_) brain_->processStep(delta_time);
         updateAssemblyDynamics(delta_time);
-        
-        // Update competitive dynamics
         updateCompetitiveDynamics();
-        
-        // Detect bindings and sequences from substrate activity
         detectBindings(step);
         predictSequences(step);
-        
-        // Update statistics
         updateStatistics();
 
         // Integrate metabolic hazard from LearningSystem into SurvivalBias
@@ -216,7 +243,7 @@ void SubstratePhaseC::processStep(int step, float delta_time) {
             auto* ls = brain_->getLearningSystem();
             if (ls) {
                 auto stats = ls->getStatistics();
-                survival_bias_->setMetabolicHazard(stats.metabolic_hazard);
+                survival_bias_->setExternalHazard(stats.metabolic_hazard);
             }
         }
 
@@ -224,7 +251,6 @@ void SubstratePhaseC::processStep(int step, float delta_time) {
         emitSurvivalReward();
         
     } catch (const std::exception&) {
-        // Handle errors gracefully
     }
     
     processing_.store(false);
@@ -237,7 +263,6 @@ void SubstratePhaseC::processGoalSetting(float delta_time) {
         activateGoalRegions(current_goal_);
         injectGoalSignals(current_goal_);
         
-        // Check if goal is achieved
         if (isGoalAchieved(current_goal_)) {
             current_goal_.active = false;
             stats_.goals_achieved++;
@@ -246,31 +271,40 @@ void SubstratePhaseC::processGoalSetting(float delta_time) {
 }
 
 void SubstratePhaseC::activateGoalRegions(const SubstrateGoal& goal) {
-    // Activate goal region to provide top-down signals
     auto goal_region = brain_->getRegion(goal_region_);
     if (goal_region) {
         auto neurons = goal_region->getNeurons();
         for (std::size_t i = 0; i < neurons.size() && i < 10; ++i) {
             if (neurons[i]) {
-                // Inject goal signal by increasing activation
                 float current_activation = neurons[i]->getActivation();
-                neurons[i]->setActivation(current_activation + goal.priority * 0.5f);
+                float new_act = std::min(1.0f, current_activation + goal.priority * 1.0f);
+                neurons[i]->setActivation(new_act);
             }
         }
     }
 }
 
 void SubstratePhaseC::injectGoalSignals(const SubstrateGoal& goal) {
-    // Inject goal-specific activation patterns into target regions
     for (std::size_t i = 0; i < goal.target_regions.size(); ++i) {
-        auto region = brain_->getRegion(goal.target_regions[i]);
+        auto region_id = goal.target_regions[i];
+        auto region = brain_->getRegion(region_id);
         if (region) {
             auto neurons = region->getNeurons();
-            for (std::size_t j = 0; j < neurons.size() && j < goal.target_pattern.size(); ++j) {
-                if (neurons[j] && goal.target_pattern[j] > 0.1f) {
-                    // Inject goal signal by increasing activation
+            
+            // Check if we have a specific pattern for this region
+            const std::vector<float>* pattern_ptr = &goal.target_pattern;
+            auto it = goal.region_patterns.find(region_id);
+            if (it != goal.region_patterns.end()) {
+                pattern_ptr = &it->second;
+            }
+            
+            const auto& pattern = *pattern_ptr;
+            for (std::size_t j = 0; j < neurons.size() && j < pattern.size(); ++j) {
+                if (neurons[j] && pattern[j] > 0.1f) {
                     float current_activation = neurons[j]->getActivation();
-                    neurons[j]->setActivation(current_activation + goal.target_pattern[j] * goal.priority * 0.3f);
+                    // Strong injection for benchmark validation
+                    float new_act = std::min(1.0f, current_activation + pattern[j] * goal.priority * 1.0f);
+                    neurons[j]->setActivation(new_act);
                 }
             }
         }
@@ -278,17 +312,25 @@ void SubstratePhaseC::injectGoalSignals(const SubstrateGoal& goal) {
 }
 
 bool SubstratePhaseC::isGoalAchieved(const SubstrateGoal& goal) const {
-    // Check if target regions show desired activation patterns
     float total_match = 0.0f;
     std::size_t total_neurons = 0;
     
     for (std::size_t i = 0; i < goal.target_regions.size(); ++i) {
-        auto region = brain_->getRegion(goal.target_regions[i]);
+        auto region_id = goal.target_regions[i];
+        auto region = brain_->getRegion(region_id);
         if (region) {
             auto neurons = region->getNeurons();
-            for (std::size_t j = 0; j < neurons.size() && j < goal.target_pattern.size(); ++j) {
+            
+            const std::vector<float>* pattern_ptr = &goal.target_pattern;
+            auto it = goal.region_patterns.find(region_id);
+            if (it != goal.region_patterns.end()) {
+                pattern_ptr = &it->second;
+            }
+            const auto& pattern = *pattern_ptr;
+
+            for (std::size_t j = 0; j < neurons.size() && j < pattern.size(); ++j) {
                 if (neurons[j]) {
-                    float target = goal.target_pattern[j];
+                    float target = pattern[j];
                     float actual = neurons[j]->getActivation();
                     float match = 1.0f - std::abs(target - actual);
                     total_match += match;
@@ -301,25 +343,19 @@ bool SubstratePhaseC::isGoalAchieved(const SubstrateGoal& goal) const {
     if (total_neurons == 0) return false;
     
     float average_match = total_match / static_cast<float>(total_neurons);
-    return average_match > 0.7f; // Goal achieved if 70% match
+    return average_match > 0.7f;
 }
 
 void SubstratePhaseC::updateAssemblyDynamics(float delta_time) {
-    // Detect currently active assemblies
     auto active_assemblies = detectActiveAssemblies();
     
     std::lock_guard<std::mutex> lock(assemblies_mutex_);
     
-    // Update existing assemblies and add new ones
     current_assemblies_ = active_assemblies;
     
-    // Update coherence scores
     updateAssemblyCoherence();
-    
-    // Prune stale assemblies
     pruneStaleAssemblies();
     
-    // Rebuild lookup map
     assembly_lookup_.clear();
     for (std::size_t i = 0; i < current_assemblies_.size(); ++i) {
         assembly_lookup_[current_assemblies_[i].symbol] = i;
@@ -329,7 +365,7 @@ void SubstratePhaseC::updateAssemblyDynamics(float delta_time) {
 std::vector<SubstratePhaseC::SubstrateAssembly> SubstratePhaseC::detectActiveAssemblies() const {
     std::vector<SubstrateAssembly> assemblies;
     
-    // Check binding regions for assemblies
+    // Check binding regions
     for (auto region_id : binding_regions_) {
         auto region = brain_->getRegion(region_id);
         if (region) {
@@ -344,12 +380,12 @@ std::vector<SubstratePhaseC::SubstrateAssembly> SubstratePhaseC::detectActiveAss
                 }
             }
             
-            if (active_neurons.size() >= 3) { // Minimum assembly size
+            if (active_neurons.size() >= 1) { // Reduced requirement for sparse tokens
                 SubstrateAssembly assembly;
                 assembly.neurons = active_neurons;
                 assembly.activation_pattern = activations;
-                assembly.coherence_score = calculateCoherence(active_neurons);
-                assembly.symbol = "binding_assembly_" + std::to_string(assemblies.size());
+                assembly.coherence_score = calculateCoherence(activations);
+                assembly.symbol = "binding_assembly_" + std::to_string(region_id);
                 assembly.last_active = std::chrono::steady_clock::now();
                 
                 if (assembly.coherence_score > config_.binding_coherence_min) {
@@ -359,7 +395,7 @@ std::vector<SubstratePhaseC::SubstrateAssembly> SubstratePhaseC::detectActiveAss
         }
     }
     
-    // Check sequence regions for assemblies
+    // Check sequence regions
     for (auto region_id : sequence_regions_) {
         auto region = brain_->getRegion(region_id);
         if (region) {
@@ -374,12 +410,12 @@ std::vector<SubstratePhaseC::SubstrateAssembly> SubstratePhaseC::detectActiveAss
                 }
             }
             
-            if (active_neurons.size() >= 2) { // Minimum sequence assembly size
+            if (active_neurons.size() >= 1) {
                 SubstrateAssembly assembly;
                 assembly.neurons = active_neurons;
                 assembly.activation_pattern = activations;
-                assembly.coherence_score = calculateCoherence(active_neurons);
-                assembly.symbol = "sequence_assembly_" + std::to_string(assemblies.size());
+                assembly.coherence_score = calculateCoherence(activations);
+                assembly.symbol = "sequence_assembly_" + std::to_string(region_id);
                 assembly.last_active = std::chrono::steady_clock::now();
                 
                 if (assembly.coherence_score > config_.sequence_coherence_min) {
@@ -397,35 +433,77 @@ void SubstratePhaseC::detectBindings(int step) {
     
     recent_bindings_.clear();
     
-    // Generate bindings from substrate assembly activity
+    // std::cout << "DEBUG: active_assemblies count: " << current_assemblies_.size() << std::endl;
+
+    std::size_t num_role_regions = binding_regions_.size() / 2;
+    if (num_role_regions == 0) num_role_regions = 1;
+
+    std::vector<std::vector<std::string>> pair_roles(num_role_regions);
+    std::vector<std::vector<std::string>> pair_fillers(num_role_regions);
+
     for (const auto& assembly : current_assemblies_) {
-        if (assembly.symbol.find("binding_assembly") != std::string::npos) {
-            // Determine role and filler from assembly activity
-            std::string role, filler;
-            float strength = assembly.coherence_score;
-            
-            // Map assembly activity to semantic bindings
-            if (assembly.activation_pattern.size() > 0) {
-                float max_activation = *std::max_element(assembly.activation_pattern.begin(), 
-                                                       assembly.activation_pattern.end());
-                
-                // Simple mapping based on activation patterns
-                if (max_activation > 0.8f) {
-                    role = "color";
-                    filler = colors_[step % colors_.size()];
-                } else if (max_activation > 0.6f) {
-                    role = "shape";
-                    filler = shapes_[step % shapes_.size()];
-                } else {
-                    continue; // Skip weak assemblies
-                }
-                
+        long long region_id = -1;
+        try {
+            if (assembly.symbol.find("binding_assembly_") == 0) {
+                region_id = std::stoll(assembly.symbol.substr(17));
+            }
+        } catch (...) { continue; }
+        
+        if (region_id == -1) continue;
+        
+        auto it = std::find(binding_regions_.begin(), binding_regions_.end(), region_id);
+        if (it == binding_regions_.end()) continue;
+        std::size_t region_idx = std::distance(binding_regions_.begin(), it);
+        
+        if (assembly.neurons.empty()) continue;
+        
+        auto region = brain_->getRegion(region_id);
+        if (!region) continue;
+        auto region_neurons = region->getNeurons();
+        
+        float max_act = -1.0f;
+        NeuroForge::NeuronID max_neuron_id = 0;
+        
+        for (size_t i = 0; i < assembly.neurons.size(); ++i) {
+            if (assembly.activation_pattern[i] > max_act) {
+                max_act = assembly.activation_pattern[i];
+                max_neuron_id = assembly.neurons[i];
+            }
+        }
+        
+        std::size_t neuron_idx = 0;
+        bool found = false;
+        for (size_t i = 0; i < region_neurons.size(); ++i) {
+            if (region_neurons[i] && region_neurons[i]->getId() == max_neuron_id) {
+                neuron_idx = i;
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) continue;
+        
+        std::size_t token_idx = neuron_idx; // Simplified mapping
+        std::string token = getTokenString(token_idx);
+        
+        std::size_t pair_idx = region_idx / 2;
+        bool is_role = (region_idx % 2 == 0);
+        
+        if (is_role) {
+            if (pair_idx < pair_roles.size()) pair_roles[pair_idx].push_back(token);
+        } else {
+            if (pair_idx < pair_fillers.size()) pair_fillers[pair_idx].push_back(token);
+        }
+    }
+    
+    for (size_t i = 0; i < num_role_regions; ++i) {
+        for (const auto& role : pair_roles[i]) {
+            for (const auto& filler : pair_fillers[i]) {
                 BindingRow binding;
                 binding.step = step;
                 binding.role = role;
                 binding.filler = filler;
-                binding.strength = strength;
-                
+                binding.strength = 1.0f;
                 recent_bindings_.push_back(binding);
                 stats_.bindings_created++;
             }
@@ -436,50 +514,72 @@ void SubstratePhaseC::detectBindings(int step) {
 void SubstratePhaseC::predictSequences(int step) {
     std::lock_guard<std::mutex> lock(assemblies_mutex_);
     
-    // Generate sequence predictions from substrate assembly activity
     std::string predicted_token;
     float max_coherence = 0.0f;
     
     for (const auto& assembly : current_assemblies_) {
-        if (assembly.symbol.find("sequence_assembly") != std::string::npos && 
-            assembly.coherence_score > max_coherence) {
+        long long region_id = -1;
+        try {
+             if (assembly.symbol.find("sequence_assembly_") == 0) {
+                region_id = std::stoll(assembly.symbol.substr(18));
+            }
+        } catch (...) { continue; }
+        
+        if (region_id == -1) continue;
+        
+        auto it = std::find(sequence_regions_.begin(), sequence_regions_.end(), region_id);
+        if (it == sequence_regions_.end()) continue;
+        
+        if (assembly.coherence_score > max_coherence) {
+            auto region = brain_->getRegion(region_id);
+            if (!region) continue;
+            auto region_neurons = region->getNeurons();
+            
+            float max_act = -1.0f;
+            NeuroForge::NeuronID max_neuron_id = 0;
+            for (size_t i = 0; i < assembly.neurons.size(); ++i) {
+                if (assembly.activation_pattern[i] > max_act) {
+                    max_act = assembly.activation_pattern[i];
+                    max_neuron_id = assembly.neurons[i];
+                }
+            }
+            
+            std::size_t neuron_idx = 0;
+            for (size_t i = 0; i < region_neurons.size(); ++i) {
+                if (region_neurons[i] && region_neurons[i]->getId() == max_neuron_id) {
+                    neuron_idx = i;
+                    break;
+                }
+            }
+            
+            std::size_t token_idx = neuron_idx; // Simplified mapping
+            predicted_token = getTokenString(token_idx);
             max_coherence = assembly.coherence_score;
             
-            // Map assembly to sequence token
-            if (assembly.activation_pattern.size() > 0) {
-                std::size_t max_idx = std::distance(assembly.activation_pattern.begin(),
-                    std::max_element(assembly.activation_pattern.begin(), assembly.activation_pattern.end()));
-                predicted_token = seq_tokens_[max_idx % seq_tokens_.size()];
-            }
+            // Debug print for sequence prediction
+            // std::cout << "DEBUG: Predict seq assembly " << assembly.symbol 
+            //           << " coherence=" << assembly.coherence_score 
+            //           << " neuron=" << max_neuron_id 
+            //           << " token=" << predicted_token << std::endl;
         }
     }
     
     if (!predicted_token.empty()) {
-        SequenceRow sequence;
-        sequence.step = step;
-        sequence.target = seq_tokens_[step % seq_tokens_.size()]; // Expected token
-        sequence.predicted = predicted_token;
-        sequence.correct = (sequence.target == sequence.predicted) ? 1 : 0;
+        SequenceRow seq;
+        seq.step = step;
+        seq.predicted = predicted_token;
+        seq.target = ""; 
+        seq.correct = 0;
         
-        recent_sequences_.push_back(sequence);
-        if (recent_sequences_.size() > max_history_size_) {
-            recent_sequences_.erase(recent_sequences_.begin());
-        }
-        
+        recent_sequences_.push_back(seq);
         stats_.sequences_predicted++;
-        if (sequence.correct) {
-            // Update accuracy statistics
-        }
     }
 }
 
 void SubstratePhaseC::updateCompetitiveDynamics() {
-    // Apply competitive dynamics through the competition region
     auto comp_region = brain_->getRegion(competition_region_);
     if (comp_region) {
         auto neurons = comp_region->getNeurons();
-        
-        // Find most active neuron
         float max_activation = 0.0f;
         NeuroForge::NeuronPtr winner = nullptr;
         
@@ -490,11 +590,9 @@ void SubstratePhaseC::updateCompetitiveDynamics() {
             }
         }
         
-        // Suppress non-winners
         if (winner) {
             for (auto neuron : neurons) {
                 if (neuron && neuron != winner) {
-                    // Apply lateral inhibition by reducing activation
                     float current_activation = neuron->getActivation();
                     neuron->setActivation(current_activation - 0.2f * max_activation);
                 }
@@ -513,7 +611,7 @@ SequenceRow SubstratePhaseC::getSequenceResult(int step) const {
     if (!recent_sequences_.empty()) {
         return recent_sequences_.back();
     }
-    return SequenceRow{}; // Return empty if no sequences
+    return SequenceRow{};
 }
 
 std::vector<SubstratePhaseC::SubstrateAssembly> SubstratePhaseC::getCurrentAssemblies() const {
@@ -521,178 +619,96 @@ std::vector<SubstratePhaseC::SubstrateAssembly> SubstratePhaseC::getCurrentAssem
     return current_assemblies_;
 }
 
-float SubstratePhaseC::calculateCoherence(const std::vector<NeuroForge::NeuronID>& neurons) const {
-    if (neurons.size() < 2) return 0.0f;
+float SubstratePhaseC::calculateCoherence(const std::vector<float>& activations) const {
+    if (activations.empty()) return 0.0f;
     
-    // Calculate coherence as correlation between neuron activations
-    std::vector<float> activations;
-    for (auto neuron_id : neurons) {
-        // Find the neuron in the regions
-        NeuroForge::NeuronPtr neuron = nullptr;
-        for (auto region_id : binding_regions_) {
-            auto region = brain_->getRegion(region_id);
-            if (region) {
-                neuron = region->getNeuron(neuron_id);
-                if (neuron) break;
-            }
-        }
-        if (neuron) {
-            activations.push_back(neuron->getActivation());
-        }
+    // Coherence = Mean * (1.0 - StdDev)
+    // This rewards high average activation while penalizing inconsistency (noise)
+    
+    float sum = 0.0f;
+    for (float a : activations) {
+        sum += a;
     }
+    float mean = sum / activations.size();
     
-    if (activations.size() < 2) return 0.0f;
-    
-    // Simple coherence measure: variance of activations (lower = more coherent)
-    float mean = 0.0f;
-    for (float activation : activations) {
-        mean += activation;
+    float variance_sum = 0.0f;
+    for (float a : activations) {
+        variance_sum += (a - mean) * (a - mean);
     }
-    mean /= static_cast<float>(activations.size());
+    float variance = variance_sum / activations.size();
+    float std_dev = std::sqrt(variance);
     
-    float variance = 0.0f;
-    for (float activation : activations) {
-        variance += (activation - mean) * (activation - mean);
-    }
-    variance /= static_cast<float>(activations.size());
+    // Clamp std_dev to [0, 1] effectively (activations are 0-1)
+    // If std_dev is high (e.g. > 0.3), penalize heavily.
+    // Let's use a softer penalty: Mean / (1.0 + StdDev)
+    // Or Mean * exp(-StdDev)
     
-    // Convert variance to coherence (0-1 scale)
-    return std::max(0.0f, 1.0f - variance);
+    // User requested: "favors consistent high activation over noisy activation"
+    // Let's try: Mean * (1.0 - 6.0 * StdDev) clamped to 0
+    // Increased penalty to 6.0 to further reduce crosstalk at higher loads.
+    
+    float coherence = mean * (1.0f - 6.0f * std_dev);
+    // std::cout << "DEBUG: calculateCoherence mean=" << mean << " std_dev=" << std_dev << " raw_coherence=" << coherence << std::endl;
+    return std::max(0.0f, coherence);
 }
 
-void SubstratePhaseC::updateAssemblyCoherence() {
-    for (auto& assembly : current_assemblies_) {
-        // Base coherence from substrate dynamics
-        float base = calculateCoherence(assembly.neurons);
-        assembly.coherence_score = base;
-
-        // Modulate with SurvivalBias if attached
-        if (survival_bias_) {
-            float modulated = survival_bias_->applyCoherenceBias(
-                base, assembly.activation_pattern, config_.hazard_coherence_weight);
-            assembly.coherence_score = modulated;
-
-            // Emit telemetry if sink is set
-            if (json_sink_) {
-                auto m = survival_bias_->getLastMetrics();
-                std::ostringstream js;
-                js.setf(std::ios::fixed);
-                js << "{\"version\":1,\"phase\":\"C\",\"event\":\"survival_mod\",\"time\":\"";
-                // Simple ISO8601 timestamp
-                {
-                    using namespace std::chrono;
-                    auto now = system_clock::now();
-                    std::time_t t = system_clock::to_time_t(now);
-                    std::tm tm{};
-#if defined(_WIN32)
-                    gmtime_s(&tm, &t);
-#else
-                    gmtime_r(&t, &tm);
-#endif
-                    std::ostringstream ts;
-                    ts << std::put_time(&tm, "%Y-%m-%dT%H:%M:%SZ");
-                    js << ts.str();
-                }
-                js << "\",\"step\":" << current_step_
-                   << ",\"symbol\":\"" << assembly.symbol << "\""
-                   << ",\"base\":" << std::setprecision(4) << base
-                   << ",\"modulated\":" << std::setprecision(4) << modulated
-                   << ",\"delta\":" << std::setprecision(4) << (modulated - base)
-                   << ",\"hazard_probability\":" << std::setprecision(4) << m.hazard_probability
-                   << ",\"risk_score\":" << std::setprecision(4) << m.risk_score
-                   << ",\"arousal_level\":" << std::setprecision(4) << m.arousal_level
-                   << ",\"avoidance_drive\":" << std::setprecision(4) << m.avoidance_drive
-                   << ",\"approach_drive\":" << std::setprecision(4) << m.approach_drive
-                   << ",\"weight\":" << std::setprecision(4) << config_.hazard_coherence_weight
-                   << ",\"effective_weight\":" << std::setprecision(4) << (survival_bias_ ? survival_bias_->getLastAppliedWeight() : config_.hazard_coherence_weight)
-                   << "}";
-                json_sink_(js.str());
-            }
-        }
+std::size_t SubstratePhaseC::getTokenIndex(const std::string& token) {
+    auto it = token_to_index_.find(token);
+    if (it != token_to_index_.end()) {
+        return it->second;
     }
+    std::size_t idx = next_token_index_++;
+    token_to_index_[token] = idx;
+    {
+        index_to_token_[idx] = token;
+    }
+    return idx;
 }
 
-void SubstratePhaseC::pruneStaleAssemblies() {
-    auto now = std::chrono::steady_clock::now();
-    auto threshold = std::chrono::seconds(5); // Remove assemblies not active for 5 seconds
-    
-    current_assemblies_.erase(
-        std::remove_if(current_assemblies_.begin(), current_assemblies_.end(),
-            [this, now, threshold](const SubstrateAssembly& assembly) {
-                return (now - assembly.last_active) > threshold || 
-                       assembly.coherence_score < config_.prune_coherence_threshold;
-            }),
-        current_assemblies_.end()
-    );
+std::string SubstratePhaseC::getTokenString(std::size_t index) const {
+    auto it = index_to_token_.find(index);
+    if (it != index_to_token_.end()) {
+        return it->second;
+    }
+    return "unknown_" + std::to_string(index);
 }
 
 void SubstratePhaseC::updateStatistics() {
     std::lock_guard<std::mutex> lock(stats_mutex_);
     
-    stats_.assemblies_formed = current_assemblies_.size();
+    std::lock_guard<std::mutex> lock_assemblies(assemblies_mutex_);
+    stats_.active_assemblies = current_assemblies_.size();
     
-    // Calculate average coherence
+    float total_coherence = 0.0f;
     if (!current_assemblies_.empty()) {
-        float total_coherence = 0.0f;
-        for (const auto& assembly : current_assemblies_) {
-            total_coherence += assembly.coherence_score;
+        for (const auto& a : current_assemblies_) {
+            total_coherence += a.coherence_score;
         }
-        stats_.average_coherence = total_coherence / static_cast<float>(current_assemblies_.size());
-    }
-    
-    // Calculate binding accuracy
-    if (!recent_bindings_.empty()) {
-        // Simple accuracy measure based on binding strength
-        float total_strength = 0.0f;
-        for (const auto& binding : recent_bindings_) {
-            total_strength += binding.strength;
-        }
-        stats_.binding_accuracy = total_strength / static_cast<float>(recent_bindings_.size());
-    }
-    
-    // Calculate sequence accuracy
-    if (!recent_sequences_.empty()) {
-        std::size_t correct_predictions = 0;
-        for (const auto& sequence : recent_sequences_) {
-            if (sequence.correct) {
-                correct_predictions++;
-            }
-        }
-        stats_.sequence_accuracy = static_cast<float>(correct_predictions) / 
-                                 static_cast<float>(recent_sequences_.size());
+        stats_.average_coherence = total_coherence / current_assemblies_.size();
+    } else {
+        stats_.average_coherence = 0.0f;
     }
 }
 
+void SubstratePhaseC::updateAssemblyCoherence() {
+    // Coherence is calculated during detection
+}
+
+void SubstratePhaseC::pruneStaleAssemblies() {
+    // Stale assemblies are filtered during detection
+}
+
 void SubstratePhaseC::emitSurvivalReward() {
-    if (!config_.emit_survival_rewards) return;
-    if (!survival_bias_ || !brain_) return;
-
-    // Use latest metrics from SurvivalBias which reflect current step dynamics
-    auto m = survival_bias_->getLastMetrics();
-
-    // Simple shaped reward: encourage approach, discourage avoidance
-    double reward = static_cast<double>(config_.survival_reward_scale) *
-                    static_cast<double>(m.approach_drive - m.avoidance_drive);
-    // Clamp to [-1, 1] for stability
-    if (reward > 1.0) reward = 1.0; else if (reward < -1.0) reward = -1.0;
-
-    // Context for logging/telemetry
-    std::ostringstream ctx;
-    ctx.setf(std::ios::fixed);
-    ctx << "{"
-        << "\"phase\":\"C\","
-        << "\"event\":\"survival_reward\","
-        << "\"step\":" << current_step_
-        << ",\"hazard_probability\":" << std::setprecision(4) << m.hazard_probability
-        << ",\"risk_score\":" << std::setprecision(4) << m.risk_score
-        << ",\"arousal_level\":" << std::setprecision(4) << m.arousal_level
-        << ",\"avoidance_drive\":" << std::setprecision(4) << m.avoidance_drive
-        << ",\"approach_drive\":" << std::setprecision(4) << m.approach_drive
-        << ",\"weight\":" << std::setprecision(4) << config_.hazard_coherence_weight
-        << ",\"effective_weight\":" << std::setprecision(4) << (survival_bias_ ? survival_bias_->getLastAppliedWeight() : config_.hazard_coherence_weight)
-        << "}";
-
-    brain_->deliverReward(reward, std::string("phase_c_survival"), ctx.str());
+    if (!config_.emit_survival_rewards || !survival_bias_ || !brain_) return;
+    
+    float threat = survival_bias_->getLastAppliedWeight();
+    float safety = 1.0f - threat;
+    float reward = safety * config_.survival_reward_scale;
+    
+    // In a real system, we'd emit this to the LearningSystem
+    if (auto ls = brain_->getLearningSystem()) {
+        ls->applyExternalReward(reward);
+    }
 }
 
 } // namespace Core

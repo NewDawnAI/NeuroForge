@@ -18,11 +18,12 @@ Phase 5 introduces revolutionary developmental language acquisition capabilities
 - **Lip-Sync Correlation**: Lip movement patterns synchronized with phoneme production
 - **Cross-Modal Associations**: Visual patterns linked to language tokens with temporal alignment
 
-### Speech Production System
+### Speech Production System & Conversational Interface
 - **Multimodal Output**: Complete speech generation with synchronized lip animation and gaze coordination
 - **Self-Monitoring**: Acoustic feedback processing for speech quality assessment
 - **Caregiver Mimicry**: Reinforcement learning from caregiver responses and attention
 - **Real-Time Production**: 60 FPS lip-sync with 16kHz audio output and prosodic modulation
+- **Native Windows Conversational Loop** (Phase 2): Integration of `AudioInputSystem` (STT via `System.Speech.Recognition`) and `AudioOutputSystem` (TTS) to provide real-time, hands-free conversational dialogue inside the `GrandUnifiedRunner`.
 
 ## Key Concepts
 
@@ -71,11 +72,16 @@ The core `LanguageSystem` class (`include/core/LanguageSystem.h`) implements:
 - **Cross-Modal Associations**: Temporal alignment of visual patterns with language tokens
 - **Attention Mapping**: Visual attention integration with token activation boosting
 
-#### Speech Production (`LanguageSystem_SpeechProduction.cpp`)
+#### Speech Production (`LanguageSystem_SpeechProduction.cpp` & `AudioOutputSystem.h`)
 - **Phoneme Sequencing**: Text-to-phoneme conversion with acoustic feature mapping
 - **Lip-Sync Generation**: 16-dimensional lip shape sequences synchronized with phonemes
 - **Prosody Synthesis**: Natural intonation patterns with emotional coloring
 - **Self-Monitoring**: Acoustic feedback processing and speech quality assessment
+- **Text-to-Speech (TTS)**: Leverages Windows PowerShell `System.Speech.Synthesis` for accessible, out-of-the-box audible responses.
+
+#### Conversational Input (`AudioInputSystem.h`)
+- **Speech-to-Text (STT)**: Uses Windows PowerShell `System.Speech.Recognition` to capture live microphone input.
+- **Continuous Listening**: Spawns a background worker thread that extracts transcribed strings without heavy ML dependencies, pushing them back into the main `LanguageSystem` loop.
 
 #### Developmental Stages
 - **Stage Progression**: Automatic advancement based on acoustic and visual development metrics
@@ -369,6 +375,14 @@ Phase 5 generates several types of output data:
 - **Spike-Based Processing**: True neural spike timing
 - **Low-Power Operation**: Energy-efficient language processing
 - **Real-Time Learning**: Continuous adaptation during operation
+
+## Relation to Autonomous Internet Grounding (Phase 6)
+
+While Phase 5 establishes the *mechanisms* for language acquisition (acoustic/visual grounding), **Phase 6 (Autonomous Internet Grounding)** provides the *curriculum*. 
+
+By connecting the Language System to the `WebSandbox` via the `LivePerceptionLoop`, NeuroForge now acquires language tokens not just from hardcoded teacher examples, but from the open internet (Wikipedia, arXiv, etc.).
+
+See [Autonomous_Internet_Grounding.md](Autonomous_Internet_Grounding.md) for details on the production learning loop.
 
 ## Conclusion
 

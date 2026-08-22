@@ -34,14 +34,15 @@ include_directories(src)
 
 # Find required packages
 find_package(Threads REQUIRED)
+find_package(Eigen3 CONFIG REQUIRED)
 
-# Temporarily disable Cap'n Proto to allow building without it
-# find_package(CapnProto CONFIG REQUIRED)
-
-# Set up schema code generation (disabled temporarily)
-# set(NF_SCHEMA_DIR ${CMAKE_CURRENT_SOURCE_DIR}/schemas)
-# set(NF_SCHEMAS ${NF_SCHEMA_DIR}/neuroforge.capnp ${NF_SCHEMA_DIR}/brainstate.capnp)
-# capnp_generate_cpp(NF_CAPNP_SRCS NF_CAPNP_HDRS ${NF_SCHEMAS})
+# Enable Cap'n Proto for boundary serialization (optional)
+find_package(CapnProto CONFIG QUIET)
+if(CapnProto_FOUND)
+    message(STATUS "Cap'n Proto found: ${CapnProto_VERSION}")
+else()
+    message(STATUS "Cap'n Proto NOT found - substrate serialization disabled")
+endif()
 
 # Optionally find OpenCV for vision demo and GPU metrics (quietly)
 # Hints for Windows users: try to auto-detect under C:\opencv and honor env vars before find_package
@@ -121,6 +122,10 @@ set(CORE_SOURCES
     src/core/PhaseAMimicry.cpp
     src/core/FirstPersonMazeRenderer.cpp
     src/core/ContextHooks.cpp
+    src/core/RelationGate.cpp
+    src/core/EpistemicGates.cpp
+    src/core/EntityResolver.cpp
+    src/core/BrainPersistence.cpp
     src/biases/AttachmentBias.cpp
     src/biases/ContrastEdgeBias.cpp
     src/biases/FaceDetectionBias.cpp
@@ -137,6 +142,10 @@ set(CORE_SOURCES
     src/core/Phase7AffectiveState.cpp
     src/core/Phase7Reflection.cpp
     src/core/Phase8GoalSystem.cpp
+    src/core/metrics/IdentityMonitor.cpp
+    src/core/metrics/IntegrationHeuristics.cpp
+    src/core/HardwareAdapter.cpp
+    src/core/HiveManager.cpp
     # Newly added Phase 9–11 sources
     src/core/Phase9Metacognition.cpp
     src/core/Phase10SelfExplanation.cpp
@@ -145,9 +154,53 @@ set(CORE_SOURCES
     src/core/Phase13AutonomyEnvelope.cpp
     src/core/Phase14MetaReasoner.cpp
     src/core/Phase15EthicsRegulator.cpp
+    src/core/MetaCognitionSystem.cpp
     src/core/ActionFilter.cpp
+    src/core/UniversalLearningSignal.cpp
+    src/core/CompositionMetrics.cpp
+    src/core/Agent2EpistemicReviewer.cpp
+    src/core/ReasoningStep.cpp
+    src/core/ReasoningTrace.cpp
+    src/core/Curiosity/ResolutionTracker.cpp
     # Sandbox implementation (Windows-only APIs guarded at compile-time)
     src/sandbox/WebSandbox.cpp
+    # Perception pipeline for autonomous grounding
+    src/perception/LivePerceptionLoop.cpp
+    # Semantic projection for JEPA-safe language integration
+    src/perception/world/SemanticProjection.cpp
+    # Visual Perception for browsing
+    src/vision/BrowserVision.cpp
+    # Navigation for autonomous exploration
+    src/navigation/CuriosityNavigator.cpp
+    # Verification for anti-hallucination
+    src/verification/GroundingVerifier.cpp
+    # Language acquisition from web content
+    src/language/LanguageAcquisitionLoop.cpp
+    # Memory systems (episodic, semantic, procedural)
+    src/memory/WorkingMemory.cpp
+    src/memory/EpisodicMemoryManager.cpp
+    src/memory/SemanticMemory.cpp
+    src/memory/ProceduralMemory.cpp
+    src/memory/MemoryIntegrator.cpp
+    src/memory/SleepConsolidation.cpp
+    src/memory/DreamProcessor.cpp
+    src/memory/DevelopmentalConstraints.cpp
+    src/runtime/UnifiedBoundedRunner.cpp
+    src/runtime/N7ModelBasedRunner.cpp
+    src/runtime/N7MinimalRunner.cpp
+    src/runtime/N7BoundedRunner.cpp
+    src/runtime/N8HumanGatedRunner.cpp
+    src/runtime/N9AutomatedGatedRunner.cpp
+    src/runtime/UnifiedAliveRunner.cpp
+    src/runtime/WebSandboxRunner.cpp
+    src/runtime/GrandUnifiedRunner.cpp
+    src/encoders/TextEncoder.cpp
+    src/runtime/SemanticN4Runner.cpp
+    src/runtime/SemanticN5Runner.cpp
+    src/runtime/SemanticN6Runner.cpp
+    src/runtime/SemanticInjectionRunner.cpp
+    src/runtime/SemanticN2Runner.cpp
+    src/runtime/SemanticN3Runner.cpp
 )
 
 # Brain region sources
@@ -189,15 +242,42 @@ set(ENCODER_SOURCES
 
 # Create core library (include Phase 2 memory sources)
 add_library(neuroforge_core STATIC ${CORE_SOURCES} ${MEMORY_SOURCES})
-# Add Cap'n Proto generated sources and linking to core (temporarily disabled)
-# target_sources(neuroforge_core PRIVATE ${NF_CAPNP_SRCS})
- # Generated headers are under the binary dir (and typically in a 'schemas' subdir); expose publicly
-   target_include_directories(neuroforge_core PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
-                                                      ${CMAKE_CURRENT_BINARY_DIR}/schemas)
-   # target_link_libraries(neuroforge_core PUBLIC CapnProto::capnp)  # Temporarily disabled
-   # target_compile_definitions(neuroforge_core PUBLIC NF_HAVE_CAPNP=1)  # Temporarily disabled
- target_include_directories(neuroforge_core PUBLIC include)
-target_link_libraries(neuroforge_core PUBLIC Threads::Threads)
+# Generated headers are under the binary dir (and typically in a 'schemas' subdir); expose publicly
+target_include_directories(neuroforge_core PUBLIC ${CMAKE_CURRENT_BINARY_DIR}
+                                                   ${CMAKE_CURRENT_BINARY_DIR}/schemas)
+target_include_directories(neuroforge_core PUBLIC include)
+target_link_libraries(neuroforge_core PUBLIC Threads::Threads Eigen3::Eigen)
+
+# Cap'n Proto integration (enabled when found)
+if(CapnProto_FOUND)
+    target_include_directories(neuroforge_core PUBLIC ${CMAKE_SOURCE_DIR}/include/serialization)
+    target_link_libraries(neuroforge_core PUBLIC CapnProto::capnp)
+    target_compile_definitions(neuroforge_core PUBLIC NF_HAVE_CAPNP=1)
+    message(STATUS "Cap'n Proto substrate serialization ENABLED")
+endif()
+
+# Platform-specific audio capture dependencies
+if(UNIX AND NOT APPLE)
+    # Linux: use ALSA (libasound2-dev required)
+    find_package(ALSA QUIET)
+    if(ALSA_FOUND)
+        target_link_libraries(neuroforge_core PUBLIC ${ALSA_LIBRARIES})
+        target_include_directories(neuroforge_core PRIVATE ${ALSA_INCLUDE_DIRS})
+        message(STATUS "ALSA audio capture enabled")
+    else()
+        message(STATUS "ALSA not found - audio capture disabled on Linux")
+    endif()
+elseif(APPLE)
+    # macOS: use CoreAudio framework
+    find_library(AUDIO_TOOLBOX AudioToolbox)
+    find_library(CORE_AUDIO CoreAudio)
+    if(AUDIO_TOOLBOX AND CORE_AUDIO)
+        target_link_libraries(neuroforge_core PUBLIC ${AUDIO_TOOLBOX} ${CORE_AUDIO})
+        message(STATUS "CoreAudio capture enabled")
+    else()
+        message(STATUS "CoreAudio not found - audio capture disabled on macOS")
+    endif()
+endif()
 
 # Optional CUDA kernels (enabled only when toolchain provides CUDA)
 if(ENABLE_CUDA)
@@ -329,6 +409,13 @@ target_link_libraries(neuroforge_connectivity PUBLIC neuroforge_core neuroforge_
 
 # Main executable
 add_executable(neuroforge src/main.cpp)
+
+# Unified Perception Demo (WorldModelCortex + VocalMotorCortex)
+add_executable(unified_perception_demo src/unified_perception_demo.cpp)
+target_link_libraries(unified_perception_demo PRIVATE neuroforge_core neuroforge_regions neuroforge_connectivity neuroforge_encoders)
+if(WIN32)
+    target_link_libraries(unified_perception_demo PRIVATE winmm user32 gdi32 ole32)
+endif()
 # Link OpenCV to main too, if present (for vision capture/processing)
 if(OpenCV_FOUND)
     if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
@@ -350,7 +437,11 @@ if(WIN32)
 endif()
 
 # Optional: Edge WebView2 (via vcpkg 'unofficial-webview2') for embedded browser sandbox
-if(WIN32)
+# NOTE: WebView2 is COM-based and only works with MSVC; skip when using GCC/MinGW
+if(WIN32 AND MSVC)
+    # Hint to find local vcpkg packages if toolchain is not used
+    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_SOURCE_DIR}/external/vcpkg/installed/x64-windows")
+    
     find_package(unofficial-webview2 CONFIG QUIET)
     if(TARGET unofficial::webview2::webview2)
         # Propagate headers/defines to both core (where WebSandbox.cpp lives) and main
@@ -362,6 +453,8 @@ if(WIN32)
     else()
         message(STATUS "WebView2 not found: sandbox will use plain window fallback")
     endif()
+elseif(WIN32)
+    message(STATUS "WebView2 skipped (MinGW build): sandbox will use plain window fallback")
 endif()
 
 # Default vision demo flag for the main executable
@@ -411,6 +504,18 @@ else()
     endif()
 endif()
 
+# Optional: Wire SQLite3 into core for MemoryDB persistence (debugging/explainability)
+if(NF_SQLITE_AVAILABLE)
+    if(SQLite3_FOUND)
+        target_link_libraries(neuroforge_core PUBLIC SQLite::SQLite3)
+    elseif(TARGET unofficial::sqlite3::sqlite3)
+        target_link_libraries(neuroforge_core PUBLIC unofficial::sqlite3::sqlite3)
+    endif()
+    target_compile_definitions(neuroforge_core PUBLIC NF_HAVE_SQLITE3=1)
+    target_compile_definitions(neuroforge PRIVATE NF_HAVE_SQLITE3=1)
+    message(STATUS "SQLite3 enabled: MemoryDB persistence available (optional — for debugging/explainability)")
+endif()
+
 # Tests (optional)
 if(NEUROFORGE_ENABLE_TESTS)
     enable_testing()
@@ -432,6 +537,14 @@ if(NEUROFORGE_ENABLE_TESTS)
         endif()
     endif()
 
+    if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_phase15_ethics.cpp)
+        add_executable(test_phase15 tests/test_phase15_ethics.cpp)
+        target_link_libraries(test_phase15 PRIVATE neuroforge_core neuroforge_regions neuroforge_connectivity neuroforge_encoders)
+        target_include_directories(test_phase15 PRIVATE include src)
+        target_compile_definitions(test_phase15 PRIVATE MINIMAL_TEST_FRAMEWORK=1)
+        add_test(NAME phase15_ethics COMMAND test_phase15)
+    endif()
+
     # Test executables
     add_executable(test_learning src/test_learning.cpp)
     target_link_libraries(test_learning 
@@ -444,6 +557,73 @@ if(NEUROFORGE_ENABLE_TESTS)
     target_compile_definitions(test_learning PRIVATE NF_LEARNING_TEST_MAIN)
     # Register test_learning with CTest
     add_test(NAME test_learning COMMAND $<TARGET_FILE:test_learning>)
+
+# New: Integration Heuristics unit tests
+add_executable(test_integration_heuristics tests/test_integration_heuristics.cpp)
+target_link_libraries(test_integration_heuristics 
+    neuroforge_core 
+    neuroforge_regions 
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(test_integration_heuristics PRIVATE include)
+add_test(NAME test_integration_heuristics COMMAND $<TARGET_FILE:test_integration_heuristics>)
+
+# Referential continuity (entity normalization + coreference) tests
+add_executable(test_referential_continuity tests/test_referential_continuity.cpp)
+target_link_libraries(test_referential_continuity
+    neuroforge_core
+    neuroforge_regions
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(test_referential_continuity PRIVATE include src)
+target_compile_definitions(test_referential_continuity PRIVATE MINIMAL_TEST_FRAMEWORK=1)
+add_test(NAME test_referential_continuity COMMAND $<TARGET_FILE:test_referential_continuity>)
+
+add_executable(test_worldmodel_regressions tests/test_worldmodel_regressions.cpp)
+target_link_libraries(test_worldmodel_regressions
+    neuroforge_core
+    neuroforge_regions
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(test_worldmodel_regressions PRIVATE include src)
+add_test(NAME test_worldmodel_regressions COMMAND $<TARGET_FILE:test_worldmodel_regressions>)
+
+# Cross-page entity linking tests
+add_executable(test_cross_page_entity_linking tests/test_cross_page_entity_linking.cpp)
+target_link_libraries(test_cross_page_entity_linking
+    neuroforge_core
+    neuroforge_regions
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(test_cross_page_entity_linking PRIVATE include src)
+target_compile_definitions(test_cross_page_entity_linking PRIVATE MINIMAL_TEST_FRAMEWORK=1)
+add_test(NAME test_cross_page_entity_linking COMMAND $<TARGET_FILE:test_cross_page_entity_linking>)
+
+# Agent-2 epistemic reviewer tests
+add_executable(test_agent2_epistemic_reviewer tests/test_agent2_epistemic_reviewer.cpp)
+target_link_libraries(test_agent2_epistemic_reviewer
+    neuroforge_core
+    neuroforge_regions
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(test_agent2_epistemic_reviewer PRIVATE include src)
+target_compile_definitions(test_agent2_epistemic_reviewer PRIVATE MINIMAL_TEST_FRAMEWORK=1)
+add_test(NAME test_agent2_epistemic_reviewer COMMAND $<TARGET_FILE:test_agent2_epistemic_reviewer>)
+
+# Benchmarks
+add_executable(bench_stage_c benchmarks/bench_stage_c.cpp)
+target_link_libraries(bench_stage_c 
+    neuroforge_core 
+    neuroforge_regions 
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(bench_stage_c PRIVATE include)
 
     # New: Encoders unit tests executable
     add_executable(test_encoders src/test_encoders.cpp)
@@ -766,6 +946,21 @@ if(NEUROFORGE_ENABLE_TESTS)
         target_link_libraries(unified_substrate_demo PRIVATE winmm)
     endif()
 
+    # Cap'n Proto round-trip test (only when Cap'n Proto is available)
+    if(CapnProto_FOUND)
+        add_executable(test_capnp_roundtrip src/test_capnp_roundtrip.cpp)
+        target_link_libraries(test_capnp_roundtrip PRIVATE
+            neuroforge_core
+            neuroforge_regions
+            neuroforge_connectivity
+            neuroforge_encoders
+        )
+        target_include_directories(test_capnp_roundtrip PRIVATE include)
+        if(WIN32)
+            target_link_libraries(test_capnp_roundtrip PRIVATE winmm)
+        endif()
+    endif()
+
     # Unified Training Demo (Nurture/Training Phase)
     add_executable(unified_training_demo src/unified_training_demo.cpp)
     target_link_libraries(unified_training_demo PRIVATE
@@ -789,7 +984,109 @@ if(NEUROFORGE_ENABLE_TESTS)
     )
     target_include_directories(test_unified_smoke PRIVATE include)
     add_test(NAME test_unified_smoke COMMAND $<TARGET_FILE:test_unified_smoke>)
+
+    # Enhanced Auditory Cortex Test
+    
+# Test for Meta-Cognition System (Stage D)
+add_executable(test_meta_cognition tests/test_meta_cognition.cpp)
+target_link_libraries(test_meta_cognition PRIVATE
+    neuroforge_core 
+    neuroforge_regions 
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(test_meta_cognition PRIVATE include)
+add_test(NAME test_meta_cognition COMMAND $<TARGET_FILE:test_meta_cognition>)
+
+# Test for Relation Gates (Autonomous Grounding Phase 1)
+add_executable(test_relation_gates tests/test_relation_gates.cpp)
+target_link_libraries(test_relation_gates PRIVATE
+    neuroforge_core 
+    neuroforge_regions 
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(test_relation_gates PRIVATE include)
+add_test(NAME test_relation_gates COMMAND $<TARGET_FILE:test_relation_gates>)
+
+add_executable(test_auditory_cortex_enhanced tests/test_auditory_cortex_enhanced.cpp)
+    target_link_libraries(test_auditory_cortex_enhanced PRIVATE
+        neuroforge_core
+        neuroforge_regions
+        neuroforge_connectivity
+        neuroforge_encoders
+    )
+    target_include_directories(test_auditory_cortex_enhanced PRIVATE include)
+    add_test(NAME test_auditory_cortex_enhanced COMMAND $<TARGET_FILE:test_auditory_cortex_enhanced>)     
+
+# Test for Cross-Modal Integration (Stage D/E)
+add_executable(test_cross_modal tests/test_cross_modal.cpp)
+target_link_libraries(test_cross_modal PRIVATE
+    neuroforge_core
+    neuroforge_regions
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(test_cross_modal PRIVATE include)
+add_test(NAME test_cross_modal COMMAND $<TARGET_FILE:test_cross_modal>)
+
+# CuriosityNavigator Unit Test (Phase 3)
+add_executable(test_curiosity_navigator tests/test_curiosity_navigator.cpp)
+target_link_libraries(test_curiosity_navigator PRIVATE
+    neuroforge_core
+    neuroforge_regions
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(test_curiosity_navigator PRIVATE include)
+target_compile_definitions(test_curiosity_navigator PRIVATE MINIMAL_TEST_FRAMEWORK=1)
+add_test(NAME test_curiosity_navigator COMMAND $<TARGET_FILE:test_curiosity_navigator>)
+
+# Full Integration Test (Autonomous Grounding Phase 1-4)
+add_executable(test_internet_grounding_full tests/test_internet_grounding_full.cpp)
+target_link_libraries(test_internet_grounding_full PRIVATE
+    neuroforge_core
+    neuroforge_regions
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(test_internet_grounding_full PRIVATE include)
+target_compile_definitions(test_internet_grounding_full PRIVATE MINIMAL_TEST_FRAMEWORK=1)
+add_test(NAME IntegrationTest COMMAND $<TARGET_FILE:test_internet_grounding_full>)
+
+# Language Acquisition Integration Test (Phase 5)
+add_executable(test_language_acquisition tests/test_language_acquisition.cpp)
+target_link_libraries(test_language_acquisition PRIVATE
+    neuroforge_core
+    neuroforge_regions
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(test_language_acquisition PRIVATE include)
+target_compile_definitions(test_language_acquisition PRIVATE MINIMAL_TEST_FRAMEWORK=1)
+add_test(NAME test_language_acquisition COMMAND $<TARGET_FILE:test_language_acquisition>)
+
 endif()
+
+# Language Learning Demo
+add_executable(language_learning_demo demos/language_learning_demo.cpp)
+target_link_libraries(language_learning_demo PRIVATE
+    neuroforge_core
+    neuroforge_regions
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(language_learning_demo PRIVATE include)
+
+# Production Autonomous Learning Runner
+add_executable(neuroforge_learn src/neuroforge_learn.cpp)
+target_link_libraries(neuroforge_learn PRIVATE
+    neuroforge_core
+    neuroforge_regions
+    neuroforge_connectivity
+    neuroforge_encoders
+)
+target_include_directories(neuroforge_learn PRIVATE include)
 
 # Installation
 install(TARGETS neuroforge neuroforge_core neuroforge_regions neuroforge_connectivity
@@ -1012,3 +1309,60 @@ else()
         # MemoryDB will compile in stub mode without NF_HAVE_SQLITE3.
     endif()
 endif()
+
+# Phase 28 stress test executable
+add_executable(test_phase28_stress tests/test_phase28_stress.cpp)
+target_include_directories(test_phase28_stress PRIVATE include)
+target_link_libraries(test_phase28_stress PRIVATE neuroforge_core)
+
+# Phase 29 stress test executable
+add_executable(test_phase29_stress tests/test_phase29_stress.cpp)
+target_include_directories(test_phase29_stress PRIVATE include)
+target_link_libraries(test_phase29_stress PRIVATE neuroforge_core)
+
+# Phase 30 stress test executable
+add_executable(test_phase30_stress tests/test_phase30_stress.cpp)
+target_include_directories(test_phase30_stress PRIVATE include)
+target_link_libraries(test_phase30_stress PRIVATE neuroforge_core)
+
+# Phase D: Developmental Runtime session (demo)
+add_executable(run_developmental_session tests/run_developmental_session.cpp)
+target_include_directories(run_developmental_session PRIVATE include)
+target_link_libraries(run_developmental_session PRIVATE neuroforge_core)
+
+# Phase D: REAL Developmental Session (with actual browsing)
+add_executable(run_real_session tests/run_real_developmental_session.cpp)
+target_include_directories(run_real_session PRIVATE include)
+target_link_libraries(run_real_session PRIVATE neuroforge_core)
+
+# Phase E1-E4: Expression and Vision Test
+add_executable(test_expression_vision tests/test_expression_vision.cpp)
+target_include_directories(test_expression_vision PRIVATE include)
+target_link_libraries(test_expression_vision PRIVATE neuroforge_core)
+
+# Integrated Developmental Session (D + E1-E4)
+add_executable(run_integrated_session tests/run_integrated_session.cpp)
+target_include_directories(run_integrated_session PRIVATE include)
+target_link_libraries(run_integrated_session PRIVATE neuroforge_core)
+
+# Curiosity-First Autonomous Session
+add_executable(run_curiosity_session tests/run_curiosity_session.cpp)
+target_include_directories(run_curiosity_session PRIVATE include)
+target_link_libraries(run_curiosity_session PRIVATE neuroforge_core)
+
+# Visual Browsing Session (See, Click, Scroll)
+add_executable(run_visual_session tests/run_visual_session.cpp)
+target_include_directories(run_visual_session PRIVATE include)
+target_link_libraries(run_visual_session PRIVATE 
+    neuroforge_core
+    ${OpenCV_LIBS} # Link OpenCV directly for vision
+)
+if(WIN32)
+    target_link_libraries(run_visual_session PRIVATE winmm user32 gdi32)
+endif()
+target_compile_definitions(run_visual_session PRIVATE NF_HAVE_OPENCV=1)
+
+# Cap'n Proto Serialization Test
+# add_executable(test_capnproto tests/test_capnproto.cpp src/serialization/neuroforge.capnp.cpp)
+# target_include_directories(test_capnproto PRIVATE include ${CAPNP_INCLUDE_DIRS})
+# target_link_libraries(test_capnproto PRIVATE CapnProto::capnp CapnProto::kj)

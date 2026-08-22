@@ -14,6 +14,7 @@
 #include <thread>
 #include <fstream>
 #include <string>
+#include <cstdlib>
 
 using namespace NeuroForge::Core;
 
@@ -84,11 +85,17 @@ int main(int argc, char** argv) {
 
         // Optional MemoryDB wiring (path from env NF_TELEMETRY_DB or default phasec_mem.db)
         std::string db_path;
-        const char* env_db = std::getenv("NF_TELEMETRY_DB");
-        if (env_db && std::string(env_db) == "off") {
-            db_path.clear();
-        } else {
-            db_path = env_db ? std::string(env_db) : std::string("phasec_mem.db");
+        {
+            const char* env_db = std::getenv("NF_TELEMETRY_DB");
+            if (env_db != nullptr) {
+                if (std::string(env_db) == "off") {
+                    db_path.clear();
+                } else {
+                    db_path = std::string(env_db);
+                }
+            } else {
+                db_path = std::string("phasec_mem.db");
+            }
         }
         std::shared_ptr<NeuroForge::Core::MemoryDB> memdb;
         std::int64_t memdb_run_id = 0;

@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <chrono>
 #include <cassert>
+#include <cmath>
 #include <limits>
 
 namespace fs = std::filesystem;
@@ -98,7 +99,39 @@ void testBasicOperations() {
         bool reward_ok = db.insertRewardLog(ms + 1500, 102, 0.75, "unit_test", "{\"context\":\"foo\"}", run_id, reward_id);
         check(reward_ok, "Reward log insertion succeeded");
         check(reward_id > 0, "Reward log ID is valid");
-        
+
+        // Test language audit and grounding insertions (Stage C v5 groundwork)
+        std::int64_t grounding_id = 0;
+        bool grounding_ok = db.insertLanguageGroundingMap(run_id,
+                                                         ms + 1550,
+                                                         102,
+                                                         1,
+                                                         "red",
+                                                         "{\"state\":\"visual_cluster\",\"cluster_id\":3}",
+                                                         0.91,
+                                                         std::make_optional(0.12),
+                                                         "unit_test",
+                                                         grounding_id);
+        check(grounding_ok, "Language grounding map insertion succeeded");
+        check(grounding_id > 0, "Language grounding map ID is valid");
+
+        std::int64_t audit_id = 0;
+        bool audit_ok = db.insertLanguageAuditLog(run_id,
+                                                 ms + 1560,
+                                                 102,
+                                                 1,
+                                                 "ground",
+                                                 "red",
+                                                 "{\"note\":\"unit_test_grounding\"}",
+                                                 false,
+                                                 false,
+                                                 false,
+                                                 false,
+                                                 true,
+                                                 audit_id);
+        check(audit_ok, "Language audit log insertion succeeded");
+        check(audit_id > 0, "Language audit log ID is valid");
+
         // Test self-model insertion
         std::int64_t sm_id = 0;
         bool sm_ok = db.insertSelfModel(ms + 1600, 103, "{\"state\":\"ok\"}", 0.9, run_id, sm_id);
@@ -357,6 +390,7 @@ void testRewardLogIntegration() {
 
     // Now open DB and assert reward_log entries exist (at least one)
     NeuroForge::Core::MemoryDB db(test_db);
+    db.setDebug(true);
     check(db.open(), "Open integration DB");
     auto runs = db.getRuns();
     check(!runs.empty(), "At least one run present after integration run");
@@ -758,6 +792,252 @@ void testCLIPhase4UnsafeBypass() {
     check(ec == 0, "CLI accepted invalid Phase-4 values when --phase4-unsafe is set");
 }
 
+void testPreferenceMemoryCrossRunFallback() {
+    std::cout << "Testing preference memory cross-run fallback..." << std::endl;
+
+    const std::string test_db = "test_prefmem_cross_run.sqlite";
+    if (fs::exists(test_db)) {
+        fs::remove(test_db);
+    }
+
+    {
+        NeuroForge::Core::MemoryDB db(test_db);
+        check(db.open(), "DB open for preference memory cross-run test");
+        check(db.ensureSchema(), "Schema ensured for preference memory cross-run test");
+
+        auto now = std::chrono::steady_clock::now();
+        auto base_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
+        std::int64_t run1 = 0;
+        check(db.beginRun("{\"test\":\"prefmem_cross_run_1\"}", run1), "Run 1 started for preference memory cross-run test");
+        check(run1 > 0, "Run 1 id is valid");
+
+        std::int64_t pref_id = 0;
+        check(db.upsertPreferenceMemory(run1,
+                                        "alpha",
+                                        0.0,
+                                        0.7,
+                                        10,
+                                        7,
+                                        1,
+                                        static_cast<std::int64_t>(base_ms),
+                                        pref_id),
+              "Inserted preference_memory row for run 1");
+        check(pref_id > 0, "Preference memory id is valid");
+
+        std::int64_t run2 = 0;
+        check(db.beginRun("{\"test\":\"prefmem_cross_run_2\"}", run2), "Run 2 started for preference memory cross-run test");
+        check(run2 > run1, "Run 2 id is greater than run 1 id");
+
+        const auto prev = db.getLatestRunIdWithPreferenceMemory(run2);
+        check(prev.has_value(), "Found latest prior run with preference memory");
+        check(*prev == run1, "Latest prior run with preference memory is run 1");
+
+        NeuroForge::Core::StageC_AutonomyGate gate(&db);
+        auto r = gate.evaluateV3(run2, 1);
+        check(r.preference_active_n == 1, "Stage C v3 counts preferences from prior run");
+
+        std::map<std::string, double> current_params;
+        current_params["alpha"] = 0.0;
+        std::vector<std::pair<std::string, double>> deltas;
+        deltas.emplace_back("alpha", 1.0);
+        (void)gate.stabilizePreferenceDeltasV3(run2, current_params, deltas, 1, 1);
+        check(deltas.size() == 1, "Delta list preserved");
+        check(deltas[0].second < 1.0, "Delta was scaled down away from preferred value");
+
+        const auto stored_run2 = db.getPreferenceMemoryForKey(run2, "alpha");
+        check(stored_run2.has_value(), "Preference memory was copied into run 2");
+        check(std::fabs(stored_run2->strength01 - 0.7) < 1e-9, "Copied preference memory strength matches prior run");
+
+        const double strength_before = stored_run2->strength01;
+        for (int i = 0; i < 50; ++i) {
+            std::int64_t rid = 0;
+            check(db.insertSelfRevision(run2,
+                                        static_cast<std::int64_t>(base_ms + 1000 + i),
+                                        "{\"test\":\"prefmem_strength\"}",
+                                        "driver",
+                                        0.5,
+                                        0.5,
+                                        rid),
+                  "Inserted self revision for preference evidence");
+            check(rid > 0, "Self revision id valid for preference evidence");
+            check(db.insertSelfRevisionOutcome(rid,
+                                               static_cast<std::int64_t>(base_ms + 2000 + i),
+                                               "Beneficial",
+                                               0.5,
+                                               0.5,
+                                               0.0,
+                                               0.0,
+                                               0.0,
+                                               0.0,
+                                               0.0,
+                                               0.0),
+                  "Inserted self revision outcome for preference evidence");
+            check(db.insertParameterHistory(run2,
+                                            rid,
+                                            11,
+                                            "alpha",
+                                            0.0,
+                                            static_cast<std::int64_t>(base_ms + 1500 + i)),
+                  "Inserted parameter history for preference evidence");
+        }
+
+        std::vector<std::pair<std::string, double>> deltas2;
+        deltas2.emplace_back("alpha", 0.1);
+        (void)gate.stabilizePreferenceDeltasV3(run2, current_params, deltas2, 200, 200);
+        const auto stored_run2_after = db.getPreferenceMemoryForKey(run2, "alpha");
+        check(stored_run2_after.has_value(), "Preference memory exists after evidence update");
+        check(stored_run2_after->strength01 > strength_before, "Preference memory strength increased after new evidence");
+
+        db.close();
+    }
+
+    fs::remove(test_db);
+    std::cout << "Preference memory cross-run fallback test completed successfully!" << std::endl;
+}
+
+void testStageCGoalFormationV4CreatesAndReaffirmsGoals() {
+    std::cout << "Testing Stage C v4 bounded goal formation (create + reaffirm)..." << std::endl;
+
+    const std::string test_db = "test_stagec_v4_goal_create.sqlite";
+    if (fs::exists(test_db)) {
+        fs::remove(test_db);
+    }
+
+    {
+        NeuroForge::Core::MemoryDB db(test_db);
+        check(db.open(), "DB open for Stage C v4 goal formation test");
+        check(db.ensureSchema(), "Schema ensured for Stage C v4 goal formation test");
+
+        std::int64_t run_id = 0;
+        check(db.beginRun("{\"test\":\"stagec_v4_goal_create\"}", run_id), "Run started for Stage C v4 goal formation test");
+
+        auto now = std::chrono::steady_clock::now();
+        auto base_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
+        std::int64_t pref_id = 0;
+        check(db.upsertPreferenceMemory(run_id,
+                                        "alpha",
+                                        0.0,
+                                        0.9,
+                                        10,
+                                        10,
+                                        0,
+                                        static_cast<std::int64_t>(base_ms),
+                                        pref_id),
+              "Inserted preference_memory row for v4 goal formation test");
+        check(pref_id > 0, "Preference memory id valid for v4 goal formation test");
+
+        std::int64_t cid = 0;
+        check(db.insertSelfConsistency(run_id,
+                                       static_cast<std::int64_t>(base_ms + 1),
+                                       0.95,
+                                       "ok",
+                                       "{}",
+                                       "seed",
+                                       cid),
+              "Inserted self-consistency allow signal for v4 goal formation test");
+
+        std::int64_t eid = 0;
+        check(db.insertEthicsRegulator(run_id,
+                                       static_cast<std::int64_t>(base_ms + 2),
+                                       "allow",
+                                       "{}",
+                                       eid),
+              "Inserted ethics allow signal for v4 goal formation test");
+
+        NeuroForge::Core::AutonomyEnvelope env{};
+        env.autonomy_score = 0.8;
+        env.valid = true;
+
+        NeuroForge::Core::StageC_AutonomyGate gate(&db);
+        const auto r1 = gate.evaluateAndApplyV4(env, run_id, 200);
+
+        check(!r1.goal_governance_veto, "Stage C v4 goal formation not vetoed under allow governance");
+        check(r1.goal_candidate_n >= 1, "Stage C v4 finds at least one goal candidate");
+        check(r1.goal_created_n == 1, "Stage C v4 created one goal");
+        check(r1.goal_reaffirmed_n == 0, "Stage C v4 did not reaffirm on first creation pass");
+
+        const std::string desc = "Preserve internal coherence by maintaining preference 'alpha' near 0.000";
+        const auto goal_id1 = db.findGoalByDescription(desc, run_id);
+        check(goal_id1.has_value(), "Created goal is findable by description");
+
+        const auto r2 = gate.evaluateAndApplyV4(env, run_id, 200);
+        check(r2.goal_created_n == 0, "Stage C v4 did not create a duplicate goal on reaffirm pass");
+        check(r2.goal_reaffirmed_n == 1, "Stage C v4 reaffirmed the existing goal");
+
+        const auto goal_id2 = db.findGoalByDescription(desc, run_id);
+        check(goal_id2.has_value(), "Reaffirmed goal remains findable by description");
+        check(*goal_id2 == *goal_id1, "Reaffirmed goal id matches original goal id");
+
+        db.close();
+    }
+
+    fs::remove(test_db);
+    std::cout << "Stage C v4 bounded goal formation test completed successfully!" << std::endl;
+}
+
+void testStageCGoalFormationV4VetoPreventsGoalCreation() {
+    std::cout << "Testing Stage C v4 bounded goal formation (governance veto)..." << std::endl;
+
+    const std::string test_db = "test_stagec_v4_goal_veto.sqlite";
+    if (fs::exists(test_db)) {
+        fs::remove(test_db);
+    }
+
+    {
+        NeuroForge::Core::MemoryDB db(test_db);
+        check(db.open(), "DB open for Stage C v4 goal veto test");
+        check(db.ensureSchema(), "Schema ensured for Stage C v4 goal veto test");
+
+        std::int64_t run_id = 0;
+        check(db.beginRun("{\"test\":\"stagec_v4_goal_veto\"}", run_id), "Run started for Stage C v4 goal veto test");
+
+        auto now = std::chrono::steady_clock::now();
+        auto base_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+
+        std::int64_t pref_id = 0;
+        check(db.upsertPreferenceMemory(run_id,
+                                        "alpha",
+                                        0.0,
+                                        0.9,
+                                        10,
+                                        10,
+                                        0,
+                                        static_cast<std::int64_t>(base_ms),
+                                        pref_id),
+              "Inserted preference_memory row for v4 goal veto test");
+
+        std::int64_t eid = 0;
+        check(db.insertEthicsRegulator(run_id,
+                                       static_cast<std::int64_t>(base_ms + 2),
+                                       "deny",
+                                       "{\"reason\":\"test\"}",
+                                       eid),
+              "Inserted ethics deny signal for v4 goal veto test");
+
+        NeuroForge::Core::AutonomyEnvelope env{};
+        env.autonomy_score = 0.8;
+        env.valid = true;
+
+        NeuroForge::Core::StageC_AutonomyGate gate(&db);
+        const auto r = gate.evaluateAndApplyV4(env, run_id, 200);
+
+        check(r.goal_governance_veto, "Stage C v4 goal formation vetoed under deny governance");
+        check(r.goal_created_n == 0, "Stage C v4 did not create goals when vetoed");
+        check(r.goal_reaffirmed_n == 0, "Stage C v4 did not reaffirm goals when vetoed");
+
+        const std::string desc = "Preserve internal coherence by maintaining preference 'alpha' near 0.000";
+        const auto goal_id = db.findGoalByDescription(desc, run_id);
+        check(!goal_id.has_value(), "No goal row exists when governance veto is active");
+
+        db.close();
+    }
+
+    fs::remove(test_db);
+    std::cout << "Stage C v4 bounded goal formation veto test completed successfully!" << std::endl;
+}
+
 void testCLIRWCIDisallowedAutonomyCoupling() {
     std::cout << "Testing CLI RWCI disallowed autonomy coupling (expect exit code 2)..." << std::endl;
     auto exe = find_neuroforge_exe();
@@ -794,6 +1074,9 @@ int main() {
         testStageCGatingNoHistory();
         testStageCGatingNeutralOnly();
         testStageCGatingHarmfulOnly();
+        testPreferenceMemoryCrossRunFallback();
+        testStageCGoalFormationV4CreatesAndReaffirmsGoals();
+        testStageCGoalFormationV4VetoPreventsGoalCreation();
         testCLIPhase4ShortFlagsValid();
         testCLIPhase4InvalidValues();
         testCLIPhase4UnsafeBypass();

@@ -8,7 +8,8 @@
 ---
 
 ## Governance (Future Work)
-- Stage C v2: Learning from self-revision outcomes (not started)
+- Stage C v2: Implemented governance-only autonomy gating with Autonomy Credit and harm-risk cap
+- Stage C v3: Implemented preference stabilization (delta scaling) with `preference_memory`
 
 ## Stage C v1 — Freeze Criteria (Governance-Only)
 
@@ -202,7 +203,10 @@ No document implies capability expansion.
 - Stage 7
 - Stage 7.5 (frozen)
 - Stage C v1
-- Stage C v2 (future, not implemented)
+- Stage C v2 (implemented)
+- Stage C v3 (implemented)
+- Stage C v4 (implemented)
+- Stage C v5 (implemented)
 
 **Pass condition:**  
 No ambiguity about what exists today.

@@ -17,7 +17,7 @@ Self-Revision (Stage 7)
         ↓
 Outcome Evaluation (Stage 7.5)
         ↓
-Autonomy Gating (Stage C v1)
+Autonomy & Learning Governance (Stage C v1/v2/v3/v4/v5)
         ↓
 Existing Action & Learning Systems
 
@@ -49,6 +49,75 @@ Key properties:
 - Does not introduce new goals, learning rules, or revision logic
 
 Stage C v1 is a governance mechanism, not a capability expansion.
+
+### Stage C v2 — Governance-Only Autonomy Gating (earned Autonomy Credit + harm-risk)
+
+Stage C v2 computes two cap multipliers:
+
+- `harm_risk_cap_multiplier` from a conservative upper bound over recent `self_revision_outcomes`
+- `autonomy_credit_cap_multiplier` from a persisted `Autonomy Credit` scalar in `autonomy_credit_log`
+
+The effective cap is:
+
+- `autonomy_cap_multiplier = min(harm_risk_cap_multiplier, autonomy_credit_cap_multiplier)`
+
+Key properties:
+- Reads `self_revision_outcomes` and latest `autonomy_credit_log` for cap computation
+- Updates and persists Autonomy Credit telemetry to `autonomy_credit_log` at revision boundaries
+- Does not gate actions directly and never increases autonomy beyond the base envelope
+- Surfaces the decision in `metacognition.self_explanation_json` under `stage_c_v2`
+
+References:
+- Gate + credit logic: `src/core/StageC_AutonomyGate.cpp`
+- Phase 11 wiring: `src/core/Phase11SelfRevision.cpp`
+- Phase 10 narrative injection: `src/core/Phase10SelfExplanation.cpp`
+- Mechanism doc: `docs/03_MECHANISMS/StageC_v2_Autonomy_Gating.md`
+
+### Stage C v3 — Governance-Only Cap + Preference Stabilization (delta scaling)
+
+Stage C v3 preserves the Stage C v2 autonomy cap computation and adds a stabilization pass that scales Phase 11 parameter deltas when they would move parameters away from empirically derived preferred values.
+
+Key properties:
+- Computes the same cap multipliers as v2 (`harm_risk_cap_multiplier`, `autonomy_credit_cap_multiplier`, and `autonomy_cap_multiplier`).
+- Derives preference signals by joining `parameter_history` and `self_revision_outcomes` on `revision_id`.
+- Persists per-parameter preferences to `preference_memory` (`preferred_value`, `strength01`, evidence counters).
+- Scales revision deltas in Phase 11 via `StageC_AutonomyGate::stabilizePreferenceDeltasV3(...)` before the revision proposal is emitted.
+- Surfaces the decision in `metacognition.self_explanation_json` under `stage_c_v3` (including preference telemetry fields).
+
+References:
+- Gate + stabilization: `src/core/StageC_AutonomyGate.cpp`
+- Phase 11 wiring + delta scaling: `src/core/Phase11SelfRevision.cpp`
+- Phase 10 narrative injection: `src/core/Phase10SelfExplanation.cpp`
+- Memory schema: `src/core/MemoryDB.cpp::ensureSchema` (`preference_memory`)
+- Mechanism doc: `docs/03_MECHANISMS/StageC_v2_Autonomy_Gating.md`
+
+### Stage C v4 — Governance-Only Bounded Goal Formation
+
+Stage C v4 preserves the v3 autonomy cap + preference stabilization behavior and adds bounded goal formation with governance veto.
+
+Key properties:
+- Uses `preference_memory` as a candidate source and upserts bounded goals into `goal_nodes` with a TTL.
+- Applies a governance veto when safety conditions fail (e.g., ethics decision `deny` or low self-consistency).
+- Surfaces goal telemetry in `metacognition.self_explanation_json` under `stage_c_v4`.
+
+References:
+- Gate + bounded goals: `src/core/StageC_AutonomyGate.cpp`
+- Phase 11 wiring: `src/core/Phase11SelfRevision.cpp`
+- Phase 10 narrative injection: `src/core/Phase10SelfExplanation.cpp`
+- Schema: `src/core/MemoryDB.cpp::ensureSchema` (`goal_nodes`)
+- Mechanism doc: `docs/03_MECHANISMS/StageC_v2_Autonomy_Gating.md`
+
+### Stage C v5 — Scope-Gated Learning (Audit-Required)
+
+Stage C v5 preserves the v4 governance computation and adds runtime learning governance for experimental subsystems:
+
+- Learning is denied unless a MemoryDB run is active (audit-ready) and the operator explicitly opens a matching scope via `--open-scope=NAME`.
+- Scope open/allow/block decisions are written to `language_audit_log`.
+
+References:
+- CLI and scope gates: `src/main.cpp`
+- Audit schema + insertion: `src/core/MemoryDB.cpp` (`language_audit_log`)
+- Mechanism doc: `docs/03_MECHANISMS/StageC_v2_Autonomy_Gating.md` (Stage C v5 section)
 
 ## Addendum: Phase 10 and Phase 11 Overview
 

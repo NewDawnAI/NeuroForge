@@ -57,7 +57,7 @@ public:
             return m;
         }
 
-        // Compute simple statistics
+        // Compute simple statistics: mean and variance of the activation pattern
         float max_act = 0.0f;
         float sum = 0.0f;
         for (float a : activation_pattern) {
@@ -65,6 +65,7 @@ public:
             sum += a;
         }
         float mean = sum / static_cast<float>(activation_pattern.size());
+        
         float var = 0.0f;
         for (float a : activation_pattern) {
             float d = a - mean;
@@ -73,6 +74,7 @@ public:
         var /= static_cast<float>(activation_pattern.size());
 
         // Hazard probability from spike relative to threshold (internal measure)
+        // Uses a sigmoid to smoothly map the excess activation to a probability [0,1]
         float hp_internal = sigmoid((max_act - config_.hazard_threshold) * 4.0f);
         // Fuse with any external hazard input (e.g., audio RMS or CLI constant)
         m.hazard_probability = clamp01(std::max(hp_internal, external_hazard_));

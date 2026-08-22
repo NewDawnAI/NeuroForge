@@ -68,11 +68,18 @@ cd vcpkg
 .\vcpkg install capnproto:x64-windows
 .\vcpkg install sqlite3:x64-windows
 .\vcpkg install opencv4:x64-windows  # Optional, for visual features
-
-# Optional: Embedded browser for sandbox window
-# Enables Edge WebView2 support via CMake's unofficial-webview2 target
-.\vcpkg install unofficial-webview2:x64-windows
+.\vcpkg install webview2:x64-windows  # Optional, for embedded browser sandbox
 ```
+
+#### Build Verification (CMake auto-detection)
+After configuring with vcpkg, CMake will output detection status:
+```
+-- SQLite3 enabled: MemoryDB persistence available (optional — for debugging/explainability)
+-- WebView2 found: enabling embedded browser sandbox
+```
+If SQLite3 is found, `NF_HAVE_SQLITE3=1` is defined and MemoryDB (4001 lines) is fully active.
+If WebView2 is found, `NF_HAVE_WEBVIEW2=1` is defined and the browser sandbox is enabled.
+Both are optional and gracefully degrade if absent.
 
 #### Sandbox Build Notes (Windows)
 ```powershell
@@ -687,9 +694,9 @@ doxygen docs/language_system.doxy
 
 ---
 
-**Last Updated**: December 2024  
-**Version**: 2.0  
-**Status**: Production Ready
+**Last Updated**: March 2026  
+**Version**: 2.1  
+**Status**: Production Ready (SQLite3 + WebView2 integrated via vcpkg)
 
 For additional support, see [Language_System_Troubleshooting.md](Language_System_Troubleshooting.md) or contact the development team.
 #### Verify Sandbox Window Integration

@@ -371,8 +371,19 @@ float SpatialNavigationBias::estimateDistance(const SpatialLocation& from, const
     float euclidean_distance = std::sqrt(dx * dx + dy * dy);
     
     // Add some noise to simulate biological estimation error
-    float error_factor = 1.0f + (1.0f - config_.distance_estimation_accuracy) * 
-                        (static_cast<float>(rand()) / RAND_MAX - 0.5f) * 0.4f;
+    auto xorshift32 = [](std::uint32_t x) {
+        x ^= x << 13;
+        x ^= x >> 17;
+        x ^= x << 5;
+        return x;
+    };
+    std::uint32_t h = config_.random_seed;
+    h ^= xorshift32(static_cast<std::uint32_t>(from.x * 1000.0f) + 0x9e3779b9u);
+    h ^= xorshift32(static_cast<std::uint32_t>(from.y * 1000.0f) + 0x85ebca6bu);
+    h ^= xorshift32(static_cast<std::uint32_t>(to.x * 1000.0f) + 0xc2b2ae35u);
+    h ^= xorshift32(static_cast<std::uint32_t>(to.y * 1000.0f) + 0x27d4eb2fu);
+    float u = (static_cast<float>(h) / 4294967295.0f) - 0.5f;
+    float error_factor = 1.0f + (1.0f - config_.distance_estimation_accuracy) * u * 0.4f;
     
     return euclidean_distance * error_factor;
 }

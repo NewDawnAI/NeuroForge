@@ -1,0 +1,15 @@
+﻿[1/2] Building CXX object CMakeFiles/test_internet_grounding_full.dir/tests/test_internet_grounding_full.cpp.obj
+FAILED: CMakeFiles/test_internet_grounding_full.dir/tests/test_internet_grounding_full.cpp.obj 
+C:\Strawberry\c\bin\c++.exe -DMINIMAL_TEST_FRAMEWORK=1 -DNF_HAVE_SQLITE3=1 -DNF_HAVE_WEBVIEW2=1 -IC:/Users/ashis/Desktop/NeuroForge/include -IC:/Users/ashis/Desktop/NeuroForge/src -IC:/Users/ashis/Desktop/NeuroForge/build -IC:/Users/ashis/Desktop/NeuroForge/build/schemas -isystem C:/vcpkg/buildtrees/eigen3/src/a8c0519f1c-ba17d9986c.clean -isystem C:/Users/ashis/Desktop/NeuroForge/external/vcpkg/installed/x64-windows/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -MD -MT CMakeFiles/test_internet_grounding_full.dir/tests/test_internet_grounding_full.cpp.obj -MF CMakeFiles\test_internet_grounding_full.dir\tests\test_internet_grounding_full.cpp.obj.d -o CMakeFiles/test_internet_grounding_full.dir/tests/test_internet_grounding_full.cpp.obj -c C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp: In function 'void setup()':
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:81:9: error: 'BrainConfig' is not a member of 'NeuroForge::Core'
+   81 |   Core::BrainConfig brain_config;
+      |         ^~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:82:51: error: 'brain_config' was not declared in this scope
+   82 |   brain = std::make_shared<Core::HypergraphBrain>(brain_config);
+      |                                                   ^~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp: In lambda function:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:141:44: warning: unused parameter 'created' [-Wunused-parameter]
+  141 |                                       bool created) {
+      |                                       ~~~~~^~~~~~~
+ninja: build stopped: subcommand failed.

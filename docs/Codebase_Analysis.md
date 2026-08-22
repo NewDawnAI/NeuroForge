@@ -246,8 +246,9 @@ graph TB
         subgraph "External Dependencies"
             CV[OpenCV 4.x<br/>Computer Vision]
             CP[Cap'n Proto<br/>Serialization]
-            SQ[SQLite3<br/>Database]
+            SQ[SQLite3<br/>Optional Persistence]
             THR[Threads<br/>Concurrency]
+            WV[WebView2<br/>Browser Sandbox]
         end
         
         subgraph "Executables"
@@ -316,8 +317,10 @@ graph TB
 
 #### 4. **Memory System Innovation** ✅
 - **7-System Architecture**: Comprehensive cognitive memory model
+- **Vector-Only Cognition**: Primary APIs use embedding vectors, not strings
 - **Cross-System Integration**: Effective coordination between memory types
-- **Persistence**: SQLite-based long-term storage with serialization
+- **Optional SQLite3 Persistence**: MemoryDB (4001 lines) for debugging/explainability, gated by `NF_HAVE_SQLITE3`
+- **6-Thread Parallel Architecture**: Perception, Grid, Web, Cognition, Consolidation, Conversation
 - **Performance**: Efficient memory access and management
 
 ### Technical Concerns
@@ -602,6 +605,6 @@ NeuroForge represents valuable research in unified cognitive architectures, but 
 
 ---
 
-*Analysis completed: January 2025*  
-*Codebase version: Latest commit*  
+*Analysis completed: March 2026*  
+*Codebase version: Latest commit (SQLite3 + WebView2 + 6-thread parallel cognition)*  
 *Analysis scope: Complete source code excluding documentation*

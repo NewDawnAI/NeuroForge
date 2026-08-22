@@ -67,7 +67,7 @@ Notes
 ## ADS‑2 Triplet‑Grounding Run & Evaluation (New)
 ```powershell
 # 1) Kick off ADS‑2 training with triplets and snapshots
-PowerShell -File .\scripts\ads2_run.ps1 -RunName ADS2_run01 -Dataset c:\Users\ashis\Desktop\NeuroForge\flickr30k_triplets -Limit 800
+PowerShell -File .\scripts\ads2_run.ps1 -RunName ADS2_run01 -Dataset C:\path\to\flickr30k_triplets -Limit 800
 
 # 2) Evaluate triplet grounding and per‑teacher statistics
 python tools\eval_triplet_grounding.py --db .\experiments\ADS2.db --cmd analyze --limit 800 --out .\exports\ADS2\grounding_metrics.json

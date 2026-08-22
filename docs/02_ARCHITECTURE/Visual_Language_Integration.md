@@ -293,4 +293,24 @@ Success Rate: 100.0%
 - **Cross-cultural variations** in motherese-face associations
 - **Neuroplasticity** modeling for adaptive cross-modal learning
 
+## WorldModelCortex Integration (JEPA-Style)
+
+The visual-linguistic integration now flows through the **WorldModelCortex** for unified latent-space learning:
+
+```cpp
+// Feed visual-linguistic features to WorldModelCortex
+WorldStateComponents components;
+components.visual = visual_cortex.getFeatures();
+components.auditory = voice_bias.getPhonemeFeatures();
+components.social = social_perception.getFaceGazeFeatures();
+components.linguistic = language_system.getActiveTokenEmbeddings();
+
+WorldState z_t = world_model_cortex.processCycle(components);
+// z_t now contains unified latent representation
+// Prediction errors drive curiosity via NoveltyBias
+```
+
+**Key insight**: Language embeddings are now a **perceptual modality** (weight=0.07), enabling infant-like co-binding:
+- `[See ball] + [Hear "ball"]` → same latent region → concept grounds
+
 This visual-linguistic integration system provides the foundation for human-like language grounding through multimodal experience, enabling NeuroForge to learn language the way infants do: through rich sensory associations between sounds, faces, and visual attention.

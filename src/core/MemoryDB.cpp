@@ -229,6 +229,17 @@ bool MemoryDB::ensureSchema() {
         "  serialized_data TEXT NOT NULL,"
         "  FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE"
         ");"
+        "CREATE TABLE IF NOT EXISTS phasec_stats ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  run_id INTEGER NOT NULL,"
+        "  ts_ms INTEGER NOT NULL,"
+        "  step INTEGER NOT NULL,"
+        "  assemblies INTEGER NOT NULL DEFAULT 0,"
+        "  bindings INTEGER NOT NULL DEFAULT 0,"
+        "  avg_coherence REAL NOT NULL DEFAULT 0.0,"
+        "  growth_velocity REAL NOT NULL DEFAULT 0.0,"
+        "  FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE"
+        ");"
         "CREATE TABLE IF NOT EXISTS hippocampal_snapshots ("
         "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "  run_id INTEGER NOT NULL,"
@@ -242,6 +253,8 @@ bool MemoryDB::ensureSchema() {
         "CREATE INDEX IF NOT EXISTS idx_substrate_states_type ON substrate_states(state_type);"
         "CREATE INDEX IF NOT EXISTS idx_substrate_states_region ON substrate_states(region_id);"
         "CREATE INDEX IF NOT EXISTS idx_substrate_states_ts ON substrate_states(ts_ms);"
+        "CREATE INDEX IF NOT EXISTS idx_phasec_stats_run_ts ON phasec_stats(run_id, ts_ms);"
+        "CREATE INDEX IF NOT EXISTS idx_phasec_stats_run_step ON phasec_stats(run_id, step);"
         "CREATE INDEX IF NOT EXISTS idx_hippocampal_priority ON hippocampal_snapshots(priority DESC);"
         "CREATE INDEX IF NOT EXISTS idx_hippocampal_ts ON hippocampal_snapshots(ts_ms);"
         "CREATE TABLE IF NOT EXISTS embeddings ("
@@ -258,6 +271,39 @@ bool MemoryDB::ensureSchema() {
         ");"
         "CREATE INDEX IF NOT EXISTS idx_embeddings_run_step ON embeddings(run_id, step);"
         "CREATE INDEX IF NOT EXISTS idx_embeddings_content ON embeddings(content_id);"
+        "CREATE TABLE IF NOT EXISTS language_grounding_map ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  run_id INTEGER NOT NULL,"
+        "  ts_ms INTEGER NOT NULL,"
+        "  step INTEGER NOT NULL,"
+        "  stage INTEGER NOT NULL,"
+        "  token TEXT NOT NULL,"
+        "  internal_state_json TEXT NOT NULL,"
+        "  correlation REAL NOT NULL,"
+        "  description_length_delta REAL,"
+        "  source TEXT,"
+        "  FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE"
+        ");"
+        "CREATE INDEX IF NOT EXISTS idx_language_grounding_run_ts ON language_grounding_map(run_id, ts_ms);"
+        "CREATE INDEX IF NOT EXISTS idx_language_grounding_token ON language_grounding_map(token);"
+        "CREATE TABLE IF NOT EXISTS language_audit_log ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  run_id INTEGER NOT NULL,"
+        "  ts_ms INTEGER NOT NULL,"
+        "  step INTEGER NOT NULL,"
+        "  stage INTEGER NOT NULL,"
+        "  event TEXT NOT NULL,"
+        "  token TEXT,"
+        "  details_json TEXT NOT NULL,"
+        "  wrote_preference_memory INTEGER NOT NULL DEFAULT 0,"
+        "  wrote_goal_nodes INTEGER NOT NULL DEFAULT 0,"
+        "  wrote_autonomy_credit INTEGER NOT NULL DEFAULT 0,"
+        "  wrote_identity_vector INTEGER NOT NULL DEFAULT 0,"
+        "  allowed INTEGER NOT NULL DEFAULT 1,"
+        "  FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE"
+        ");"
+        "CREATE INDEX IF NOT EXISTS idx_language_audit_run_ts ON language_audit_log(run_id, ts_ms);"
+        "CREATE INDEX IF NOT EXISTS idx_language_audit_event ON language_audit_log(event);"
         // Phase 6: Hybrid Reasoning Engine tables
         "CREATE TABLE IF NOT EXISTS options ("
         "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -398,6 +444,11 @@ bool MemoryDB::ensureSchema() {
         "  priority REAL NOT NULL DEFAULT 0.5,"
         "  stability REAL NOT NULL DEFAULT 0.5,"
         "  origin_reflection_id INTEGER,"
+        "  created_ts_ms INTEGER NOT NULL DEFAULT 0,"
+        "  expires_ts_ms INTEGER NOT NULL DEFAULT 0,"
+        "  reaffirm_n INTEGER NOT NULL DEFAULT 0,"
+        "  vetoed INTEGER NOT NULL DEFAULT 0,"
+        "  veto_reason TEXT,"
         "  FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE,"
         "  FOREIGN KEY(origin_reflection_id) REFERENCES reflections(id) ON DELETE SET NULL"
         ");"
@@ -512,6 +563,18 @@ bool MemoryDB::ensureSchema() {
         ");"
         "CREATE INDEX IF NOT EXISTS idx_self_consistency_run ON self_consistency_log(run_id);"
         "CREATE INDEX IF NOT EXISTS idx_self_consistency_ts ON self_consistency_log(ts_ms);"
+        // Stage C v2: Autonomy Credit log
+        "CREATE TABLE IF NOT EXISTS autonomy_credit_log ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  run_id INTEGER NOT NULL,"
+        "  ts_ms INTEGER NOT NULL,"
+        "  credit_value REAL NOT NULL,"
+        "  decay_rate REAL NOT NULL,"
+        "  driver_json TEXT,"
+        "  FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE"
+        ");"
+        "CREATE INDEX IF NOT EXISTS idx_autonomy_credit_run ON autonomy_credit_log(run_id);"
+        "CREATE INDEX IF NOT EXISTS idx_autonomy_credit_ts ON autonomy_credit_log(ts_ms);"
         // Phase 13: Autonomy Envelope decision log
         "CREATE TABLE IF NOT EXISTS autonomy_envelope_log ("
         "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -559,6 +622,21 @@ bool MemoryDB::ensureSchema() {
         ");"
         "CREATE INDEX IF NOT EXISTS idx_paramhist_run ON parameter_history(run_id);"
         "CREATE INDEX IF NOT EXISTS idx_paramhist_ts ON parameter_history(ts_ms);"
+        "CREATE TABLE IF NOT EXISTS preference_memory ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  run_id INTEGER NOT NULL,"
+        "  key TEXT NOT NULL,"
+        "  preferred_value REAL NOT NULL,"
+        "  strength01 REAL NOT NULL,"
+        "  evidence_n INTEGER NOT NULL DEFAULT 0,"
+        "  beneficial_n INTEGER NOT NULL DEFAULT 0,"
+        "  harmful_n INTEGER NOT NULL DEFAULT 0,"
+        "  updated_ts_ms INTEGER,"
+        "  FOREIGN KEY(run_id) REFERENCES runs(id) ON DELETE CASCADE,"
+        "  UNIQUE(run_id, key)"
+        ");"
+        "CREATE INDEX IF NOT EXISTS idx_prefmem_run ON preference_memory(run_id);"
+        "CREATE INDEX IF NOT EXISTS idx_prefmem_strength ON preference_memory(strength01);"
         "CREATE TABLE IF NOT EXISTS autonomy_modulation_log ("
         "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
         "  run_id INTEGER NOT NULL,"
@@ -624,6 +702,50 @@ bool MemoryDB::ensureSchema() {
     if (!has_kappa) {
         (void)exec("ALTER TABLE context_peer_log ADD COLUMN kappa REAL DEFAULT 0.0;");
     }
+
+    bool has_goal_created_ts = false;
+    bool has_goal_expires_ts = false;
+    bool has_goal_expiry_ts_legacy = false;
+    bool has_goal_reaffirm_n = false;
+    bool has_goal_vetoed = false;
+    bool has_goal_veto_reason = false;
+    {
+        sqlite3_stmt* stmt = nullptr;
+        const char* pragma = "PRAGMA table_info(goal_nodes);";
+        if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), pragma, -1, &stmt, nullptr) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                const unsigned char* name = sqlite3_column_text(stmt, 1);
+                if (!name) continue;
+                std::string col(reinterpret_cast<const char*>(name));
+                if (col == "created_ts_ms") has_goal_created_ts = true;
+                else if (col == "expires_ts_ms") has_goal_expires_ts = true;
+                else if (col == "expiry_ts_ms") has_goal_expiry_ts_legacy = true;
+                else if (col == "reaffirm_n") has_goal_reaffirm_n = true;
+                else if (col == "vetoed") has_goal_vetoed = true;
+                else if (col == "veto_reason") has_goal_veto_reason = true;
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+    if (!has_goal_created_ts) {
+        (void)exec("ALTER TABLE goal_nodes ADD COLUMN created_ts_ms INTEGER NOT NULL DEFAULT 0;");
+    }
+    if (!has_goal_expires_ts) {
+        (void)exec("ALTER TABLE goal_nodes ADD COLUMN expires_ts_ms INTEGER NOT NULL DEFAULT 0;");
+    }
+    if (!has_goal_expires_ts && has_goal_expiry_ts_legacy) {
+        (void)exec("UPDATE goal_nodes SET expires_ts_ms = COALESCE(expiry_ts_ms, 0) WHERE expires_ts_ms = 0;");
+    }
+    if (!has_goal_reaffirm_n) {
+        (void)exec("ALTER TABLE goal_nodes ADD COLUMN reaffirm_n INTEGER NOT NULL DEFAULT 0;");
+    }
+    if (!has_goal_vetoed) {
+        (void)exec("ALTER TABLE goal_nodes ADD COLUMN vetoed INTEGER NOT NULL DEFAULT 0;");
+    }
+    if (!has_goal_veto_reason) {
+        (void)exec("ALTER TABLE goal_nodes ADD COLUMN veto_reason TEXT;");
+    }
+    (void)exec("CREATE INDEX IF NOT EXISTS idx_goal_nodes_expires ON goal_nodes(expires_ts_ms);");
 
     // Backfill migration: ensure reward_updates column exists for existing DBs
     bool has_reward_updates = false;
@@ -789,6 +911,81 @@ bool MemoryDB::insertLearningStats(std::int64_t ts_ms,
     (void)ts_ms; (void)step; (void)processing_hz; (void)s; (void)run_id;
     return false;
 #endif
+}
+
+bool MemoryDB::insertPhaseCStats(std::int64_t ts_ms,
+                                 std::uint64_t step,
+                                 std::int64_t assemblies,
+                                 std::int64_t bindings,
+                                 double avg_coherence,
+                                 double growth_velocity,
+                                 std::int64_t run_id,
+                                 std::int64_t& out_phasec_id) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_) return false;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "INSERT INTO phasec_stats (run_id, ts_ms, step, assemblies, bindings, avg_coherence, growth_velocity)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for insertPhaseCStats: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return false;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int64(stmt, 2, ts_ms);
+    sqlite3_bind_int64(stmt, 3, static_cast<sqlite3_int64>(step));
+    sqlite3_bind_int64(stmt, 4, static_cast<sqlite3_int64>(assemblies));
+    sqlite3_bind_int64(stmt, 5, static_cast<sqlite3_int64>(bindings));
+    sqlite3_bind_double(stmt, 6, avg_coherence);
+    sqlite3_bind_double(stmt, 7, growth_velocity);
+    bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
+    if (!ok && debug_) std::cerr << "[MemoryDB] step failed for insertPhaseCStats: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+    sqlite3_finalize(stmt);
+    if (!ok) return false;
+    out_phasec_id = sqlite3_last_insert_rowid(static_cast<sqlite3*>(db_));
+    return true;
+#else
+    (void)ts_ms; (void)step; (void)assemblies; (void)bindings; (void)avg_coherence; (void)growth_velocity; (void)run_id; (void)out_phasec_id;
+    return false;
+#endif
+}
+
+std::vector<MemoryDB::LearningStatsEntry> MemoryDB::getRecentLearningStats(std::int64_t run_id, int n) {
+#ifdef NF_HAVE_SQLITE3
+    std::vector<LearningStatsEntry> out;
+    if (!db_ || run_id <= 0 || n <= 0) return out;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "SELECT ts_ms, step, avg_energy, metabolic_hazard FROM learning_stats WHERE run_id = ? ORDER BY ts_ms DESC LIMIT ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getRecentLearningStats: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return out;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int(stmt, 2, n);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        LearningStatsEntry e;
+        e.ts_ms = sqlite3_column_int64(stmt, 0);
+        e.step = static_cast<std::uint64_t>(sqlite3_column_int64(stmt, 1));
+        e.avg_energy = sqlite3_column_double(stmt, 2);
+        e.metabolic_hazard = sqlite3_column_double(stmt, 3);
+        out.push_back(std::move(e));
+    }
+    sqlite3_finalize(stmt);
+    return out;
+#else
+    (void)run_id;
+    (void)n;
+    return {};
+#endif
+}
+
+std::optional<MemoryDB::LearningStatsEntry> MemoryDB::getLatestLearningStats(std::int64_t run_id) {
+    auto rows = getRecentLearningStats(run_id, 1);
+    if (rows.empty()) return std::nullopt;
+    return rows.front();
 }
 
 bool MemoryDB::insertExperience(std::int64_t ts_ms,
@@ -1710,6 +1907,106 @@ bool MemoryDB::insertAction(std::int64_t ts_ms,
 #endif
 }
 
+bool MemoryDB::insertLanguageGroundingMap(std::int64_t run_id,
+                                         std::int64_t ts_ms,
+                                         std::uint64_t step,
+                                         int stage,
+                                         const std::string& token,
+                                         const std::string& internal_state_json,
+                                         double correlation,
+                                         std::optional<double> description_length_delta,
+                                         const std::string& source,
+                                         std::int64_t& out_grounding_id) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_) return false;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "INSERT INTO language_grounding_map (run_id, ts_ms, step, stage, token, internal_state_json, correlation, description_length_delta, source)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for insertLanguageGroundingMap: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return false;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int64(stmt, 2, ts_ms);
+    sqlite3_bind_int64(stmt, 3, static_cast<sqlite3_int64>(step));
+    sqlite3_bind_int(stmt, 4, stage);
+    sqlite3_bind_text(stmt, 5, token.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_text(stmt, 6, internal_state_json.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_double(stmt, 7, correlation);
+    if (description_length_delta.has_value()) {
+        sqlite3_bind_double(stmt, 8, description_length_delta.value());
+    } else {
+        sqlite3_bind_null(stmt, 8);
+    }
+    sqlite3_bind_text(stmt, 9, source.c_str(), -1, SQLITE_TRANSIENT);
+    bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
+    if (!ok && debug_) std::cerr << "[MemoryDB] step failed for insertLanguageGroundingMap: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+    sqlite3_finalize(stmt);
+    if (!ok) return false;
+    out_grounding_id = sqlite3_last_insert_rowid(static_cast<sqlite3*>(db_));
+    if (debug_) std::cerr << "[MemoryDB] inserted language_grounding_map id=" << out_grounding_id << " token=" << token << std::endl;
+    return true;
+#else
+    (void)run_id; (void)ts_ms; (void)step; (void)stage; (void)token; (void)internal_state_json; (void)correlation; (void)description_length_delta; (void)source; (void)out_grounding_id;
+    return false;
+#endif
+}
+
+bool MemoryDB::insertLanguageAuditLog(std::int64_t run_id,
+                                     std::int64_t ts_ms,
+                                     std::uint64_t step,
+                                     int stage,
+                                     const std::string& event,
+                                     const std::string& token,
+                                     const std::string& details_json,
+                                     bool wrote_preference_memory,
+                                     bool wrote_goal_nodes,
+                                     bool wrote_autonomy_credit,
+                                     bool wrote_identity_vector,
+                                     bool allowed,
+                                     std::int64_t& out_audit_id) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_) return false;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "INSERT INTO language_audit_log (run_id, ts_ms, step, stage, event, token, details_json, wrote_preference_memory, wrote_goal_nodes, wrote_autonomy_credit, wrote_identity_vector, allowed)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for insertLanguageAuditLog: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return false;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int64(stmt, 2, ts_ms);
+    sqlite3_bind_int64(stmt, 3, static_cast<sqlite3_int64>(step));
+    sqlite3_bind_int(stmt, 4, stage);
+    sqlite3_bind_text(stmt, 5, event.c_str(), -1, SQLITE_TRANSIENT);
+    if (!token.empty()) {
+        sqlite3_bind_text(stmt, 6, token.c_str(), -1, SQLITE_TRANSIENT);
+    } else {
+        sqlite3_bind_null(stmt, 6);
+    }
+    sqlite3_bind_text(stmt, 7, details_json.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_int(stmt, 8, wrote_preference_memory ? 1 : 0);
+    sqlite3_bind_int(stmt, 9, wrote_goal_nodes ? 1 : 0);
+    sqlite3_bind_int(stmt, 10, wrote_autonomy_credit ? 1 : 0);
+    sqlite3_bind_int(stmt, 11, wrote_identity_vector ? 1 : 0);
+    sqlite3_bind_int(stmt, 12, allowed ? 1 : 0);
+    bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
+    if (!ok && debug_) std::cerr << "[MemoryDB] step failed for insertLanguageAuditLog: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+    sqlite3_finalize(stmt);
+    if (!ok) return false;
+    out_audit_id = sqlite3_last_insert_rowid(static_cast<sqlite3*>(db_));
+    if (debug_) std::cerr << "[MemoryDB] inserted language_audit_log id=" << out_audit_id << " event=" << event << std::endl;
+    return true;
+#else
+    (void)run_id; (void)ts_ms; (void)step; (void)stage; (void)event; (void)token; (void)details_json; (void)wrote_preference_memory; (void)wrote_goal_nodes; (void)wrote_autonomy_credit; (void)wrote_identity_vector; (void)allowed; (void)out_audit_id;
+    return false;
+#endif
+}
+
 // Phase 8: Goal hierarchy and motivation methods
 bool MemoryDB::insertGoalNode(const std::string& description,
                               double priority,
@@ -1816,6 +2113,118 @@ bool MemoryDB::insertGoalEdge(std::int64_t goal_id,
     return ok;
 #else
     (void)goal_id; (void)subgoal_id; (void)weight; return false;
+#endif
+}
+
+bool MemoryDB::upsertBoundedGoalNode(std::int64_t run_id,
+                                     const std::string& description,
+                                     double priority,
+                                     double stability,
+                                     std::int64_t now_ts_ms,
+                                     std::int64_t expires_ts_ms,
+                                     bool vetoed,
+                                     const std::string& veto_reason,
+                                     std::int64_t& out_goal_id,
+                                     bool& out_inserted,
+                                     bool& out_reaffirmed) {
+#ifdef NF_HAVE_SQLITE3
+    out_goal_id = 0;
+    out_inserted = false;
+    out_reaffirmed = false;
+    if (!db_ || run_id <= 0 || description.empty()) return false;
+    std::lock_guard<std::mutex> lg(m_);
+
+    std::int64_t existing_goal_id = 0;
+    {
+        const char* qsql = "SELECT goal_id FROM goal_nodes WHERE run_id = ? AND description = ? LIMIT 1;";
+        sqlite3_stmt* q = nullptr;
+        if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), qsql, -1, &q, nullptr) != SQLITE_OK) {
+            if (debug_) std::cerr << "[MemoryDB] prepare failed for upsertBoundedGoalNode(select): " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+            return false;
+        }
+        sqlite3_bind_int64(q, 1, run_id);
+        sqlite3_bind_text(q, 2, description.c_str(), -1, SQLITE_TRANSIENT);
+        if (sqlite3_step(q) == SQLITE_ROW) {
+            existing_goal_id = sqlite3_column_int64(q, 0);
+        }
+        sqlite3_finalize(q);
+    }
+
+    if (existing_goal_id > 0) {
+        const char* usql =
+            "UPDATE goal_nodes SET "
+            "priority = ?, stability = ?, "
+            "created_ts_ms = CASE WHEN created_ts_ms <= 0 THEN ? ELSE created_ts_ms END, "
+            "expires_ts_ms = ?, "
+            "reaffirm_n = reaffirm_n + 1, "
+            "vetoed = ?, veto_reason = ? "
+            "WHERE goal_id = ?;";
+        sqlite3_stmt* u = nullptr;
+        if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), usql, -1, &u, nullptr) != SQLITE_OK) {
+            if (debug_) std::cerr << "[MemoryDB] prepare failed for upsertBoundedGoalNode(update): " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+            return false;
+        }
+        sqlite3_bind_double(u, 1, priority);
+        sqlite3_bind_double(u, 2, stability);
+        sqlite3_bind_int64(u, 3, now_ts_ms);
+        sqlite3_bind_int64(u, 4, expires_ts_ms);
+        sqlite3_bind_int(u, 5, vetoed ? 1 : 0);
+        if (vetoed && !veto_reason.empty()) {
+            sqlite3_bind_text(u, 6, veto_reason.c_str(), -1, SQLITE_TRANSIENT);
+        } else {
+            sqlite3_bind_null(u, 6);
+        }
+        sqlite3_bind_int64(u, 7, existing_goal_id);
+        const bool ok = (sqlite3_step(u) == SQLITE_DONE);
+        if (!ok && debug_) std::cerr << "[MemoryDB] step failed for upsertBoundedGoalNode(update): " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        sqlite3_finalize(u);
+        if (!ok) return false;
+        out_goal_id = existing_goal_id;
+        out_reaffirmed = true;
+        return true;
+    }
+
+    const char* isql =
+        "INSERT INTO goal_nodes (run_id, description, priority, stability, created_ts_ms, expires_ts_ms, reaffirm_n, vetoed, veto_reason)"
+        " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);";
+    sqlite3_stmt* ins = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), isql, -1, &ins, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for upsertBoundedGoalNode(insert): " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return false;
+    }
+    sqlite3_bind_int64(ins, 1, run_id);
+    sqlite3_bind_text(ins, 2, description.c_str(), -1, SQLITE_TRANSIENT);
+    sqlite3_bind_double(ins, 3, priority);
+    sqlite3_bind_double(ins, 4, stability);
+    sqlite3_bind_int64(ins, 5, now_ts_ms);
+    sqlite3_bind_int64(ins, 6, expires_ts_ms);
+    sqlite3_bind_int(ins, 7, 0);
+    sqlite3_bind_int(ins, 8, vetoed ? 1 : 0);
+    if (vetoed && !veto_reason.empty()) {
+        sqlite3_bind_text(ins, 9, veto_reason.c_str(), -1, SQLITE_TRANSIENT);
+    } else {
+        sqlite3_bind_null(ins, 9);
+    }
+    const bool ok = (sqlite3_step(ins) == SQLITE_DONE);
+    if (!ok && debug_) std::cerr << "[MemoryDB] step failed for upsertBoundedGoalNode(insert): " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+    sqlite3_finalize(ins);
+    if (!ok) return false;
+    out_goal_id = sqlite3_last_insert_rowid(static_cast<sqlite3*>(db_));
+    out_inserted = true;
+    return true;
+#else
+    (void)run_id;
+    (void)description;
+    (void)priority;
+    (void)stability;
+    (void)now_ts_ms;
+    (void)expires_ts_ms;
+    (void)vetoed;
+    (void)veto_reason;
+    (void)out_goal_id;
+    (void)out_inserted;
+    (void)out_reaffirmed;
+    return false;
 #endif
 }
 
@@ -2603,6 +3012,28 @@ std::optional<std::int64_t> MemoryDB::getSelfRevisionTimestamp(std::int64_t revi
 #endif
 }
 
+std::optional<std::int64_t> MemoryDB::getLatestSelfRevisionTimestamp(std::int64_t run_id) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_ || run_id <= 0) return std::nullopt;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql = "SELECT ts_ms FROM self_revision_log WHERE run_id = ? ORDER BY ts_ms DESC, id DESC LIMIT 1;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getLatestSelfRevisionTimestamp: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return std::nullopt;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    std::optional<std::int64_t> out = std::nullopt;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        out = sqlite3_column_int64(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return out;
+#else
+    (void)run_id; return std::nullopt;
+#endif
+}
+
 // Phase 12: Self-Consistency logging
 bool MemoryDB::insertSelfConsistency(std::int64_t run_id,
                                      std::int64_t ts_ms,
@@ -2664,6 +3095,99 @@ std::vector<MemoryDB::SelfConsistencyEntry> MemoryDB::getRecentConsistency(std::
         if (window) e.window_json.assign(window);
         const char* driver = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
         if (driver) e.driver_explanation.assign(driver);
+        entries.push_back(std::move(e));
+    }
+    sqlite3_finalize(stmt);
+    return entries;
+#else
+    (void)run_id; (void)n; return {};
+#endif
+}
+
+bool MemoryDB::insertAutonomyCredit(std::int64_t run_id,
+                                   std::int64_t ts_ms,
+                                   double credit_value,
+                                   double decay_rate,
+                                   const std::string& driver_json,
+                                   std::int64_t& out_credit_id) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_) return false;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql =
+        "INSERT INTO autonomy_credit_log (run_id, ts_ms, credit_value, decay_rate, driver_json)"
+        " VALUES (?, ?, ?, ?, ?);";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for insertAutonomyCredit: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return false;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int64(stmt, 2, ts_ms);
+    sqlite3_bind_double(stmt, 3, credit_value);
+    sqlite3_bind_double(stmt, 4, decay_rate);
+    sqlite3_bind_text(stmt, 5, driver_json.c_str(), -1, SQLITE_TRANSIENT);
+    bool ok = (sqlite3_step(stmt) == SQLITE_DONE);
+    if (!ok && debug_) std::cerr << "[MemoryDB] step failed for insertAutonomyCredit: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+    sqlite3_finalize(stmt);
+    if (!ok) return false;
+    out_credit_id = sqlite3_last_insert_rowid(static_cast<sqlite3*>(db_));
+    if (debug_) std::cerr << "[MemoryDB] inserted autonomy_credit_log id=" << out_credit_id << std::endl;
+    return true;
+#else
+    (void)run_id; (void)ts_ms; (void)credit_value; (void)decay_rate; (void)driver_json; (void)out_credit_id; return false;
+#endif
+}
+
+std::optional<MemoryDB::AutonomyCreditEntry> MemoryDB::getLatestAutonomyCredit(std::int64_t run_id) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_ || run_id <= 0) return std::nullopt;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql = "SELECT id, ts_ms, credit_value, decay_rate, driver_json FROM autonomy_credit_log WHERE run_id = ? ORDER BY ts_ms DESC LIMIT 1;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getLatestAutonomyCredit: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return std::nullopt;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    std::optional<AutonomyCreditEntry> out = std::nullopt;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        AutonomyCreditEntry e;
+        e.id = sqlite3_column_int64(stmt, 0);
+        e.ts_ms = sqlite3_column_int64(stmt, 1);
+        e.credit_value = sqlite3_column_double(stmt, 2);
+        e.decay_rate = sqlite3_column_double(stmt, 3);
+        const char* driver = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+        if (driver) e.driver_json.assign(driver);
+        out = e;
+    }
+    sqlite3_finalize(stmt);
+    return out;
+#else
+    (void)run_id; return std::nullopt;
+#endif
+}
+
+std::vector<MemoryDB::AutonomyCreditEntry> MemoryDB::getRecentAutonomyCredit(std::int64_t run_id, int n) {
+#ifdef NF_HAVE_SQLITE3
+    std::vector<AutonomyCreditEntry> entries;
+    if (!db_ || run_id <= 0) return entries;
+    std::lock_guard<std::mutex> lg(m_);
+    const char* sql = "SELECT id, ts_ms, credit_value, decay_rate, driver_json FROM autonomy_credit_log WHERE run_id = ? ORDER BY ts_ms DESC LIMIT ?;";
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getRecentAutonomyCredit: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return entries;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int(stmt, 2, n);
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        AutonomyCreditEntry e;
+        e.id = sqlite3_column_int64(stmt, 0);
+        e.ts_ms = sqlite3_column_int64(stmt, 1);
+        e.credit_value = sqlite3_column_double(stmt, 2);
+        e.decay_rate = sqlite3_column_double(stmt, 3);
+        const char* driver = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+        if (driver) e.driver_json.assign(driver);
         entries.push_back(std::move(e));
     }
     sqlite3_finalize(stmt);
@@ -2969,6 +3493,201 @@ std::vector<MemoryDB::ParameterRecord> MemoryDB::getRecentParamHistory(std::int6
     return records;
 #else
     (void)run_id; (void)n; return {};
+#endif
+}
+
+bool MemoryDB::upsertPreferenceMemory(std::int64_t run_id,
+                                      const std::string& key,
+                                      double preferred_value,
+                                      double strength01,
+                                      int evidence_n,
+                                      int beneficial_n,
+                                      int harmful_n,
+                                      std::int64_t updated_ts_ms,
+                                      std::int64_t& out_pref_id) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_ || run_id <= 0 || key.empty()) return false;
+    std::lock_guard<std::mutex> lg(m_);
+
+    {
+        const char* update_sql =
+            "UPDATE preference_memory SET preferred_value = ?, strength01 = ?, evidence_n = ?, beneficial_n = ?, harmful_n = ?, updated_ts_ms = ? "
+            "WHERE run_id = ? AND key = ?;";
+        sqlite3_stmt* stmt = nullptr;
+        if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), update_sql, -1, &stmt, nullptr) != SQLITE_OK) {
+            if (debug_) std::cerr << "[MemoryDB] prepare failed for upsertPreferenceMemory(update): " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+            return false;
+        }
+        sqlite3_bind_double(stmt, 1, preferred_value);
+        sqlite3_bind_double(stmt, 2, strength01);
+        sqlite3_bind_int(stmt, 3, evidence_n);
+        sqlite3_bind_int(stmt, 4, beneficial_n);
+        sqlite3_bind_int(stmt, 5, harmful_n);
+        if (updated_ts_ms > 0) sqlite3_bind_int64(stmt, 6, updated_ts_ms); else sqlite3_bind_null(stmt, 6);
+        sqlite3_bind_int64(stmt, 7, run_id);
+        sqlite3_bind_text(stmt, 8, key.c_str(), -1, SQLITE_TRANSIENT);
+
+        bool update_ok = (sqlite3_step(stmt) == SQLITE_DONE);
+        if (!update_ok && debug_) std::cerr << "[MemoryDB] step failed for upsertPreferenceMemory(update): " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        sqlite3_finalize(stmt);
+        if (!update_ok) return false;
+
+        if (sqlite3_changes(static_cast<sqlite3*>(db_)) == 0) {
+            const char* insert_sql =
+                "INSERT INTO preference_memory (run_id, key, preferred_value, strength01, evidence_n, beneficial_n, harmful_n, updated_ts_ms) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?);";
+            sqlite3_stmt* ins = nullptr;
+            if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), insert_sql, -1, &ins, nullptr) != SQLITE_OK) {
+                if (debug_) std::cerr << "[MemoryDB] prepare failed for upsertPreferenceMemory(insert): " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+                return false;
+            }
+            sqlite3_bind_int64(ins, 1, run_id);
+            sqlite3_bind_text(ins, 2, key.c_str(), -1, SQLITE_TRANSIENT);
+            sqlite3_bind_double(ins, 3, preferred_value);
+            sqlite3_bind_double(ins, 4, strength01);
+            sqlite3_bind_int(ins, 5, evidence_n);
+            sqlite3_bind_int(ins, 6, beneficial_n);
+            sqlite3_bind_int(ins, 7, harmful_n);
+            if (updated_ts_ms > 0) sqlite3_bind_int64(ins, 8, updated_ts_ms); else sqlite3_bind_null(ins, 8);
+
+            bool insert_ok = (sqlite3_step(ins) == SQLITE_DONE);
+            if (!insert_ok && debug_) std::cerr << "[MemoryDB] step failed for upsertPreferenceMemory(insert): " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+            sqlite3_finalize(ins);
+            if (!insert_ok) return false;
+        }
+    }
+
+    out_pref_id = 0;
+    const char* qsql = "SELECT id FROM preference_memory WHERE run_id = ? AND key = ? LIMIT 1;";
+    sqlite3_stmt* q = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), qsql, -1, &q, nullptr) != SQLITE_OK) {
+        return true;
+    }
+    sqlite3_bind_int64(q, 1, run_id);
+    sqlite3_bind_text(q, 2, key.c_str(), -1, SQLITE_TRANSIENT);
+    if (sqlite3_step(q) == SQLITE_ROW) {
+        out_pref_id = sqlite3_column_int64(q, 0);
+    }
+    sqlite3_finalize(q);
+    return true;
+#else
+    (void)run_id;
+    (void)key;
+    (void)preferred_value;
+    (void)strength01;
+    (void)evidence_n;
+    (void)beneficial_n;
+    (void)harmful_n;
+    (void)updated_ts_ms;
+    (void)out_pref_id;
+    return false;
+#endif
+}
+
+std::vector<MemoryDB::PreferenceMemoryEntry> MemoryDB::getPreferenceMemory(std::int64_t run_id, std::size_t n) {
+#ifdef NF_HAVE_SQLITE3
+    std::vector<PreferenceMemoryEntry> records;
+    if (!db_ || run_id <= 0 || n == 0) return records;
+    std::lock_guard<std::mutex> lg(m_);
+
+    const char* sql =
+        "SELECT id, key, preferred_value, strength01, evidence_n, beneficial_n, harmful_n, updated_ts_ms "
+        "FROM preference_memory WHERE run_id = ? ORDER BY strength01 DESC, updated_ts_ms DESC LIMIT ?;";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getPreferenceMemory: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return records;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_int(stmt, 2, static_cast<int>(n));
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        PreferenceMemoryEntry e;
+        e.id = sqlite3_column_int64(stmt, 0);
+        const char* k = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        if (k) e.key.assign(k);
+        e.preferred_value = sqlite3_column_double(stmt, 2);
+        e.strength01 = sqlite3_column_double(stmt, 3);
+        e.evidence_n = sqlite3_column_int(stmt, 4);
+        e.beneficial_n = sqlite3_column_int(stmt, 5);
+        e.harmful_n = sqlite3_column_int(stmt, 6);
+        e.updated_ts_ms = sqlite3_column_type(stmt, 7) == SQLITE_NULL ? 0 : sqlite3_column_int64(stmt, 7);
+        records.push_back(std::move(e));
+    }
+    sqlite3_finalize(stmt);
+    return records;
+#else
+    (void)run_id; (void)n; return {};
+#endif
+}
+
+std::optional<MemoryDB::PreferenceMemoryEntry> MemoryDB::getPreferenceMemoryForKey(std::int64_t run_id, const std::string& key) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_ || run_id <= 0 || key.empty()) return std::nullopt;
+    std::lock_guard<std::mutex> lg(m_);
+
+    const char* sql =
+        "SELECT id, key, preferred_value, strength01, evidence_n, beneficial_n, harmful_n, updated_ts_ms "
+        "FROM preference_memory WHERE run_id = ? AND key = ? LIMIT 1;";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getPreferenceMemoryForKey: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return std::nullopt;
+    }
+    sqlite3_bind_int64(stmt, 1, run_id);
+    sqlite3_bind_text(stmt, 2, key.c_str(), -1, SQLITE_TRANSIENT);
+
+    std::optional<PreferenceMemoryEntry> out;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        PreferenceMemoryEntry e;
+        e.id = sqlite3_column_int64(stmt, 0);
+        const char* k = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+        if (k) e.key.assign(k);
+        e.preferred_value = sqlite3_column_double(stmt, 2);
+        e.strength01 = sqlite3_column_double(stmt, 3);
+        e.evidence_n = sqlite3_column_int(stmt, 4);
+        e.beneficial_n = sqlite3_column_int(stmt, 5);
+        e.harmful_n = sqlite3_column_int(stmt, 6);
+        e.updated_ts_ms = sqlite3_column_type(stmt, 7) == SQLITE_NULL ? 0 : sqlite3_column_int64(stmt, 7);
+        out = e;
+    }
+    sqlite3_finalize(stmt);
+    return out;
+#else
+    (void)run_id; (void)key; return std::nullopt;
+#endif
+}
+
+std::optional<std::int64_t> MemoryDB::getLatestRunIdWithPreferenceMemory(std::int64_t before_run_id) {
+#ifdef NF_HAVE_SQLITE3
+    if (!db_ || before_run_id <= 0) return std::nullopt;
+    std::lock_guard<std::mutex> lg(m_);
+
+    const char* sql =
+        "SELECT run_id "
+        "FROM preference_memory "
+        "WHERE run_id < ? "
+        "GROUP BY run_id "
+        "ORDER BY run_id DESC "
+        "LIMIT 1;";
+
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(static_cast<sqlite3*>(db_), sql, -1, &stmt, nullptr) != SQLITE_OK) {
+        if (debug_) std::cerr << "[MemoryDB] prepare failed for getLatestRunIdWithPreferenceMemory: " << sqlite3_errmsg(static_cast<sqlite3*>(db_)) << std::endl;
+        return std::nullopt;
+    }
+    sqlite3_bind_int64(stmt, 1, before_run_id);
+
+    std::optional<std::int64_t> out = std::nullopt;
+    if (sqlite3_step(stmt) == SQLITE_ROW) {
+        out = sqlite3_column_int64(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    return out;
+#else
+    (void)before_run_id;
+    return std::nullopt;
 #endif
 }
 // keep namespace open for helper and method definitions

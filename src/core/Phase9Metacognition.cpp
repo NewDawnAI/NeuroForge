@@ -16,7 +16,7 @@ namespace Core {
 
 static inline std::int64_t now_ms() {
     using namespace std::chrono;
-    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
 static double clamp01(double x) {

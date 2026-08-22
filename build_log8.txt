@@ -1,0 +1,85 @@
+﻿[0/1] Re-running CMake...
+-- Found OpenCV 4.11.0
+cmake : CMake Warning 
+at CMakeLists.txt:320 
+(message):
+At line:1 char:1
++ cmake --build build 
+--config Release 
+--target test_internet
+_grounding ...
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (CMake Warn   
+ ing a...:320 (mes    
+sage)::String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+  OpenCV found but 
+non-MSVC toolchain 
+detected; skipping 
+OpenCV
+  linkage/defines for 
+neuroforge_core to 
+avoid ABI mismatch.
+
+
+-- WebView2 found: enabling embedded browser sandbox
+CMake Warning at 
+CMakeLists.txt:411 
+(message):
+  Skipping OpenCV 
+CUDA defines under 
+non-MSVC toolchain.
+
+
+-- NeuroForge Hypergraph Brain - Build Configuration:
+--   Build Type: Release
+--   C++ Standard: 20
+--   Compiler: GNU
+--   Install Prefix: C:/Program Files (x86)/NeuroForge
+--   GPU Stubs: OFF
+--   Vision Demo Default: OFF
+--   OpenCV: FOUND (4.11.0)
+-- Configuring done (1.0s)
+CMake Error at 
+CMakeLists.txt:882 (ta
+rget_link_libraries):
+  Target "test_interne
+t_grounding_full" 
+links to:
+
+    GTest::GTest
+
+  but the target was 
+not found.  Possible 
+reasons include:
+
+    * There is a typo 
+in the target name.
+    * A find_package 
+call is missing for 
+an IMPORTED target.
+    * An ALIAS target 
+is missing.
+
+
+
+-- Generating done (0.2s)
+CMake Generate step 
+failed.  Build files 
+cannot be regenerated 
+correctly.
+ninja: error: 
+rebuilding 
+'build.ninja': 
+subcommand failed
+FAILED: build.ninja C:/Users/ashis/Desktop/NeuroForge/build/cmake_install.cmake C:/Users/ashis/Desktop/NeuroForge/build/CTestTestfile.cmake 
+"C:\Program Files\CMake\bin\cmake.exe" --regenerate-during-build -SC:\Users\ashis\Desktop\NeuroForge -BC:\Users\ashis\Desktop\NeuroForge\build

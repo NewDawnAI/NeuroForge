@@ -1,0 +1,96 @@
+﻿[0/1] Re-running CMake...
+-- Found OpenCV 4.11.0
+cmake : CMake Warning 
+at CMakeLists.txt:318 
+(message):
+At line:1 char:1
++ cmake --build build 
+--config Release 2>&1 
+| Out-File -FilePath 
+build_ ...
++ ~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo    
+          : NotSpeci  
+  fied: (CMake Warn   
+ ing a...:318 (mes    
+sage)::String) []    
+, RemoteException
+    + FullyQualifiedE 
+   rrorId : NativeCo  
+  mmandError
+ 
+  OpenCV found but 
+non-MSVC toolchain 
+detected; skipping 
+OpenCV
+  linkage/defines for 
+neuroforge_core to 
+avoid ABI mismatch.
+
+
+-- WebView2 found: enabling embedded browser sandbox
+CMake Warning at 
+CMakeLists.txt:409 
+(message):
+  Skipping OpenCV 
+CUDA defines under 
+non-MSVC toolchain.
+
+
+-- NeuroForge Hypergraph Brain - Build Configuration:
+--   Build Type: Release
+--   C++ Standard: 20
+--   Compiler: GNU
+--   Install Prefix: C:/Program Files (x86)/NeuroForge
+--   GPU Stubs: OFF
+--   Vision Demo Default: OFF
+--   OpenCV: FOUND (4.11.0)
+-- Configuring done (1.6s)
+-- Generating done (0.3s)
+-- Build files have been written to: C:/Users/ashis/Desktop/NeuroForge/build
+[1/38] Building CXX object CMakeFiles/neuroforge_core.dir/src/navigation/CuriosityNavigator.cpp.obj
+FAILED: CMakeFiles/neuroforge_core.dir/src/navigation/CuriosityNavigator.cpp.obj 
+C:\Strawberry\c\bin\c++.exe -DNDEBUG -DNF_HAVE_SQLITE3=1 -DNF_HAVE_WEBVIEW2=1 -IC:/Users/ashis/Desktop/NeuroForge/include -IC:/Users/ashis/Desktop/NeuroForge/src -IC:/Users/ashis/Desktop/NeuroForge/build -IC:/Users/ashis/Desktop/NeuroForge/build/schemas -isystem C:/vcpkg/buildtrees/eigen3/src/a8c0519f1c-ba17d9986c.clean -isystem C:/Users/ashis/Desktop/NeuroForge/external/vcpkg/installed/x64-windows/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -MD -MT CMakeFiles/neuroforge_core.dir/src/navigation/CuriosityNavigator.cpp.obj -MF CMakeFiles\neuroforge_core.dir\src\navigation\CuriosityNavigator.cpp.obj.d -o CMakeFiles/neuroforge_core.dir/src/navigation/CuriosityNavigator.cpp.obj -c C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp
+In file included from C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:1:
+C:/Users/ashis/Desktop/NeuroForge/include/navigation/CuriosityNavigator.h:350:49: error: expected ',' or '...' before 'concept'
+  350 |   void updateNoveltyTracking(const std::string &concept);
+      |                                                 ^~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp: In member function 'void NeuroForge::Navigation::CuriosityNavigator::recordPageVisit(const std::string&, const std::vector<std::__cxx11::basic_string<char> >&)':
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:169:22: error: expected unqualified-id before 'concept'
+  169 |     for (const auto &concept : concepts) {
+      |                      ^~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:169:22: error: expected ';' before 'concept'
+  169 |     for (const auto &concept : concepts) {
+      |                      ^~~~~~~
+      |                      ;
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:169:22: error: C++20 concept definition syntax is 'concept <name> = <expr>'
+  169 |     for (const auto &concept : concepts) {
+      |                      ^~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:169:22: error: 'concept' invalid in condition
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:169:30: error: expected unqualified-id before ':' token
+  169 |     for (const auto &concept : concepts) {
+      |                              ^
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:169:40: error: expected ';' before ')' token
+  169 |     for (const auto &concept : concepts) {
+      |                                        ^
+      |                                        ;
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:170:29: error: expected primary-expression before 'concept'
+  170 |       updateNoveltyTracking(concept);
+      |                             ^~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp: At global scope:
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:458:67: error: expected ',' or '...' before 'concept'
+  458 | void CuriosityNavigator::updateNoveltyTracking(const std::string &concept) {
+      |                                                                   ^~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp: In member function 'void NeuroForge::Navigation::CuriosityNavigator::updateNoveltyTracking(const std::string&)':
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:460:19: error: expected primary-expression before 'concept'
+  460 |   concept_counts_[concept]++;
+      |                   ^~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:460:19: error: expected ']' before 'concept'
+  460 |   concept_counts_[concept]++;
+      |                   ^~~~~~~
+      |                   ]
+C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:463:43: error: expected primary-expression before 'concept'
+  463 |   recent_concepts_[concept_ring_index_] = concept;
+      |                                           ^~~~~~~
+ninja: build stopped: subcommand failed.

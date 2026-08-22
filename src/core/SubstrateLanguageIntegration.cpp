@@ -392,13 +392,6 @@ void SubstrateLanguageIntegration::integrateWithLearningSystem() {
     // We do not own the LearningSystem; create an aliasing shared_ptr for safe access
     learning_system_ = std::shared_ptr<LearningSystem>(hypergraph_brain_, ls_raw);
 
-    // Ensure learning is enabled at the brain level
-    try {
-        hypergraph_brain_->setLearningEnabled(true);
-    } catch (...) {
-        // Non-fatal if enabling fails; continue with best-effort integration
-    }
-
     // Configure attention modulation coherently between integration config and learning system config
     // If integration config enables attention modulation, propagate minimal enabling to LearningSystem
     if (learning_system_) {

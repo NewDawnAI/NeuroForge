@@ -4,12 +4,13 @@
 #include <string>
 #include <optional>
 #include <unordered_map>
+#include <functional>
 #include "core/MemoryDB.h"
 
 namespace NeuroForge {
 namespace Core {
 
-class AutonomyEnvelope;
+struct AutonomyEnvelope;
 
 // Phase 15: Ethics Regulator
 // Monitors recent metacognition and autonomy signals to emit ethics decisions
@@ -26,8 +27,10 @@ public:
         bool approved{false};
     };
 
-    Phase15EthicsRegulator(MemoryDB* db, std::int64_t run_id, const Config& cfg)
-        : db_(db), run_id_(run_id), cfg_(cfg) {}
+    using ContextSampler = std::function<double(const std::string&)>;
+
+    Phase15EthicsRegulator(MemoryDB* db, std::int64_t run_id, const Config& cfg, ContextSampler sampler = nullptr)
+        : db_(db), run_id_(run_id), cfg_(cfg), sampler_(sampler) {}
 
     // Runs an ethics check for the latest context and logs a decision.
     // Returns the decision string ("allow", "review", or "deny").
@@ -43,6 +46,7 @@ private:
     MemoryDB* db_{nullptr};
     std::int64_t run_id_{0};
     Config cfg_{};
+    ContextSampler sampler_{nullptr};
     const AutonomyEnvelope* autonomy_env_{nullptr};
     std::unordered_map<std::string, int> last_decision_context_;
 };

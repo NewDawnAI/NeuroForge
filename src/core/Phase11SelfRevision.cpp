@@ -254,15 +254,38 @@ bool Phase11SelfRevision::runForLatest(const std::string& context) {
     std::int64_t now_ts_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count();
 
+    if (current_revision_params_.empty() && run_id_ > 0) {
+        const auto hist = db_->getRecentParamHistory(run_id_, 5000);
+        for (const auto& rec : hist) {
+            if (rec.parameter.empty()) continue;
+            if (current_revision_params_.find(rec.parameter) != current_revision_params_.end()) continue;
+            current_revision_params_[rec.parameter] = rec.value;
+        }
+    }
+
+    StageC_AutonomyGate gate(db_);
     StageC_AutonomyGate::Result stage_c_result{};
     bool stage_c_ran = false;
-    if (stage_c_enabled_ && run_id_ > 0) {
-        AutonomyEnvelope env{};
-        if (autonomy_env_) {
-            env = *autonomy_env_;
+        if (stage_c_enabled_ && run_id_ > 0) {
+            AutonomyEnvelope env{};
+            if (autonomy_env_) {
+                env = *autonomy_env_;
+            }
+        if (stage_c_version_ == 5) {
+            (void)gate.updateAutonomyCreditV2(run_id_, now_ts_ms, 200, 0.99);
+            stage_c_result = gate.evaluateAndApplyV4(env, run_id_, 200);
+        } else if (stage_c_version_ == 4) {
+            (void)gate.updateAutonomyCreditV2(run_id_, now_ts_ms, 200, 0.99);
+            stage_c_result = gate.evaluateAndApplyV4(env, run_id_, 200);
+        } else if (stage_c_version_ == 3) {
+            (void)gate.updateAutonomyCreditV2(run_id_, now_ts_ms, 200, 0.99);
+            stage_c_result = gate.evaluateAndApplyV3(env, run_id_, 200);
+        } else if (stage_c_version_ == 2) {
+            (void)gate.updateAutonomyCreditV2(run_id_, now_ts_ms, 200, 0.99);
+            stage_c_result = gate.evaluateAndApplyV2(env, run_id_, 200);
+        } else {
+            stage_c_result = gate.evaluateAndApply(env, run_id_, 20);
         }
-        StageC_AutonomyGate gate(db_);
-        stage_c_result = gate.evaluateAndApply(env, run_id_, 20);
         stage_c_ran = true;
     }
     
@@ -310,6 +333,21 @@ bool Phase11SelfRevision::runForLatest(const std::string& context) {
         return false;
     }
     clampParameterDeltas(deltas);
+
+    if (stage_c_ran && (stage_c_result.version == 3 || stage_c_result.version == 4)) {
+        std::vector<std::pair<std::string, double>> deltas_io;
+        deltas_io.reserve(deltas.size());
+        for (const auto& d : deltas) {
+            deltas_io.emplace_back(d.parameter_name, d.delta_value);
+        }
+        const auto pref = gate.stabilizePreferenceDeltasV3(run_id_, current_revision_params_, deltas_io, 200, 1000);
+        for (std::size_t i = 0; i < deltas.size() && i < deltas_io.size(); ++i) {
+            deltas[i].delta_value = deltas_io[i].second;
+        }
+        stage_c_result.preference_rigidity01 = pref.rigidity01;
+        stage_c_result.preference_destabilization01 = pref.destabilization01;
+        stage_c_result.preference_active_n = pref.active_n;
+    }
     
     std::string revision_json = generateRevisionJson(deltas);
     std::string driver_explanation = synthesizeDriverExplanation(trigger.value(), deltas);
@@ -320,9 +358,65 @@ bool Phase11SelfRevision::runForLatest(const std::string& context) {
         driver_explanation += " autonomy_cap_multiplier=" + std::to_string(cap);
         driver_explanation += " effective_autonomy=" + std::to_string(base_autonomy * cap);
         if (stage_c_ran) {
-            driver_explanation += " stage_c_rr=" + std::to_string(stage_c_result.revision_reputation);
+            if (stage_c_result.version == 4) {
+                driver_explanation += " stage_c4_p_harm_mean=" + std::to_string(stage_c_result.p_harm_mean);
+                driver_explanation += " stage_c4_p_harm_ub95=" + std::to_string(stage_c_result.p_harm_ub95);
+                driver_explanation += " stage_c4_harm_risk_cap=" + std::to_string(stage_c_result.harm_risk_cap_multiplier);
+                driver_explanation += " stage_c4_autonomy_credit=" + std::to_string(stage_c_result.autonomy_credit);
+                driver_explanation += " stage_c4_autonomy_credit_cap=" + std::to_string(stage_c_result.autonomy_credit_cap_multiplier);
+                driver_explanation += " stage_c4_n_harmful=" + std::to_string(stage_c_result.harmful_n);
+                driver_explanation += " stage_c4_n_beneficial=" + std::to_string(stage_c_result.beneficial_n);
+                driver_explanation += " stage_c4_n_neutral=" + std::to_string(stage_c_result.neutral_n);
+                driver_explanation += " stage_c4_window_n=" + std::to_string(stage_c_result.window_n);
+                driver_explanation += " stage_c4_pref_rigidity01=" + std::to_string(stage_c_result.preference_rigidity01);
+                driver_explanation += " stage_c4_pref_destabilization01=" + std::to_string(stage_c_result.preference_destabilization01);
+                driver_explanation += " stage_c4_pref_active_n=" + std::to_string(stage_c_result.preference_active_n);
+                driver_explanation += " stage_c4_goal_candidate_n=" + std::to_string(stage_c_result.goal_candidate_n);
+                driver_explanation += " stage_c4_goal_created_n=" + std::to_string(stage_c_result.goal_created_n);
+                driver_explanation += " stage_c4_goal_reaffirmed_n=" + std::to_string(stage_c_result.goal_reaffirmed_n);
+                driver_explanation += " stage_c4_goal_governance_veto=" + std::string(stage_c_result.goal_governance_veto ? "1" : "0");
+                driver_explanation += " stage_c4_goal_ttl_ms=" + std::to_string(stage_c_result.goal_ttl_ms);
+            } else if (stage_c_result.version == 3) {
+                driver_explanation += " stage_c3_p_harm_mean=" + std::to_string(stage_c_result.p_harm_mean);
+                driver_explanation += " stage_c3_p_harm_ub95=" + std::to_string(stage_c_result.p_harm_ub95);
+                driver_explanation += " stage_c3_harm_risk_cap=" + std::to_string(stage_c_result.harm_risk_cap_multiplier);
+                driver_explanation += " stage_c3_autonomy_credit=" + std::to_string(stage_c_result.autonomy_credit);
+                driver_explanation += " stage_c3_autonomy_credit_cap=" + std::to_string(stage_c_result.autonomy_credit_cap_multiplier);
+                driver_explanation += " stage_c3_n_harmful=" + std::to_string(stage_c_result.harmful_n);
+                driver_explanation += " stage_c3_n_beneficial=" + std::to_string(stage_c_result.beneficial_n);
+                driver_explanation += " stage_c3_n_neutral=" + std::to_string(stage_c_result.neutral_n);
+                driver_explanation += " stage_c3_window_n=" + std::to_string(stage_c_result.window_n);
+                driver_explanation += " stage_c3_pref_rigidity01=" + std::to_string(stage_c_result.preference_rigidity01);
+                driver_explanation += " stage_c3_pref_destabilization01=" + std::to_string(stage_c_result.preference_destabilization01);
+                driver_explanation += " stage_c3_pref_active_n=" + std::to_string(stage_c_result.preference_active_n);
+            } else if (stage_c_result.version == 2) {
+                driver_explanation += " stage_c2_p_harm_mean=" + std::to_string(stage_c_result.p_harm_mean);
+                driver_explanation += " stage_c2_p_harm_ub95=" + std::to_string(stage_c_result.p_harm_ub95);
+                driver_explanation += " stage_c2_harm_risk_cap=" + std::to_string(stage_c_result.harm_risk_cap_multiplier);
+                driver_explanation += " stage_c2_autonomy_credit=" + std::to_string(stage_c_result.autonomy_credit);
+                driver_explanation += " stage_c2_autonomy_credit_cap=" + std::to_string(stage_c_result.autonomy_credit_cap_multiplier);
+                driver_explanation += " stage_c2_n_harmful=" + std::to_string(stage_c_result.harmful_n);
+                driver_explanation += " stage_c2_n_beneficial=" + std::to_string(stage_c_result.beneficial_n);
+                driver_explanation += " stage_c2_n_neutral=" + std::to_string(stage_c_result.neutral_n);
+                driver_explanation += " stage_c2_window_n=" + std::to_string(stage_c_result.window_n);
+            } else {
+                driver_explanation += " stage_c_rr=" + std::to_string(stage_c_result.revision_reputation);
+                driver_explanation += " stage_c_window_n=" + std::to_string(stage_c_result.window_n);
+            }
         }
     }
+
+    driver_explanation += " change_cost_total=" + std::to_string(last_change_cost_total_);
+    driver_explanation += " change_cost_scale=" + std::to_string(change_cost_scale_);
+    driver_explanation += " change_cost_min=" + std::to_string(change_cost_min_);
+    driver_explanation += " change_cost_energy01=" + std::to_string(last_change_cost_energy01_);
+    driver_explanation += " change_cost_metabolic_hazard01=" + std::to_string(last_change_cost_metabolic_hazard01_);
+    driver_explanation += " change_cost_mito_health01=" + std::to_string(last_change_cost_mito_health01_);
+    driver_explanation += " change_cost_eg01=" + std::to_string(last_change_cost_eg01_);
+    driver_explanation += " change_cost_stress01=" + std::to_string(last_change_cost_stress01_);
+    driver_explanation += " change_cost_stress_mult=" + std::to_string(last_change_cost_stress_multiplier_);
+    driver_explanation += " change_cost_freq_mult=" + std::to_string(last_change_cost_frequency_multiplier_);
+    driver_explanation += " change_cost_dt_ms=" + std::to_string(last_change_cost_dt_ms_);
     
     // Get current trust for before/after tracking
     double trust_before = 0.5;
@@ -690,6 +784,47 @@ bool Phase11SelfRevision::validateRevisionSafety(const std::vector<ParameterDelt
 }
 
 void Phase11SelfRevision::clampParameterDeltas(std::vector<ParameterDelta>& deltas) {
+    last_change_cost_total_ = 0.0;
+    last_change_cost_energy01_ = 0.5;
+    last_change_cost_metabolic_hazard01_ = 0.0;
+    last_change_cost_mito_health01_ = 1.0;
+    last_change_cost_eg01_ = 0.25;
+    last_change_cost_stress01_ = 0.0;
+    last_change_cost_stress_multiplier_ = 1.0;
+    last_change_cost_frequency_multiplier_ = 1.0;
+    last_change_cost_dt_ms_ = 0;
+
+    const auto clamp01 = [](double x) -> double { return std::clamp(x, 0.0, 1.0); };
+
+    if (db_ && run_id_ > 0) {
+        auto latest = db_->getLatestLearningStats(run_id_);
+        if (latest.has_value()) {
+            last_change_cost_energy01_ = clamp01(latest->avg_energy);
+            last_change_cost_metabolic_hazard01_ = clamp01(latest->metabolic_hazard);
+        }
+    }
+
+    last_change_cost_mito_health01_ = clamp01(1.0 - last_change_cost_metabolic_hazard01_);
+    last_change_cost_eg01_ = clamp01(last_change_cost_energy01_ * last_change_cost_energy01_ * last_change_cost_mito_health01_);
+    last_change_cost_stress01_ = clamp01(1.0 - last_change_cost_eg01_);
+    last_change_cost_stress_multiplier_ = 1.0 + 2.0 * last_change_cost_stress01_;
+
+    std::int64_t now_ts = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    std::int64_t last_ts = getLastRevisionTimestamp();
+    if (last_ts > 0) {
+        last_change_cost_dt_ms_ = std::max<std::int64_t>(0, now_ts - last_ts);
+    }
+
+    if (revision_interval_ms_ > 0) {
+        const double dt = static_cast<double>(last_change_cost_dt_ms_);
+        const double denom = static_cast<double>(revision_interval_ms_);
+        const double freq01 = std::clamp(1.0 - (dt / denom), 0.0, 1.0);
+        last_change_cost_frequency_multiplier_ = 1.0 + change_cost_frequency_scale_ * freq01;
+    } else {
+        last_change_cost_frequency_multiplier_ = 1.0;
+    }
+
     for (auto& delta : deltas) {
         const bool looks_like_time_ms =
             (delta.parameter_name.find("interval") != std::string::npos) ||
@@ -701,6 +836,21 @@ void Phase11SelfRevision::clampParameterDeltas(std::vector<ParameterDelta>& delt
             delta.delta_value = std::max(-0.2, std::min(0.2, delta.delta_value));
         }
         delta.delta_value *= delta.confidence;
+
+        const double v = delta.delta_value;
+        const double norm = looks_like_time_ms ? (v / 1000.0) : v;
+        const double scale = std::max(0.0, change_cost_scale_);
+        const double magnitude_sq = norm * norm;
+        double cost = scale * magnitude_sq * last_change_cost_stress_multiplier_ * last_change_cost_frequency_multiplier_;
+        if (scale > 0.0 && magnitude_sq > 0.0) {
+            cost = std::max(cost, std::max(0.0, change_cost_min_));
+        }
+
+        last_change_cost_total_ += cost;
+
+        if (cost > 0.0) {
+            delta.delta_value = v / (1.0 + cost);
+        }
     }
 }
 
@@ -718,9 +868,15 @@ std::int64_t Phase11SelfRevision::getLastRevisionTimestamp() {
     if (last_revision_ts_.has_value()) {
         return last_revision_ts_.value();
     }
-    
-    // Query database for last revision
-    // For now, return 0 to allow first revision
+
+    if (db_ && run_id_ > 0) {
+        auto latest_ts = db_->getLatestSelfRevisionTimestamp(run_id_);
+        if (latest_ts.has_value()) {
+            last_revision_ts_ = *latest_ts;
+            return *latest_ts;
+        }
+    }
+
     return 0;
 }
 

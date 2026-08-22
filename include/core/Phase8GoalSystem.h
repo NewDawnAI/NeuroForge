@@ -13,7 +13,7 @@ class MemoryDB;
 class Phase7Reflection;
 class Phase9Metacognition; // forward declaration for Phase 9 integration
 class SelfModel;
-class AutonomyEnvelope;
+struct AutonomyEnvelope;
 
 /**
  * Phase 8: Goal System

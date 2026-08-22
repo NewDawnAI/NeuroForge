@@ -1,0 +1,8 @@
+﻿[1/37] Building CXX object CMakeFiles/neuroforge_core.dir/src/navigation/CuriosityNavigator.cpp.obj
+FAILED: CMakeFiles/neuroforge_core.dir/src/navigation/CuriosityNavigator.cpp.obj 
+C:\Strawberry\c\bin\c++.exe -DNDEBUG -DNF_HAVE_SQLITE3=1 -DNF_HAVE_WEBVIEW2=1 -IC:/Users/ashis/Desktop/NeuroForge/include -IC:/Users/ashis/Desktop/NeuroForge/src -IC:/Users/ashis/Desktop/NeuroForge/build -IC:/Users/ashis/Desktop/NeuroForge/build/schemas -isystem C:/vcpkg/buildtrees/eigen3/src/a8c0519f1c-ba17d9986c.clean -isystem C:/Users/ashis/Desktop/NeuroForge/external/vcpkg/installed/x64-windows/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -MD -MT CMakeFiles/neuroforge_core.dir/src/navigation/CuriosityNavigator.cpp.obj -MF CMakeFiles\neuroforge_core.dir\src\navigation\CuriosityNavigator.cpp.obj.d -o CMakeFiles/neuroforge_core.dir/src/navigation/CuriosityNavigator.cpp.obj -c C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp
+In file included from C:/Users/ashis/Desktop/NeuroForge/src/navigation/CuriosityNavigator.cpp:1:
+C:/Users/ashis/Desktop/NeuroForge/include/navigation/CuriosityNavigator.h:350:49: error: expected ',' or '...' before 'concept'
+  350 |   void updateNoveltyTracking(const std::string &concept);
+      |                                                 ^~~~~~~
+ninja: build stopped: subcommand failed.

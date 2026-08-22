@@ -644,3 +644,42 @@ Phase A MemoryDB schema updates (v0.16+)
 - **Purpose**: Number of highest‑reward attempts to reinforce each replay cycle.
 
 References: `include/core/PhaseAMimicry.h:135–140`, `src/core/PhaseAMimicry.cpp:460–465`, `src/core/PhaseAMimicry.cpp:1323`.
+
+## Autonomous Grounding Parameters (Phase 4)
+
+### Verification Controls
+
+#### `min_sources_for_verification`
+- **Type**: `int`
+- **Default**: `2`
+- **Purpose**: Minimum independent sources required to verify a hypothesis.
+- **Effect**: Higher values = more rigor but slower verification.
+
+#### `min_verification_score`
+- **Type**: `float`
+- **Default**: `0.6f`
+- **Range**: `0.0f - 1.0f`
+- **Purpose**: Aggregate confidence score needed for verification.
+
+#### `contradiction_threshold`
+- **Type**: `float`
+- **Default**: `0.4f`
+- **Purpose**: Ratio of contradicting evidence to reject a hypothesis.
+- **Effect**: Lower values makes the system more sensitive to disputes.
+
+#### `source_trust`
+- **Type**: `map<string, float>`
+- **Default**: Wikipedia (0.9), Britannica (0.95), Simple Wikipedia (0.85).
+- **Purpose**: Trust weights for evidence sources.
+
+### Perception Constraints
+
+#### `url_allowlist`
+- **Type**: `vector<string>`
+- **Default**: `wikipedia.org`, `britannica.com`, `vocabulary.com`.
+- **Purpose**: Restricts autonomous browsing to safe, high-quality domains.
+
+#### `max_pages_per_minute`
+- **Type**: `int`
+- **Default**: `30`
+- **Purpose**: Rate limiting to prevent server overload or bot detection.

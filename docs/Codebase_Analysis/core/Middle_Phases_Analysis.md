@@ -12,7 +12,7 @@ Self-Revision (Stage 7)
         ↓
 Outcome Evaluation (Stage 7.5)
         ↓
-Autonomy Gating (Stage C v1)
+Governance (Stage C v1–v5)
         ↓
 Existing Action & Learning Systems
 
@@ -52,10 +52,14 @@ Stage 7.5 evaluates the observed outcomes of each self-revision over time and pe
 
 This layer is evaluation-only: it does not approve revisions, does not modify learning rules, and does not grant additional autonomy. It is frozen at the `stage7_5-freeze` tag.
 
-### Stage C v1: Governance-Only Autonomy Gating
-Stage C v1 reads the historical outcomes produced by Stage 7.5 (read-only), derives a conservative reputation-like signal over a recent window, and applies an autonomy cap multiplier to the existing autonomy envelope.
+### Stage C v1–v5: Governance-Only Controls (No Authority Expansion)
+Stage C is a governance layer that consumes audit telemetry and applies conservative constraints without creating new action channels or increasing authority.
 
-Stage C v1 does not add new capabilities, goals, or learning behaviors.
+- Stage C v1: governance-only autonomy cap derived from recent `self_revision_outcomes`.
+- Stage C v2: adds an evidence-accumulating cap via `Autonomy Credit` plus a harm-risk upper bound.
+- Stage C v3: preserves the v2 cap and adds preference stabilization that scales Phase 11 deltas away from empirically preferred values.
+- Stage C v4: preserves the v3 cap and adds bounded goal formation with governance veto (bounded, auditable writes to `goal_nodes` when enabled).
+- Stage C v5: preserves the v4 governance computation and adds audit-required scope-gated learning rules for experimental subsystems (scope open/allow/block events written to `language_audit_log`).
 
 ---
 

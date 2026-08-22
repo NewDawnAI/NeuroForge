@@ -11,7 +11,7 @@ namespace Core {
 
 static inline std::int64_t now_ms_phase15() {
     using namespace std::chrono;
-    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
 // Minimal initial policy:
@@ -24,7 +24,13 @@ std::string Phase15EthicsRegulator::runForLatest(const std::string& context) {
     if (!db_) return std::string("allow");
 
     // Sample the current context signal using provided label
-    double sample = NeuroForge::Core::NF_SampleContext(context);
+    double sample = 0.0;
+    if (sampler_) {
+        sample = sampler_(context);
+    } else {
+        sample = NeuroForge::Core::NF_SampleContext(context);
+    }
+    
     auto cfg_ctx = NeuroForge::Core::NF_GetContextConfig();
 
     // Compute decision relative to configured risk threshold with a small margin

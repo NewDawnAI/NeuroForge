@@ -1,0 +1,671 @@
+﻿[1/2] Building CXX object CMakeFiles/test_internet_grounding_full.dir/tests/test_internet_grounding_full.cpp.obj
+FAILED: CMakeFiles/test_internet_grounding_full.dir/tests/test_internet_grounding_full.cpp.obj 
+C:\Strawberry\c\bin\c++.exe -DMINIMAL_TEST_FRAMEWORK=1 -DNF_HAVE_SQLITE3=1 -DNF_HAVE_WEBVIEW2=1 -IC:/Users/ashis/Desktop/NeuroForge/include -IC:/Users/ashis/Desktop/NeuroForge/src -IC:/Users/ashis/Desktop/NeuroForge/build -IC:/Users/ashis/Desktop/NeuroForge/build/schemas -isystem C:/vcpkg/buildtrees/eigen3/src/a8c0519f1c-ba17d9986c.clean -isystem C:/Users/ashis/Desktop/NeuroForge/external/vcpkg/installed/x64-windows/include -O3 -DNDEBUG -std=c++20 -Wall -Wextra -Wpedantic -MD -MT CMakeFiles/test_internet_grounding_full.dir/tests/test_internet_grounding_full.cpp.obj -MF CMakeFiles\test_internet_grounding_full.dir\tests\test_internet_grounding_full.cpp.obj.d -o CMakeFiles/test_internet_grounding_full.dir/tests/test_internet_grounding_full.cpp.obj -c C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp: In function 'void setup()':
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:81:9: error: 'BrainConfig' is not a member of 'NeuroForge::Core'
+   81 |   Core::BrainConfig brain_config;
+      |         ^~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:82:51: error: 'brain_config' was not declared in this scope
+   82 |   brain = std::make_shared<Core::HypergraphBrain>(brain_config);
+      |                                                   ^~~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:84:9: error: 'LanguageSystemConfig' is not a member of 'NeuroForge::Core'; did you mean 'LanguageSystem'?
+   84 |   Core::LanguageSystemConfig lang_config;
+      |         ^~~~~~~~~~~~~~~~~~~~
+      |         LanguageSystem
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:85:60: error: 'lang_config' was not declared in this scope
+   85 |   language_system = std::make_unique<Core::LanguageSystem>(lang_config);
+      |                                                            ^~~~~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp: In lambda function:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:141:21: error: no match for 'operator==' (operand types are 'const NeuroForge::Perception::ExtractedEntity' and 'const char [4]')
+  141 |     if (rel.subject == "cat" && rel.relation == "is_a" &&
+      |         ~~~~~~~~~~~ ^~ ~~~~~
+      |             |          |
+      |             |          const char [4]
+      |             const NeuroForge::Perception::ExtractedEntity
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:141:37: error: 'const struct NeuroForge::Perception::CandidateRelation' has no member named 'relation'
+  141 |     if (rel.subject == "cat" && rel.relation == "is_a" &&
+      |                                     ^~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:142:20: error: no match for 'operator==' (operand types are 'const NeuroForge::Perception::ExtractedEntity' and 'const char [7]')
+  142 |         rel.object == "mammal") {
+      |         ~~~~~~~~~~ ^~ ~~~~~~~~
+      |             |         |
+      |             |         const char [7]
+      |             const NeuroForge::Perception::ExtractedEntity
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:53: error: no match for 'operator<<' (operand types are 'std::basic_ostream<char>' and 'const NeuroForge::Perception::ExtractedEntity')
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ^~ ~~~~~~~~~~~
+      |                 |                                          |
+      |                 std::basic_ostream<char>                   const NeuroForge::Perception::ExtractedEntity
+In file included from C:/Strawberry/c/include/c++/13.2.0/bits/unique_ptr.h:42,
+                 from C:/Strawberry/c/include/c++/13.2.0/memory:78,
+                 from C:/Users/ashis/Desktop/NeuroForge/include/core/Types.h:3,
+                 from C:/Users/ashis/Desktop/NeuroForge/include/core/LearningSystem.h:3,
+                 from C:/Users/ashis/Desktop/NeuroForge/include/core/LanguageSystem.h:3,
+                 from C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:2:
+C:/Strawberry/c/include/c++/13.2.0/ostream:110:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(__ostream_type& (*)(__ostream_type&)) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  110 |       operator<<(__ostream_type& (*__pf)(__ostream_type&))
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:110:36: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'std::basic_ostream<char>::__ostream_type& (*)(std::basic_ostream<char>::__ostream_type&)' {aka 'std::basic_ostream<char>& (*)(std::basic_ostream<char>&)'}
+  110 |       operator<<(__ostream_type& (*__pf)(__ostream_type&))
+      |                  ~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:119:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(__ios_type& (*)(__ios_type&)) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>; __ios_type = std::basic_ios<char>]'
+  119 |       operator<<(__ios_type& (*__pf)(__ios_type&))
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:119:32: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'std::basic_ostream<char>::__ios_type& (*)(std::basic_ostream<char>::__ios_type&)' {aka 'std::basic_ios<char>& (*)(std::basic_ios<char>&)'}
+  119 |       operator<<(__ios_type& (*__pf)(__ios_type&))
+      |                  ~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:129:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(std::ios_base& (*)(std::ios_base&)) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  129 |       operator<<(ios_base& (*__pf) (ios_base&))
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:129:30: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'std::ios_base& (*)(std::ios_base&)'
+  129 |       operator<<(ios_base& (*__pf) (ios_base&))
+      |                  ~~~~~~~~~~~~^~~~~~~~~~~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:168:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(long int) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  168 |       operator<<(long __n)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:168:23: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'long int'
+  168 |       operator<<(long __n)
+      |                  ~~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:172:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(long unsigned int) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  172 |       operator<<(unsigned long __n)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:172:32: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'long unsigned int'
+  172 |       operator<<(unsigned long __n)
+      |                  ~~~~~~~~~~~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:176:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(bool) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  176 |       operator<<(bool __n)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:176:23: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'bool'
+  176 |       operator<<(bool __n)
+      |                  ~~~~~^~~
+In file included from C:/Strawberry/c/include/c++/13.2.0/ostream:880:
+C:/Strawberry/c/include/c++/13.2.0/bits/ostream.tcc:96:5: note: candidate: 'std::basic_ostream<_CharT, _Traits>& std::basic_ostream<_CharT, _Traits>::operator<<(short int) [with _CharT = char; _Traits = std::char_traits<char>]'
+   96 |     basic_ostream<_CharT, _Traits>::
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/ostream.tcc:97:22: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'short int'
+   97 |     operator<<(short __n)
+      |                ~~~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:183:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(short unsigned int) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  183 |       operator<<(unsigned short __n)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:183:33: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'short unsigned int'
+  183 |       operator<<(unsigned short __n)
+      |                  ~~~~~~~~~~~~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/bits/ostream.tcc:110:5: note: candidate: 'std::basic_ostream<_CharT, _Traits>& std::basic_ostream<_CharT, _Traits>::operator<<(int) [with _CharT = char; _Traits = std::char_traits<char>]'
+  110 |     basic_ostream<_CharT, _Traits>::
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/ostream.tcc:111:20: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'int'
+  111 |     operator<<(int __n)
+      |                ~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:194:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(unsigned int) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  194 |       operator<<(unsigned int __n)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:194:31: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'unsigned int'
+  194 |       operator<<(unsigned int __n)
+      |                  ~~~~~~~~~~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:203:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(long long int) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  203 |       operator<<(long long __n)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:203:28: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'long long int'
+  203 |       operator<<(long long __n)
+      |                  ~~~~~~~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:207:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(long long unsigned int) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  207 |       operator<<(unsigned long long __n)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:207:37: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'long long unsigned int'
+  207 |       operator<<(unsigned long long __n)
+      |                  ~~~~~~~~~~~~~~~~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:222:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(double) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  222 |       operator<<(double __f)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:222:25: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'double'
+  222 |       operator<<(double __f)
+      |                  ~~~~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:226:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(float) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  226 |       operator<<(float __f)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:226:24: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'float'
+  226 |       operator<<(float __f)
+      |                  ~~~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:234:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(long double) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  234 |       operator<<(long double __f)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:234:30: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'long double'
+  234 |       operator<<(long double __f)
+      |                  ~~~~~~~~~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:292:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(const void*) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>]'
+  292 |       operator<<(const void* __p)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:292:30: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'const void*'
+  292 |       operator<<(const void* __p)
+      |                  ~~~~~~~~~~~~^~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:297:7: note: candidate: 'std::basic_ostream<_CharT, _Traits>::__ostream_type& std::basic_ostream<_CharT, _Traits>::operator<<(std::nullptr_t) [with _CharT = char; _Traits = std::char_traits<char>; __ostream_type = std::basic_ostream<char>; std::nullptr_t = std::nullptr_t]'
+  297 |       operator<<(nullptr_t)
+      |       ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:297:18: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'std::nullptr_t'
+  297 |       operator<<(nullptr_t)
+      |                  ^~~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/ostream.tcc:124:5: note: candidate: 'std::basic_ostream<_CharT, _Traits>& std::basic_ostream<_CharT, _Traits>::operator<<(__streambuf_type*) [with _CharT = char; _Traits = std::char_traits<char>; __streambuf_type = std::basic_streambuf<char>]'
+  124 |     basic_ostream<_CharT, _Traits>::
+      |     ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/ostream.tcc:125:34: note:   no known conversion for argument 1 from 'const NeuroForge::Perception::ExtractedEntity' to 'std::basic_ostream<char>::__streambuf_type*' {aka 'std::basic_streambuf<char>*'}
+  125 |     operator<<(__streambuf_type* __sbin)
+      |                ~~~~~~~~~~~~~~~~~~^~~~~~
+In file included from C:/Strawberry/c/include/c++/13.2.0/bits/basic_string.h:47,
+                 from C:/Strawberry/c/include/c++/13.2.0/string:54,
+                 from C:/Strawberry/c/include/c++/13.2.0/bits/locale_classes.h:40,
+                 from C:/Strawberry/c/include/c++/13.2.0/bits/ios_base.h:41,
+                 from C:/Strawberry/c/include/c++/13.2.0/ios:44,
+                 from C:/Strawberry/c/include/c++/13.2.0/ostream:40:
+C:/Strawberry/c/include/c++/13.2.0/string_view:760:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, basic_string_view<_CharT, _Traits>)'
+  760 |     operator<<(basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/string_view:760:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'NeuroForge::Perception::ExtractedEntity' is not derived from 'std::basic_string_view<_CharT, _Traits>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/basic_string.h:4020:5: note: candidate: 'template<class _CharT, class _Traits, class _Alloc> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const __cxx11::basic_string<_CharT, _Traits, _Allocator>&)'
+ 4020 |     operator<<(basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/basic_string.h:4020:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::__cxx11::basic_string<_CharT, _Traits, _Allocator>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+In file included from C:/Strawberry/c/include/c++/13.2.0/bits/memory_resource.h:38,
+                 from C:/Strawberry/c/include/c++/13.2.0/string:58:
+C:/Strawberry/c/include/c++/13.2.0/cstddef:124:5: note: candidate: 'template<class _IntegerType> constexpr std::__byte_op_t<_IntegerType> std::operator<<(byte, _IntegerType)'
+  124 |     operator<<(byte __b, _IntegerType __shift) noexcept
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/cstddef:124:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:17: note:   cannot convert 'std::operator<< <char_traits<char> >(std::cout, ((const char*)"Perception: Detected relation "))' (type 'std::basic_ostream<char>') to type 'std::byte'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |       ~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+In file included from C:/Strawberry/c/include/c++/13.2.0/bits/ios_base.h:46:
+C:/Strawberry/c/include/c++/13.2.0/system_error:339:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const error_code&)'
+  339 |     operator<<(basic_ostream<_CharT, _Traits>& __os, const error_code& __e)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/system_error:339:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'const std::error_code&'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:554:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, _CharT)'
+  554 |     operator<<(basic_ostream<_CharT, _Traits>& __out, _CharT __c)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:554:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   deduced conflicting types for parameter '_CharT' ('char' and 'NeuroForge::Perception::ExtractedEntity')
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:564:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, char)'
+  564 |     operator<<(basic_ostream<_CharT, _Traits>& __out, char __c)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:564:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'char'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:570:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, char)'
+  570 |     operator<<(basic_ostream<char, _Traits>& __out, char __c)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:570:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'char'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:581:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, signed char)'
+  581 |     operator<<(basic_ostream<char, _Traits>& __out, signed char __c)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:581:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'signed char'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:586:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, unsigned char)'
+  586 |     operator<<(basic_ostream<char, _Traits>& __out, unsigned char __c)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:586:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'unsigned char'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:595:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, wchar_t)' (deleted)
+  595 |     operator<<(basic_ostream<char, _Traits>&, wchar_t) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:595:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'wchar_t'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:600:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, char8_t)' (deleted)
+  600 |     operator<<(basic_ostream<char, _Traits>&, char8_t) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:600:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'char8_t'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:605:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, char16_t)' (deleted)
+  605 |     operator<<(basic_ostream<char, _Traits>&, char16_t) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:605:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'char16_t'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:609:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, char32_t)' (deleted)
+  609 |     operator<<(basic_ostream<char, _Traits>&, char32_t) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:609:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'char32_t'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:615:5: note: candidate: 'template<class _Traits> std::basic_ostream<wchar_t, _Traits>& std::operator<<(basic_ostream<wchar_t, _Traits>&, char8_t)' (deleted)
+  615 |     operator<<(basic_ostream<wchar_t, _Traits>&, char8_t) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:615:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   mismatched types 'wchar_t' and 'char'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:620:5: note: candidate: 'template<class _Traits> std::basic_ostream<wchar_t, _Traits>& std::operator<<(basic_ostream<wchar_t, _Traits>&, char16_t)' (deleted)
+  620 |     operator<<(basic_ostream<wchar_t, _Traits>&, char16_t) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:620:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   mismatched types 'wchar_t' and 'char'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:624:5: note: candidate: 'template<class _Traits> std::basic_ostream<wchar_t, _Traits>& std::operator<<(basic_ostream<wchar_t, _Traits>&, char32_t)' (deleted)
+  624 |     operator<<(basic_ostream<wchar_t, _Traits>&, char32_t) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:624:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   mismatched types 'wchar_t' and 'char'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:645:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const _CharT*)'
+  645 |     operator<<(basic_ostream<_CharT, _Traits>& __out, const _CharT* __s)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:645:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   mismatched types 'const _CharT*' and 'NeuroForge::Perception::ExtractedEntity'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/ostream.tcc:307:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const char*)'
+  307 |     operator<<(basic_ostream<_CharT, _Traits>& __out, const char* __s)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/ostream.tcc:307:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'const char*'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:662:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, const char*)'
+  662 |     operator<<(basic_ostream<char, _Traits>& __out, const char* __s)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:662:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'const char*'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:675:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, const signed char*)'
+  675 |     operator<<(basic_ostream<char, _Traits>& __out, const signed char* __s)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:675:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'const signed char*'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:680:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, const unsigned char*)'
+  680 |     operator<<(basic_ostream<char, _Traits>& __out, const unsigned char* __s)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:680:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'const unsigned char*'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:689:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, const wchar_t*)' (deleted)
+  689 |     operator<<(basic_ostream<char, _Traits>&, const wchar_t*) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:689:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'const wchar_t*'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:694:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, const char8_t*)' (deleted)
+  694 |     operator<<(basic_ostream<char, _Traits>&, const char8_t*) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:694:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'const char8_t*'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:699:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, const char16_t*)' (deleted)
+  699 |     operator<<(basic_ostream<char, _Traits>&, const char16_t*) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:699:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'const char16_t*'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:703:5: note: candidate: 'template<class _Traits> std::basic_ostream<char, _Traits>& std::operator<<(basic_ostream<char, _Traits>&, const char32_t*)' (deleted)
+  703 |     operator<<(basic_ostream<char, _Traits>&, const char32_t*) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:703:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'const char32_t*'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:709:5: note: candidate: 'template<class _Traits> std::basic_ostream<wchar_t, _Traits>& std::operator<<(basic_ostream<wchar_t, _Traits>&, const char8_t*)' (deleted)
+  709 |     operator<<(basic_ostream<wchar_t, _Traits>&, const char8_t*) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:709:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   mismatched types 'wchar_t' and 'char'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:714:5: note: candidate: 'template<class _Traits> std::basic_ostream<wchar_t, _Traits>& std::operator<<(basic_ostream<wchar_t, _Traits>&, const char16_t*)' (deleted)
+  714 |     operator<<(basic_ostream<wchar_t, _Traits>&, const char16_t*) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:714:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   mismatched types 'wchar_t' and 'char'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:718:5: note: candidate: 'template<class _Traits> std::basic_ostream<wchar_t, _Traits>& std::operator<<(basic_ostream<wchar_t, _Traits>&, const char32_t*)' (deleted)
+  718 |     operator<<(basic_ostream<wchar_t, _Traits>&, const char32_t*) = delete;
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:718:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   mismatched types 'wchar_t' and 'char'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:801:5: note: candidate: 'template<class _Ostream, class _Tp> _Ostream&& std::operator<<(_Ostream&&, const _Tp&)'
+  801 |     operator<<(_Ostream&& __os, const _Tp& __x)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/ostream:801:5: note:   template argument deduction/substitution failed:
+C:/Strawberry/c/include/c++/13.2.0/ostream: In substitution of 'template<class _Ostream, class _Tp> _Ostream&& std::operator<<(_Ostream&&, const _Tp&) [with _Ostream = std::basic_ostream<char>&; _Tp = NeuroForge::Perception::ExtractedEntity]':
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60:   required from here
+C:/Strawberry/c/include/c++/13.2.0/ostream:801:5: error: template constraint failure for 'template<class _Os, class _Tp>  requires (__derived_from_ios_base<_Os>) && requires(_Os& __os, const _Tp& __t) {__os << __t;} using std::__rvalue_stream_insertion_t = _Os&&'
+C:/Strawberry/c/include/c++/13.2.0/ostream:801:5: note: constraints not satisfied
+C:/Strawberry/c/include/c++/13.2.0/ostream: In substitution of 'template<class _Os, class _Tp>  requires (__derived_from_ios_base<_Os>) && requires(_Os& __os, const _Tp& __t) {__os << __t;} using std::__rvalue_stream_insertion_t = _Os&& [with _Os = std::basic_ostream<char>&; _Tp = NeuroForge::Perception::ExtractedEntity]':
+C:/Strawberry/c/include/c++/13.2.0/ostream:801:5:   required by substitution of 'template<class _Ostream, class _Tp> _Ostream&& std::operator<<(_Ostream&&, const _Tp&) [with _Ostream = std::basic_ostream<char>&; _Tp = NeuroForge::Perception::ExtractedEntity]'
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60:   required from here
+C:/Strawberry/c/include/c++/13.2.0/ostream:768:13:   required for the satisfaction of '__derived_from_ios_base<_Os>' [with _Os = std::basic_ostream<char, std::char_traits<char> >&]
+C:/Strawberry/c/include/c++/13.2.0/ostream:768:39: note: the expression 'is_class_v<_Tp> [with _Tp = std::basic_ostream<char, std::char_traits<char> >&]' evaluated to 'false'
+  768 |     concept __derived_from_ios_base = is_class_v<_Tp>
+      |                                       ^~~~~~~~~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/unique_ptr.h:1142:5: note: candidate: 'template<class _CharT, class _Traits, class _Tp, class _Dp> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const unique_ptr<_Up, _Ep>&) requires requires{std::operator<<::__os << std::operator<<::__p->get();}'
+ 1142 |     operator<<(basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/unique_ptr.h:1142:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::unique_ptr<_Up, _Ep>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+In file included from C:/Strawberry/c/include/c++/13.2.0/memory:80:
+C:/Strawberry/c/include/c++/13.2.0/bits/shared_ptr.h:70:5: note: candidate: 'template<class _Ch, class _Tr, class _Tp, __gnu_cxx::_Lock_policy _Lp> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const __shared_ptr<_Tp, _Lp>&)'
+   70 |     operator<<(std::basic_ostream<_Ch, _Tr>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/shared_ptr.h:70:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::__shared_ptr<_Tp, _Lp>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+In file included from C:/Strawberry/c/include/c++/13.2.0/bits/chrono_io.h:38,
+                 from C:/Strawberry/c/include/c++/13.2.0/chrono:3330,
+                 from C:/Users/ashis/Desktop/NeuroForge/include/core/Types.h:8:
+C:/Strawberry/c/include/c++/13.2.0/iomanip:81:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, _Resetiosflags)'
+   81 |     operator<<(basic_ostream<_CharT, _Traits>& __os, _Resetiosflags __f)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:81:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'std::_Resetiosflags'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:111:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, _Setiosflags)'
+  111 |     operator<<(basic_ostream<_CharT, _Traits>& __os, _Setiosflags __f)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:111:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'std::_Setiosflags'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:145:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, _Setbase)'
+  145 |     operator<<(basic_ostream<_CharT, _Traits>& __os, _Setbase __f)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:145:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'std::_Setbase'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:180:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, _Setfill<_CharT>)'
+  180 |     operator<<(basic_ostream<_CharT, _Traits>& __os, _Setfill<_CharT> __f)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:180:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'NeuroForge::Perception::ExtractedEntity' is not derived from 'std::_Setfill<_CharT>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:210:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, _Setprecision)'
+  210 |     operator<<(basic_ostream<_CharT, _Traits>& __os, _Setprecision __f)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:210:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'std::_Setprecision'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:240:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, _Setw)'
+  240 |     operator<<(basic_ostream<_CharT, _Traits>& __os, _Setw __f)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:240:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'std::_Setw'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:313:5: note: candidate: 'template<class _CharT, class _Traits, class _MoneyT> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, _Put_money<_MoneyT>)'
+  313 |     operator<<(basic_ostream<_CharT, _Traits>& __os, _Put_money<_MoneyT> __f)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:313:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'NeuroForge::Perception::ExtractedEntity' is not derived from 'std::_Put_money<_MoneyT>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:365:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, _Put_time<_CharT>)'
+  365 |     operator<<(basic_ostream<_CharT, _Traits>& __os, _Put_time<_CharT> __f)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/iomanip:365:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'NeuroForge::Perception::ExtractedEntity' is not derived from 'std::_Put_time<_CharT>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+In file included from C:/Strawberry/c/include/c++/13.2.0/random:51,
+                 from C:/Users/ashis/Desktop/NeuroForge/include/core/LearningSystem.h:9:
+C:/Strawberry/c/include/c++/13.2.0/bits/random.h:1341:5: note: candidate: 'template<class _RandomNumberEngine, long long unsigned int __w, class _UIntType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const independent_bits_engine<_RandomNumberEngine, __w, _UIntType>&)'
+ 1341 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.h:1341:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::independent_bits_engine<_RandomNumberEngine, __w, _UIntType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+In file included from C:/Strawberry/c/include/c++/13.2.0/random:53:
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:907:5: note: candidate: 'template<class _IntType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const uniform_int_distribution<_IntType>&)'
+  907 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:907:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::uniform_int_distribution<_IntType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:965:5: note: candidate: 'template<class _RealType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const uniform_real_distribution<_RealType>&)'
+  965 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:965:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::uniform_real_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2142:5: note: candidate: 'template<class _RealType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const cauchy_distribution<_RealType>&)'
+ 2142 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2142:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::cauchy_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1026:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const bernoulli_distribution&)'
+ 1026 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1026:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'const std::bernoulli_distribution&'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1107:5: note: candidate: 'template<class _IntType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const geometric_distribution<_IntType>&)'
+ 1107 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1107:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::geometric_distribution<_IntType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1759:5: note: candidate: 'template<class _RealType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const exponential_distribution<_RealType>&)'
+ 1759 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1759:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::exponential_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2536:5: note: candidate: 'template<class _RealType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const weibull_distribution<_RealType>&)'
+ 2536 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2536:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::weibull_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2610:5: note: candidate: 'template<class _RealType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const extreme_value_distribution<_RealType>&)'
+ 2610 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2610:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::extreme_value_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:156:5: note: candidate: 'template<class _UIntType, _UIntType __a, _UIntType __c, _UIntType __m, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const linear_congruential_engine<_UIntType, __a, __c, __m>&)'
+  156 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:156:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::linear_congruential_engine<_UIntType, __a, __c, __m>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:477:5: note: candidate: 'template<class _UIntType1, long long unsigned int __w1, long long unsigned int __n1, long long unsigned int __m1, long long unsigned int __r1, _UIntType1 __a1, long long unsigned int __u1, _UIntType1 __d1, long long unsigned int __s1, _UIntType1 __b1, long long unsigned int __t1, _UIntType1 __c1, long long unsigned int __l1, _UIntType1 __f1, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const mersenne_twister_engine<_UIntType1, __w1, __n1, __m1, __r1, __a1, __u1, __d1, __s1, __b1, __t1, __c1, __l1, __f1>&)'
+  477 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:477:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::mersenne_twister_engine<_UIntType1, __w1, __n1, __m1, __r1, __a1, __u1, __d1, __s1, __b1, __t1, __c1, __l1, __f1>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:632:5: note: candidate: 'template<class _UIntType, long long unsigned int __w, long long unsigned int __s, long long unsigned int __r, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const subtract_with_carry_engine<_UIntType, __w, __s, __r>&)'
+  632 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:632:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::subtract_with_carry_engine<_UIntType, __w, __s, __r>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:701:5: note: candidate: 'template<class _RandomNumberEngine, long long unsigned int __p, long long unsigned int __r, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const discard_block_engine<_RandomNumberEngine, __p, __r>&)'
+  701 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:701:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::discard_block_engine<_RandomNumberEngine, __p, __r>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:863:5: note: candidate: 'template<class _RandomNumberEngine, long long unsigned int __k, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const shuffle_order_engine<_RandomNumberEngine, __k>&)'
+  863 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:863:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::shuffle_order_engine<_RandomNumberEngine, __k>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1221:5: note: candidate: 'template<class _IntType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const negative_binomial_distribution<_IntType>&)'
+ 1221 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1221:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::negative_binomial_distribution<_IntType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1431:5: note: candidate: 'template<class _IntType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const poisson_distribution<_IntType>&)'
+ 1431 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1431:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::poisson_distribution<_IntType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1697:5: note: candidate: 'template<class _IntType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const binomial_distribution<_IntType>&)'
+ 1697 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1697:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::binomial_distribution<_IntType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1917:5: note: candidate: 'template<class _RealType1, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const normal_distribution<_RealType>&)'
+ 1917 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1917:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::normal_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1984:5: note: candidate: 'template<class _RealType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const lognormal_distribution<_RealType>&)'
+ 1984 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:1984:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::lognormal_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2056:5: note: candidate: 'template<class _RealType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const chi_squared_distribution<_RealType>&)'
+ 2056 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2056:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::chi_squared_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2217:5: note: candidate: 'template<class _RealType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const fisher_f_distribution<_RealType>&)'
+ 2217 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2217:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::fisher_f_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2291:5: note: candidate: 'template<class _RealType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const student_t_distribution<_RealType>&)'
+ 2291 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2291:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::student_t_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2460:5: note: candidate: 'template<class _RealType1, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const gamma_distribution<_RealType>&)'
+ 2460 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2460:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::gamma_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2746:5: note: candidate: 'template<class _IntType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const discrete_distribution<_IntType>&)'
+ 2746 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2746:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::discrete_distribution<_IntType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2968:5: note: candidate: 'template<class _RealType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const piecewise_constant_distribution<_RealType>&)'
+ 2968 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:2968:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::piecewise_constant_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:3174:5: note: candidate: 'template<class _RealType, class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, const piecewise_linear_distribution<_RealType>&)'
+ 3174 |     operator<<(std::basic_ostream<_CharT, _Traits>& __os,
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/bits/random.tcc:3174:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   'const NeuroForge::Perception::ExtractedEntity' is not derived from 'const std::piecewise_linear_distribution<_RealType>'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                            ^~~~~~~
+In file included from C:/Users/ashis/Desktop/NeuroForge/include/core/HypergraphBrain.h:19,
+                 from C:/Users/ashis/Desktop/NeuroForge/include/core/RelationGate.h:14,
+                 from C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:3:
+C:/Strawberry/c/include/c++/13.2.0/thread:97:5: note: candidate: 'template<class _CharT, class _Traits> std::basic_ostream<_CharT, _Traits>& std::operator<<(basic_ostream<_CharT, _Traits>&, thread::id)'
+   97 |     operator<<(basic_ostream<_CharT, _Traits>& __out, thread::id __id)
+      |     ^~~~~~~~
+C:/Strawberry/c/include/c++/13.2.0/thread:97:5: note:   template argument deduction/substitution failed:
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:144:60: note:   cannot convert 'rel.NeuroForge::Perception::CandidateRelation::subject' (type 'const NeuroForge::Perception::ExtractedEntity') to type 'std::thread::id'
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |                                                        ~~~~^~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:145:24: error: 'const struct NeuroForge::Perception::CandidateRelation' has no member named 'relation'
+  145 |                 << rel.relation << " " << rel.object << "\n";
+      |                        ^~~~~~~~
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp: In function 'void InternetGrounding_FullLoopSimulation()':
+C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:140:35: error: cannot convert 'InternetGrounding_FullLoopSimulation()::<lambda(const NeuroForge::Perception::CandidateRelation&)>' to 'NeuroForge::Perception::LivePerceptionLoop::RelationCallback' {aka 'std::function<void(const NeuroForge::Perception::CandidateRelation&, bool)>'}
+  140 |   perception->setRelationCallback([&](const CandidateRelation &rel) {
+      |                                   ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                   |
+      |                                   InternetGrounding_FullLoopSimulation()::<lambda(const NeuroForge::Perception::CandidateRelation&)>
+  141 |     if (rel.subject == "cat" && rel.relation == "is_a" &&
+      |     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  142 |         rel.object == "mammal") {
+      |         ~~~~~~~~~~~~~~~~~~~~~~~~~  
+  143 |       relation_detected = true;
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~    
+  144 |       std::cout << "Perception: Detected relation " << rel.subject << " "
+      |       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  145 |                 << rel.relation << " " << rel.object << "\n";
+      |                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  146 |     }
+      |     ~                              
+  147 |   });
+      |   ~                                
+In file included from C:/Users/ashis/Desktop/NeuroForge/include/navigation/CuriosityNavigator.h:14,
+                 from C:/Users/ashis/Desktop/NeuroForge/tests/test_internet_grounding_full.cpp:4:
+C:/Users/ashis/Desktop/NeuroForge/include/perception/LivePerceptionLoop.h:226:45: note:   initializing argument 1 of 'void NeuroForge::Perception::LivePerceptionLoop::setRelationCallback(RelationCallback)'
+  226 |   void setRelationCallback(RelationCallback callback) {
+      |                            ~~~~~~~~~~~~~~~~~^~~~~~~~
+ninja: build stopped: subcommand failed.

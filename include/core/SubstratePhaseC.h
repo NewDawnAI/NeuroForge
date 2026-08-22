@@ -62,6 +62,7 @@ public:
         std::string task_type;                       ///< "binding" or "sequence"
         std::vector<NeuroForge::RegionID> target_regions; ///< Regions to activate
         std::vector<float> target_pattern;           ///< Target activation pattern
+        std::map<NeuroForge::RegionID, std::vector<float>> region_patterns; ///< Per-region target patterns (overrides target_pattern if present)
         float priority = 1.0f;                      ///< Goal priority
         bool active = false;                         ///< Whether goal is currently active
     };
@@ -89,6 +90,16 @@ public:
     void setGoal(const std::string& task_type, const std::map<std::string, std::string>& parameters);
 
     /**
+     * @brief Get current configuration
+     */
+    Config getConfig() const { return config_; }
+
+    /**
+     * @brief Update configuration
+     */
+    void setConfig(const Config& config) { config_ = config; }
+
+    /**
      * @brief Process one step of substrate-driven Phase C behavior
      */
     void processStep(int step, float delta_time);
@@ -113,6 +124,7 @@ public:
      */
     struct Statistics {
         std::size_t assemblies_formed = 0;
+        std::size_t active_assemblies = 0;
         std::size_t bindings_created = 0;
         std::size_t sequences_predicted = 0;
         std::size_t goals_achieved = 0;
@@ -137,7 +149,12 @@ public:
      * @brief Attach SurvivalBias to modulate assembly coherence under risk
      */
     void setSurvivalBias(std::shared_ptr<NeuroForge::Biases::SurvivalBias> bias) { survival_bias_ = std::move(bias); }
+    std::shared_ptr<NeuroForge::Biases::SurvivalBias> getSurvivalBias() const { return survival_bias_; }
     void setJsonSink(std::function<void(const std::string&)> sink) { json_sink_ = std::move(sink); }
+
+    // Symbol table access
+    std::size_t getTokenIndex(const std::string& token);
+    std::string getTokenString(std::size_t index) const;
 
 private:
     // Core substrate operations
@@ -160,7 +177,7 @@ private:
     bool isGoalAchieved(const SubstrateGoal& goal) const;
     
     // Utility functions
-    float calculateCoherence(const std::vector<NeuroForge::NeuronID>& neurons) const;
+    float calculateCoherence(const std::vector<float>& activations) const;
     std::vector<float> extractActivationPattern(const std::vector<NeuroForge::NeuronID>& neurons) const;
     void updateStatistics();
     void emitSurvivalReward();
@@ -208,6 +225,11 @@ private:
     // Bias integration
     std::shared_ptr<NeuroForge::Biases::SurvivalBias> survival_bias_;
     std::function<void(const std::string&)> json_sink_;
+
+    // Symbol table
+    std::unordered_map<std::string, std::size_t> token_to_index_;
+    mutable std::unordered_map<std::size_t, std::string> index_to_token_;
+    std::size_t next_token_index_ = 0;
 };
 
 } // namespace Core

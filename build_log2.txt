@@ -1,0 +1,4 @@
+﻿[1/4] Linking CXX static library libneuroforge_core.a
+[2/4] Linking CXX static library libneuroforge_regions.a
+[3/4] Building CXX object CMakeFiles/test_relation_gates.dir/tests/test_relation_gates.cpp.obj
+[4/4] Linking CXX executable test_relation_gates.exe

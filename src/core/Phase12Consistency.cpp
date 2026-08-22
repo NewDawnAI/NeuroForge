@@ -9,7 +9,7 @@ namespace Core {
 
 static inline std::int64_t now_ms_p12() {
     using namespace std::chrono;
-    return duration_cast<milliseconds>(steady_clock::now().time_since_epoch()).count();
+    return duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
 }
 
 static inline double clamp01(double x) { return std::max(0.0, std::min(1.0, x)); }
