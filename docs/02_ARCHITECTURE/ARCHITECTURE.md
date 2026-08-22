@@ -1,5 +1,14 @@
 # NeuroForge Architecture (Public Overview)
 
+> **Governance engines changed 2026-08-22.** `ContractAcceptanceEngine` gained an
+> optional `ContractStore` and a privilege-escalation check (Check 8): previously it
+> evaluated every proposal in isolation and **accepted** a contract widening
+> `speak_only` to `full_access` while dropping its predecessor's restrictions. Both it
+> and `RoleAcceptanceEngine` also had their check order changed so the narrowest
+> jurisdiction governs - the set of rejected proposals is unchanged, only the reported
+> reason. Landed without re-ratification by owner decision. Detail:
+> `Validation_notes/governance_engine_changes_2026-08-22.md`
+
 NeuroForge is organized around a small number of interacting loops that make internal state, internal change, and internal justification observable.
 
 This is a foundational research prototype — not a product.

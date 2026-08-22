@@ -706,3 +706,78 @@ Get-ChildItem -Recurse -Filter neuroforge.exe | ForEach-Object {
 #   --sandbox-url=URL
 #   --sandbox-size=WxH
 ```
+
+---
+
+## MSYS2 / MinGW-w64 build (verified 2026-08-22)
+
+The sections above prescribe MSVC + vcpkg. The binaries previously shipped in
+`build/` were in fact linked against **MinGW/MSYS2** runtimes (`libgcc_s_seh-1.dll`,
+`libwinpthread-1.dll`, `libsqlite3-0.dll`, `libcapnp.dll`, `libkj.dll`), so on a machine
+without that toolchain they fail to start with `0xC0000135` (STATUS_DLL_NOT_FOUND) before
+reaching `main()`. This section records a toolchain that builds the tree from source,
+end to end, including the failure modes encountered.
+
+### 1. Toolchain and dependencies
+
+```bash
+winget install --id MSYS2.MSYS2
+C:\msys64\usr\bin\bash.exe -lc "pacman -S --needed \
+  mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-ninja \
+  mingw-w64-x86_64-capnproto mingw-w64-x86_64-sqlite3 mingw-w64-x86_64-eigen3 \
+  mingw-w64-x86_64-opencv mingw-w64-x86_64-nlohmann-json mingw-w64-x86_64-tbb"
+```
+
+Verified with GCC 16.2.0, Cap'n Proto 1.4.0, SQLite 3.53.4. The tree compiles clean under
+GCC 16 apart from unused-parameter warnings.
+
+### 2. Configure and build
+
+```bash
+export PATH=/mingw64/bin:$PATH
+LIBS="-ltbb12 -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 \
+      -loleaut32 -luuid -lcomdlg32 -ladvapi32"
+cmake -S . -B build_msys -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_CXX_STANDARD_LIBRARIES="$LIBS"
+cmake --build build_msys --target neuroforge -j4
+```
+
+### 3. Failure modes, and what they actually mean
+
+**`#error "Version mismatch between generated code and library headers"`**
+`include/serialization/*.capnp.h` are **generated files that are checked in**, stamped
+with the compiler version that produced them (`CAPNP_VERSION != 1002000` = capnp 1.2.0).
+They must match the installed library. Regenerate:
+
+```bash
+capnp compile -oc++ --src-prefix=schemas schemas/neuroforge.capnp
+capnp compile -oc++ --src-prefix=schemas schemas/brainstate.capnp
+cp neuroforge.capnp.* brainstate.capnp.* include/serialization/
+```
+
+Note `--src-prefix` strips the prefix, so output lands in the **repository root**, not in
+`schemas/`.
+
+**`undefined reference to tbb::detail::r1::...`**
+The tree uses C++17 parallel algorithms (`std::execution`), which libstdc++ implements via
+Intel TBB. MSYS2 ships the import library as **`libtbb12`**, so the flag is `-ltbb12`, not
+`-ltbb`. It must also come **after** the object files: GNU ld resolves left to right, so
+putting it in `CMAKE_EXE_LINKER_FLAGS` places it too early. Use
+`CMAKE_CXX_STANDARD_LIBRARIES`.
+
+**`undefined reference to FOLDERID_LocalAppData`**
+`CMAKE_CXX_STANDARD_LIBRARIES` **replaces** CMake's default Windows library list rather
+than appending to it. Passing only `-ltbb12` drops `-luuid`, `-lole32` and the rest. Pass
+the full list as shown above.
+
+### 4. Tests
+
+`neuroforge_tests` links exactly **one** test file (`test_autonomous_scheduler.cpp`). The
+other 41 files under `tests/` are separate CMake targets and are **not** built by that
+aggregate target. To build and run them all:
+
+```bash
+cmake --build build_msys --target help | grep -oE "^test_[a-z0-9_]+"
+```
+
+Measured 2026-08-22 after the fixes on this branch: **37 targets, 37 build, 34 pass.**
