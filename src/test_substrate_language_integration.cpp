@@ -28,6 +28,14 @@ private:
     std::size_t tests_failed_;
 
 public:
+    // Exposed so main() can set the process exit code from the result. Without
+    // this the suite printed "Some tests FAILED" and still returned 0, so any
+    // CI checking exit codes reported it green.
+    std::size_t failedCount() const { return tests_failed_; }
+
+private:
+
+public:
     explicit SubstrateLanguageIntegrationTest(bool verbose = true) 
         : verbose_output_(verbose), tests_passed_(0), tests_failed_(0) {
         
@@ -1116,7 +1124,9 @@ int main() {
     try {
         SubstrateLanguageIntegrationTest test_suite(true);
         test_suite.runAllTests();
-        return 0;
+        // Exit non-zero when any assertion failed; previously this always
+        // returned 0 regardless of the reported result.
+        return test_suite.failedCount() == 0 ? 0 : 1;
     } catch (const std::exception& e) {
         std::cerr << "Test suite failed with exception: " << e.what() << std::endl;
         return 1;

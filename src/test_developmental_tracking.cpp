@@ -1,5 +1,6 @@
 #include "core/LanguageSystem.h"
 #include <iostream>
+#include <iomanip>  // std::setprecision (not transitively provided by <iostream> in GCC 16)
 #include <vector>
 #include <chrono>
 #include <random>
@@ -129,7 +130,7 @@ private:
         // Caregiver-like interactions with motherese
         if (step % 8 == 0) {
             std::vector<std::string> babbling_sounds = {"mama", "baba", "dada", "gaga", "nana"};
-            std::uniform_int_distribution<> sound_dist(0, babbling_sounds.size() - 1);
+            std::uniform_int_distribution<> sound_dist(0, static_cast<int>(babbling_sounds.size()) - 1);
             
             // Higher pitch for motherese
             auto teacher_audio = generateSyntheticAudio(babbling_sounds[sound_dist(rng_)], 200.0f, true);
@@ -145,7 +146,7 @@ private:
                 {"ball", {0.2f, 0.3f}},
                 {"cup",  {0.7f, 0.4f}}
             };
-            std::uniform_int_distribution<> obj_dist(0, early_objects.size() - 1);
+            std::uniform_int_distribution<> obj_dist(0, static_cast<int>(early_objects.size()) - 1);
             auto [word, gaze] = early_objects[obj_dist(rng_)];
             language_system_->processJointAttentionEvent(gaze, word);
         }
@@ -182,7 +183,7 @@ private:
                 {"toy", {0.1f, 0.8f}}
             };
             
-            std::uniform_int_distribution<> word_dist(0, grounded_words.size() - 1);
+            std::uniform_int_distribution<> word_dist(0, static_cast<int>(grounded_words.size()) - 1);
             auto [word, gaze] = grounded_words[word_dist(rng_)];
             
             // Teach word with visual grounding
@@ -199,7 +200,7 @@ private:
         // Advanced communication patterns
         if (step % 5 == 0) {
             std::vector<std::string> advanced_words = {"please", "thank", "help", "want", "like"};
-            std::uniform_int_distribution<> word_dist(0, advanced_words.size() - 1);
+            std::uniform_int_distribution<> word_dist(0, static_cast<int>(advanced_words.size()) - 1);
             
             std::string word = advanced_words[word_dist(rng_)];
             auto teacher_audio = generateSyntheticAudio(word, 170.0f);
