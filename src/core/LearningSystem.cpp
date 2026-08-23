@@ -30,8 +30,7 @@ namespace NeuroForge {
         void LearningSystem::shutdown() {
             is_active_.store(false, std::memory_order_relaxed);
             {
-                std::lock_guard<std::mutex> lock(syn_state_mutex_);
-                syn_state_.clear();
+                elig_.clear();
             }
             {
                 std::lock_guard<std::mutex> lock(spike_times_mutex_);
@@ -136,16 +135,12 @@ namespace NeuroForge {
             if (std::fabs(R) > 1e-9f) {
                 std::vector<std::pair<SynapseID, float>> deltas;
                 {
-                    std::lock_guard<std::mutex> lock(syn_state_mutex_);
-                    deltas.reserve(syn_state_.size());
-                    for (auto& kv : syn_state_) {
-                        const SynapseID sid = kv.first;
-                        SynapseRuntime& st = kv.second;
+                    elig_.forEachActive([&](SynapseID sid, float eligibility) {
                         float comp_scale_dw = 1.0f;
                         if (config_.competence_mode == CompetenceMode::ScaleLearningRates) {
                             comp_scale_dw = std::clamp(competence_level_.load(std::memory_order_relaxed), 0.0f, 1.0f);
                         }
-                        const float dw = kappa_ * R * st.eligibility * config_.global_learning_rate; // Apply global learning rate
+                        const float dw = kappa_ * R * eligibility * config_.global_learning_rate; // Apply global learning rate
                         if (std::fabs(dw) > 0.0f) {
                             // Stochastic gating for sparse plasticity
                             float effective_p_gate_r = config_.p_gate;
@@ -158,7 +153,7 @@ namespace NeuroForge {
                             }
                         }
                         // Note: eligibility decay removed to match expected test formula kappa*R*elig
-                    }
+                    });
                 }
                 // Apply weight deltas without holding the map mutex
                 for (const auto& [sid, dw] : deltas) {
@@ -778,10 +773,9 @@ void LearningSystem::onNeuronSpike(NeuroForge::NeuronID neuron_id, NeuroForge::T
                 sids.clear();
                 neuron->collectSynapseIds(sids);
 
-                std::lock_guard<std::mutex> lock(syn_state_mutex_);
+                // No lock: EligibilityTraces is a flat array of atomics.
                 for (const auto sid : sids) {
-                    auto& state = syn_state_[sid];
-                    state.eligibility = std::min(1.0f, state.eligibility + 0.1f);
+                    elig_.bump(sid, 0.1f);
                 }
             }
         }
@@ -1031,9 +1025,7 @@ void LearningSystem::updateStatistics(LearningSystem::Algorithm algorithm, float
         void LearningSystem::notePrePost(NeuroForge::SynapseID sid, float pre, float post) {
             if (!is_active_.load()) return;
             const float increment = etaElig_ * pre * post;
-            std::lock_guard<std::mutex> lock(syn_state_mutex_);
-            auto &st = syn_state_[sid];
-            st.eligibility = lambda_ * st.eligibility + increment;
+            elig_.set(sid, lambda_ * elig_.get(sid) + increment);
         }
 
         void LearningSystem::applyExternalReward(float r) {
@@ -1065,18 +1057,12 @@ void LearningSystem::updateStatistics(LearningSystem::Algorithm algorithm, float
             eta_ = eta;
             // Reset Phase 4 runtime state to ensure deterministic behavior between configurations
             {
-                std::lock_guard<std::mutex> lock(syn_state_mutex_);
-                for (auto &kv : syn_state_) {
-                    kv.second.eligibility = 0.0f;
-                }
+                elig_.clear();
             }
         }
 
         float LearningSystem::getElig(NeuroForge::SynapseID sid) const {
-            std::lock_guard<std::mutex> lock(syn_state_mutex_);
-            auto it = syn_state_.find(sid);
-            if (it == syn_state_.end()) return 0.0f;
-            return it->second.eligibility;
+            return elig_.get(sid);
         }
 
         float LearningSystem::computeShapedReward(const std::vector<float>& obs,

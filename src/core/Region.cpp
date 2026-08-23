@@ -60,7 +60,10 @@ namespace NeuroForge {
             }
 
             neurons_.push_back(neuron);
-            neuron_index_[neuron->getId()] = neuron;
+            {
+                std::lock_guard<std::mutex> ilock(neuron_index_mutex_);
+                neuron_index_[neuron->getId()] = neuron;
+            }
             mito_states_.emplace_back(); // Add default mitochondrial state
             return true;
         }
@@ -102,13 +105,17 @@ namespace NeuroForge {
                 mito_states_.erase(mito_states_.begin() + index);
             }
 
-            neuron_index_.erase(neuron_id);
+            {
+                std::lock_guard<std::mutex> ilock(neuron_index_mutex_);
+                neuron_index_.erase(neuron_id);
+            }
             neurons_.erase(it);
             return true;
         }
 
         NeuronPtr Region::getNeuron(NeuronID neuron_id) const {
-            std::lock_guard<std::mutex> lock(region_mutex_);
+            // neuron_index_mutex_, never region_mutex_ -- see the declaration.
+            std::lock_guard<std::mutex> lock(neuron_index_mutex_);
             
             const auto it = neuron_index_.find(neuron_id);
             return (it != neuron_index_.end()) ? it->second : nullptr;
@@ -129,6 +136,7 @@ namespace NeuroForge {
             {
                 std::lock_guard<std::mutex> lock(region_mutex_);
                 neurons_.insert(neurons_.end(), created_neurons.begin(), created_neurons.end());
+                std::lock_guard<std::mutex> ilock(neuron_index_mutex_);
                 neuron_index_.reserve(neurons_.size());
                 for (const auto& n : created_neurons) {
                     if (n) neuron_index_[n->getId()] = n;

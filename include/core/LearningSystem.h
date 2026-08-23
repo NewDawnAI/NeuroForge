@@ -1,5 +1,6 @@
 #pragma once
 
+#include "EligibilityTraces.h"
 #include "core/Types.h"
 #include <atomic>
 #include <chrono>
@@ -331,7 +332,14 @@ private:
       last_spike_times_;
 
   // Phase 4 runtime state
-  std::unordered_map<NeuroForge::SynapseID, SynState> syn_state_;
+  /// Per-synapse eligibility, flat and lock-free. Replaces an
+  /// unordered_map<SynapseID, SynState> that held a single float per entry and
+  /// was written ~128 times per spike under syn_state_mutex_ -- see
+  /// EligibilityTraces.h for the measurements that motivated the change.
+  EligibilityTraces elig_;
+  /// NOTE: this mutex no longer guards eligibility. It still guards rng_,
+  /// attention_weights_ and statistics_, which are unrelated state that happened
+  /// to share it.
   mutable std::mutex syn_state_mutex_;
   /// id -> synapse, filled on first successful lookup.
   ///

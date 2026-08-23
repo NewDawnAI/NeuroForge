@@ -115,6 +115,18 @@ namespace NeuroForge {
             /// 12-region anatomical brain in 420 seconds, stuck on iteration 0.
             /// connectToRegion also calls it twice per synapse.
             std::unordered_map<NeuronID, NeuronPtr> neuron_index_;
+            /// Guards neuron_index_ ONLY.
+            ///
+            /// getNeuron() must not take region_mutex_. Neuron spike callbacks
+            /// run inside code that already holds it -- LearningSystem::
+            /// onNeuronSpike calls getNeuron() once per region while
+            /// accumulating eligibility -- and std::mutex is not recursive, so
+            /// the lookup deadlocked against its own caller. Diagnosed
+            /// 2026-08-24: with --anatomical-regions --auto-eligibility=on the
+            /// probe showed 9 getNeuron entries and only 8 returns, then no
+            /// further progress. It presented as "eligibility is too slow" and
+            /// survived four unrelated optimisations before being measured.
+            mutable std::mutex neuron_index_mutex_;
             // Mitochondrial state (parallel to neurons_)
             std::vector<MitochondrialState> mito_states_;
             
