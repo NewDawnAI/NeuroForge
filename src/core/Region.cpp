@@ -15,6 +15,10 @@
 #elif defined(__SSE2__)
 #include <emmintrin.h>
 #include "core/SubstrateAblation.h"
+#include "regions/CorticalRegions.h"
+#include "regions/SubcorticalRegions.h"
+#include "regions/LimbicRegions.h"
+#include <cctype>
 #endif
 
 namespace NeuroForge {
@@ -1196,9 +1200,80 @@ namespace NeuroForge {
         }
 
         // RegionFactory Implementation
+
+        namespace {
+            bool &anatomicalDispatchRef() { static bool enabled = false; return enabled; }
+            std::size_t &anatomicalNeuronsRef() { static std::size_t n = 64; return n; }
+
+            std::string lowerCopy(const std::string &in) {
+                std::string out(in);
+                for (auto &c : out) {
+                    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+                }
+                return out;
+            }
+        } // namespace
+
+        void RegionFactory::setAnatomicalDispatch(bool enabled, std::size_t neuron_count) {
+            anatomicalDispatchRef() = enabled;
+            anatomicalNeuronsRef() = neuron_count;
+        }
+
+        bool RegionFactory::anatomicalDispatchEnabled() { return anatomicalDispatchRef(); }
+
+        namespace {
+            // Construct the anatomical subclass matching `name`, or nullptr.
+            // Matching is on a lowercased substring so that "LeftHippocampus" and
+            // "hippocampus_CA1" both resolve, which is how callers name regions.
+            NeuroForge::RegionPtr makeAnatomical(const std::string &name, std::size_t n) {
+                using namespace NeuroForge::Regions;
+                const std::string k = lowerCopy(name);
+                auto has = [&k](const char *needle) { return k.find(needle) != std::string::npos; };
+
+                // Most specific first: "prefrontalcortex" also contains "cortex",
+                // and "somatosensorycortex" contains "sensory".
+                if (has("hippocamp"))        return std::make_shared<Hippocampus>(name, n);
+                if (has("amygdala"))         return std::make_shared<Amygdala>(name, n);
+                if (has("thalam"))           return std::make_shared<Thalamus>(name, n);
+                if (has("brainstem"))        return std::make_shared<Brainstem>(name, n);
+                if (has("prefrontal"))       return std::make_shared<PrefrontalCortex>(name, n);
+                if (has("somatosensory"))    return std::make_shared<SomatosensoryCortex>(name, n);
+                if (has("cingulate"))        return std::make_shared<CingulateCortex>(name, n);
+                if (has("insula"))           return std::make_shared<Insula>(name, n);
+                if (has("defaultmode"))      return std::make_shared<DefaultModeNetwork>(name, n);
+                if (has("selfnode"))         return std::make_shared<SelfNode>(name, n);
+                if (has("visual"))           return std::make_shared<VisualCortex>(name, n);
+                if (has("auditory"))         return std::make_shared<AuditoryCortex>(name, n);
+                if (has("motor"))            return std::make_shared<MotorCortex>(name, n);
+                return nullptr;
+            }
+        } // namespace
+
+        bool RegionFactory::isAnatomicalName(const std::string &name) {
+            static const char *kNames[] = {
+                "hippocamp", "amygdala", "thalam", "brainstem", "prefrontal",
+                "somatosensory", "cingulate", "insula", "defaultmode",
+                "selfnode", "visual", "auditory", "motor"};
+            const std::string k = lowerCopy(name);
+            for (const char *nm : kNames) {
+                if (k.find(nm) != std::string::npos) return true;
+            }
+            return false;
+        }
+
         RegionPtr RegionFactory::createRegion(const std::string& name,
                                              Region::Type type,
                                              Region::ActivationPattern pattern) {
+            // Anatomical dispatch, when enabled. The subclass assigns its own id
+            // via getNextId() and sets the Type/ActivationPattern appropriate to
+            // the real structure (e.g. Hippocampus is Subcortical/Oscillatory),
+            // so the type and pattern requested here are deliberately overridden
+            // for a region we have an implementation of.
+            if (anatomicalDispatchRef()) {
+                if (auto specialised = makeAnatomical(name, anatomicalNeuronsRef())) {
+                    return specialised;
+                }
+            }
             auto id = next_id_.fetch_add(1, std::memory_order_relaxed);
             return std::make_shared<Region>(id, name, type, pattern);
         }

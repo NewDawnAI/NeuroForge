@@ -2569,9 +2569,65 @@ static void emit_json_line(bool enabled, const std::string &path,
 // saturate at neurons * 64 no matter how high density goes.
 std::size_t g_demo_neurons = 32;
 float g_demo_density = 0.05f;
+// Build the demo brain from the implemented anatomical region classes rather
+// than two generic regions. See RegionFactory::setAnatomicalDispatch.
+bool g_anatomical_regions = false;
+std::size_t g_anatomical_neurons = 64;
 
 void create_demo_brain(NeuroForge::Core::HypergraphBrain &brain) {
   using NeuroForge::Core::Region;
+
+  if (g_anatomical_regions) {
+    NeuroForge::Core::RegionFactory::setAnatomicalDispatch(
+        true, g_anatomical_neurons);
+    // A brain of real regions. Each name resolves through RegionFactory to its
+    // implemented subclass, which sets its own Type and ActivationPattern and
+    // runs its own process() override.
+    //
+    // Wiring follows the coarse anatomy rather than being all-to-all: sensory
+    // cortices report to the thalamus, the thalamus relays to prefrontal, the
+    // hippocampus and amygdala exchange with prefrontal, and prefrontal drives
+    // motor. It is a sketch, not a connectome, but it is directed and it is not
+    // arbitrary.
+    static const char *kRegions[] = {
+        "VisualCortex", "AuditoryCortex", "SomatosensoryCortex",
+        "Thalamus",     "Hippocampus",    "Amygdala",
+        "PrefrontalCortex", "CingulateCortex", "Insula",
+        "MotorCortex",  "Brainstem"};
+    std::vector<NeuroForge::RegionPtr> made;
+    for (const char *nm : kRegions) {
+      auto r = brain.createRegion(nm, Region::Type::Custom,
+                                  Region::ActivationPattern::Asynchronous);
+      if (r) {
+        // The subclass constructor already created its neurons.
+        made.push_back(r);
+        std::cout << "[Anatomy] " << nm << " neurons=" << r->getNeurons().size()
+                  << std::endl;
+      }
+    }
+    auto find = [&made](const std::string &n) -> NeuroForge::RegionPtr {
+      for (auto &r : made) {
+        if (r && r->getName() == n) return r;
+      }
+      return nullptr;
+    };
+    const std::pair<const char *, const char *> kEdges[] = {
+        {"VisualCortex", "Thalamus"},        {"AuditoryCortex", "Thalamus"},
+        {"SomatosensoryCortex", "Thalamus"}, {"Thalamus", "PrefrontalCortex"},
+        {"Hippocampus", "PrefrontalCortex"}, {"Amygdala", "PrefrontalCortex"},
+        {"PrefrontalCortex", "Hippocampus"}, {"PrefrontalCortex", "MotorCortex"},
+        {"CingulateCortex", "PrefrontalCortex"}, {"Insula", "Amygdala"},
+        {"Brainstem", "Thalamus"},           {"MotorCortex", "Brainstem"}};
+    for (const auto &e : kEdges) {
+      auto a = find(e.first);
+      auto b = find(e.second);
+      if (a && b) {
+        brain.connectRegions(a->getId(), b->getId(), g_demo_density,
+                             {0.1f, 0.9f});
+      }
+    }
+    return;
+  }
 
   auto regionA = brain.createRegion("DemoCortex", Region::Type::Cortical,
                                     Region::ActivationPattern::Asynchronous);
@@ -6169,6 +6225,17 @@ int main(int argc, char *argv[]) {
                     << std::endl;
           return 2;
         }
+      } else if (arg == "--anatomical-regions") {
+        g_anatomical_regions = true;
+      } else if (starts_with(arg, "--anatomical-neurons=")) {
+        try {
+          g_anatomical_neurons = static_cast<std::size_t>(std::stoul(
+              arg.substr(std::string("--anatomical-neurons=").size())));
+        } catch (...) {
+          std::cerr << "Error: invalid integer for --anatomical-neurons"
+                    << std::endl;
+          return 2;
+        }
       } else if (starts_with(arg, "--structural-energy-gate=")) {
         try {
           lconf.structural_energy_gate = std::stof(arg.substr(
@@ -6461,7 +6528,8 @@ int main(int argc, char *argv[]) {
               "--ablate-region=", "--ablate-seed=", "--sequential",
               "--structural-plasticity", "--structural-grow-batch=",
               "--structural-spawn-batch=", "--structural-prune-threshold=",
-              "--structural-interval=", "--structural-energy-gate="};
+              "--structural-interval=", "--structural-energy-gate=",
+              "--anatomical-regions", "--anatomical-neurons="};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {

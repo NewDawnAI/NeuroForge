@@ -493,6 +493,32 @@ namespace NeuroForge {
              * @brief Reset region ID counter (use with caution)
              */
             static void resetIdCounter();
+
+            /**
+             * @brief Return the anatomical subclass for a known region name.
+             *
+             * Fourteen region classes (Hippocampus, Amygdala, PrefrontalCortex,
+             * Thalamus, VisualCortex, ...) are implemented with real process()
+             * overrides, but createRegion() always returned a base Region, so
+             * none of them was ever constructed. The NF_ForceLink_* stubs called
+             * at startup are empty bodies whose only job is to stop the linker
+             * discarding those objects -- which is itself the tell that nothing
+             * referenced them.
+             *
+             * Off by default: the subclass constructors call createNeurons() with
+             * defaults up to 1,000,000, and they set their own Type and
+             * ActivationPattern, so switching this on changes both allocation and
+             * behaviour. Enable deliberately via --anatomical-regions.
+             *
+             * @param neuron_count neurons each anatomical region is built with,
+             *        overriding the very large per-class defaults.
+             */
+            static void setAnatomicalDispatch(bool enabled,
+                                              std::size_t neuron_count = 64);
+            static bool anatomicalDispatchEnabled();
+
+            /// True when `name` matches an implemented anatomical region.
+            static bool isAnatomicalName(const std::string& name);
         };
 
     } // namespace Core
