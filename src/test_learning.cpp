@@ -1616,6 +1616,38 @@ bool LearningTestSuite::testPhase4EligibilityDecayOnly() {
 }
 
 
+namespace {
+
+/// Outcome of shelling out to the neuroforge binary for a CLI check.
+///
+/// std::system() returns -1 when the command processor could not be started at
+/// all -- out of memory, CreateProcess/fork failure -- as opposed to running the
+/// program and reporting its exit status. Conflating the two broke these tests
+/// in both directions, and neither symptom pointed at the real cause:
+///
+///   * the two tests that expect success read `rc != 0` and so reported a
+///     FAILURE of the product when nothing had been run;
+///   * the two that expect rejection read `rc == 0` and so reported a PASS,
+///     because -1 is not 0 -- they would pass with the binary never launched.
+///
+/// Observed 2026-08-23: running the full test sweep left ~1 GB free of 8 GB and
+/// test_learning then failed on "CLI attention: Valid flags... (exit=-1)". Run
+/// on its own it passed 12/12, and neither half of the preceding tests
+/// reproduced it alone -- the signature of resource pressure, not stale state.
+enum class CliLaunch { Ran, CouldNotStart };
+
+CliLaunch runCliCommand(const std::string& cmd, int& exit_code) {
+    const int rc = std::system(cmd.c_str());
+    if (rc == -1) {
+        exit_code = -1;
+        return CliLaunch::CouldNotStart;
+    }
+    exit_code = rc;
+    return CliLaunch::Ran;
+}
+
+} // namespace
+
 bool LearningTestSuite::testCLISmokePhase4Flags() {
     std::cout << "Test CLI smoke: Phase-4 flags...";
     try {
@@ -1637,7 +1669,14 @@ bool LearningTestSuite::testCLISmokePhase4Flags() {
         if (exe.empty()) { std::cout << " SKIPPED (neuroforge.exe not found)\n"; return true; }
 
         std::string cmd = std::string("\"") + exe.string() + "\" --steps=1 --step-ms=0 --vision-demo=off --viewer=off --enable-learning --attention-mode=external --attention-Amin=0.2 --attention-Amax=1.0 --attention-anneal-ms=-10";
-        int rc = std::system(cmd.c_str());
+        int rc = 0;
+        if (runCliCommand(cmd, rc) == CliLaunch::CouldNotStart) {
+            // Without this the test would PASS here: -1 is not 0, so a child
+            // that never launched would look like a correctly rejected one.
+            std::cout << " SKIPPED (could not start child process; environment,"
+                         " not a product failure)\n";
+            return true;
+        }
         if (rc == 0) { std::cout << " FAILED (expected non-zero exit)\n"; return false; }
         std::cout << " PASSED\n"; return true;
     } catch (const std::exception& e) { std::cout << " FAILED (Exception: " << e.what() << ")\n"; return false; }
@@ -1664,7 +1703,12 @@ bool LearningTestSuite::testCLIAttentionFlagsValid() {
         if (exe.empty()) { std::cout << " SKIPPED (neuroforge.exe not found)\n"; return true; }
 
         std::string cmd = std::string("\"") + exe.string() + "\" --steps=1 --step-ms=0 --vision-demo=off --viewer=off --enable-learning --attention-mode=external --attention-Amin=0.2 --attention-Amax=1.0 --attention-anneal-ms=500";
-        int rc = std::system(cmd.c_str());
+        int rc = 0;
+        if (runCliCommand(cmd, rc) == CliLaunch::CouldNotStart) {
+            std::cout << " SKIPPED (could not start child process; environment,"
+                         " not a product failure)\n";
+            return true;
+        }
         if (rc != 0) { std::cout << " FAILED (exit=" << rc << ")\n"; return false; }
         std::cout << " PASSED\n"; return true;
     } catch (const std::exception& e) { std::cout << " FAILED (Exception: " << e.what() << ")\n"; return false; }
@@ -1691,7 +1735,12 @@ bool LearningTestSuite::testCLIAttentionAnnealZeroAccepted() {
         if (exe.empty()) { std::cout << " SKIPPED (neuroforge.exe not found)\n"; return true; }
 
         std::string cmd = std::string("\"") + exe.string() + "\" --steps=1 --step-ms=0 --vision-demo=off --viewer=off --enable-learning --attention-mode=external --attention-Amin=0.2 --attention-Amax=1.0 --attention-anneal-ms=0";
-        int rc = std::system(cmd.c_str());
+        int rc = 0;
+        if (runCliCommand(cmd, rc) == CliLaunch::CouldNotStart) {
+            std::cout << " SKIPPED (could not start child process; environment,"
+                         " not a product failure)\n";
+            return true;
+        }
         if (rc != 0) { std::cout << " FAILED (exit=" << rc << ")\n"; return false; }
         std::cout << " PASSED\n"; return true;
     } catch (const std::exception& e) { std::cout << " FAILED (Exception: " << e.what() << ")\n"; return false; }
@@ -1718,7 +1767,14 @@ bool LearningTestSuite::testCLIAttentionAmaxLessThanAminRejected() {
         if (exe.empty()) { std::cout << " SKIPPED (neuroforge.exe not found)\n"; return true; }
 
         std::string cmd = std::string("\"") + exe.string() + "\" --steps=1 --step-ms=0 --vision-demo=off --viewer=off --enable-learning --attention-mode=external --attention-Amin=0.7 --attention-Amax=0.4 --attention-anneal-ms=100";
-        int rc = std::system(cmd.c_str());
+        int rc = 0;
+        if (runCliCommand(cmd, rc) == CliLaunch::CouldNotStart) {
+            // Without this the test would PASS here: -1 is not 0, so a child
+            // that never launched would look like a correctly rejected one.
+            std::cout << " SKIPPED (could not start child process; environment,"
+                         " not a product failure)\n";
+            return true;
+        }
         if (rc == 0) { std::cout << " FAILED (expected non-zero exit)\n"; return false; }
         std::cout << " PASSED\n"; return true;
     } catch (const std::exception& e) { std::cout << " FAILED (Exception: " << e.what() << ")\n"; return false; }
@@ -1745,7 +1801,14 @@ bool LearningTestSuite::testCLIAttentionAnnealNegativeRejected() {
         if (exe.empty()) { std::cout << " SKIPPED (neuroforge.exe not found)\n"; return true; }
 
         std::string cmd = std::string("\"") + exe.string() + "\" --steps=1 --step-ms=0 --vision-demo=off --viewer=off --enable-learning --attention-mode=external --attention-Amin=0.2 --attention-Amax=1.0 --attention-anneal-ms=-10";
-        int rc = std::system(cmd.c_str());
+        int rc = 0;
+        if (runCliCommand(cmd, rc) == CliLaunch::CouldNotStart) {
+            // Without this the test would PASS here: -1 is not 0, so a child
+            // that never launched would look like a correctly rejected one.
+            std::cout << " SKIPPED (could not start child process; environment,"
+                         " not a product failure)\n";
+            return true;
+        }
         if (rc == 0) { std::cout << " FAILED (expected non-zero exit)\n"; return false; }
         std::cout << " PASSED\n"; return true;
     } catch (const std::exception& e) { std::cout << " FAILED (Exception: " << e.what() << ")\n"; return false; }
