@@ -220,7 +220,8 @@ namespace NeuroForge {
             signal.signal_type = signal_type;
             signal.intensity = intensity;
             signal.signal_pattern = {intensity}; // Simplified pattern
-            signal.timestamp = std::chrono::system_clock::now();
+            signal.timestamp = std::chrono::system_clock::now(); // logging only
+            signal.sim_time_seconds = simTimeSeconds();
             signal.is_conscious = (intensity > 0.5f * interoceptive_sensitivity_);
             
             interoceptive_signals_.push_back(signal);
@@ -242,10 +243,12 @@ namespace NeuroForge {
         std::vector<Insula::InteroceptiveSignal> Insula::getInteroceptiveState() const {
             std::vector<InteroceptiveSignal> current_signals;
             
-            auto now = std::chrono::system_clock::now();
+            // Simulation time, not the wall clock: a signal must expire after the
+            // same amount of MODELLED time on every run, otherwise a slower
+            // machine sees a different set of valid signals.
+            const double now_sim = simTimeSeconds();
             for (const auto& signal : interoceptive_signals_) {
-                auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - signal.timestamp);
-                if (duration.count() < 10) { // Signals valid for 10 seconds
+                if (now_sim - signal.sim_time_seconds < 10.0) { // valid for 10 simulated seconds
                     current_signals.push_back(signal);
                 }
             }
@@ -324,12 +327,12 @@ namespace NeuroForge {
 
         void Insula::processRegionSpecific(float delta_time) {
             // Decay old interoceptive signals
-            auto now = std::chrono::system_clock::now();
+            const double now_sim = simTimeSeconds();
             interoceptive_signals_.erase(
                 std::remove_if(interoceptive_signals_.begin(), interoceptive_signals_.end(),
-                    [now](const InteroceptiveSignal& signal) {
-                        auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - signal.timestamp);
-                        return duration.count() > 30; // Remove signals older than 30 seconds
+                    [now_sim](const InteroceptiveSignal& signal) {
+                        // 30 simulated seconds, so the decay is reproducible.
+                        return (now_sim - signal.sim_time_seconds) > 30.0;
                     }),
                 interoceptive_signals_.end()
             );

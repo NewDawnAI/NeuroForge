@@ -496,6 +496,10 @@ namespace NeuroForge {
                 return;
             }
 
+            // Simulation clock. Advances only while the region is active, so an
+            // inactive region does not age its state. See simTimeSeconds().
+            sim_time_seconds_ += static_cast<double>(delta_time);
+
             auto start_time = std::chrono::steady_clock::now();
 
             // Process neurons according to activation pattern

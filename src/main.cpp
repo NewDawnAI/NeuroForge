@@ -2593,7 +2593,11 @@ void create_demo_brain(NeuroForge::Core::HypergraphBrain &brain) {
         "VisualCortex", "AuditoryCortex", "SomatosensoryCortex",
         "Thalamus",     "Hippocampus",    "Amygdala",
         "PrefrontalCortex", "CingulateCortex", "Insula",
-        "MotorCortex",  "Brainstem"};
+        "MotorCortex",  "Brainstem",
+        // SelfNode is here because runAutonomousLoop looks it up by name for
+        // its reflection integration; without it that block finds no region and
+        // never runs.
+        "SelfNode"};
     std::vector<NeuroForge::RegionPtr> made;
     for (const char *nm : kRegions) {
       auto r = brain.createRegion(nm, Region::Type::Custom,
@@ -2617,7 +2621,8 @@ void create_demo_brain(NeuroForge::Core::HypergraphBrain &brain) {
         {"Hippocampus", "PrefrontalCortex"}, {"Amygdala", "PrefrontalCortex"},
         {"PrefrontalCortex", "Hippocampus"}, {"PrefrontalCortex", "MotorCortex"},
         {"CingulateCortex", "PrefrontalCortex"}, {"Insula", "Amygdala"},
-        {"Brainstem", "Thalamus"},           {"MotorCortex", "Brainstem"}};
+        {"Brainstem", "Thalamus"},           {"MotorCortex", "Brainstem"},
+        {"PrefrontalCortex", "SelfNode"},    {"SelfNode", "CingulateCortex"}};
     for (const auto &e : kEdges) {
       auto a = find(e.first);
       auto b = find(e.second);

@@ -81,7 +81,10 @@ namespace NeuroForge {
                 std::string signal_type; // heartbeat, breathing, hunger, etc.
                 float intensity;
                 std::vector<float> signal_pattern;
-                std::chrono::system_clock::time_point timestamp;
+                std::chrono::system_clock::time_point timestamp; // wall clock, for logging only
+                /// Region simulation time at which this signal arrived. Ageing
+                /// decisions use THIS, not `timestamp` -- see Region::simTimeSeconds.
+                double sim_time_seconds = 0.0;
                 bool is_conscious;
             };
 

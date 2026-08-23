@@ -1,3 +1,5 @@
+#include <mutex>
+#include <set>
 #include "core/HypergraphBrain.h"
 #include "core/SelfModel.h" // Step 2: read-only SelfModel mirror
 #include "core/Region.h"
@@ -2985,6 +2987,40 @@ namespace NeuroForge {
             selfnode_integration_enabled_.store(enabled, std::memory_order_relaxed);
         }
 
+namespace {
+// Report ONCE per region whether the downcast an integration depends on actually
+// succeeded.
+//
+// runAutonomousLoop reaches for four regions by name and downcasts each to its
+// anatomical class before using it:
+//
+//     auto pfc = std::dynamic_pointer_cast<Regions::PrefrontalCortex>(region);
+//     if (pfc) { pfc->makeDecision(...); pfc->storeInWorkingMemory(...); }
+//
+// RegionFactory returned a base Region for every name until 2026-08-23, so the
+// cast returned nullptr and the whole block did nothing -- no error, no log, no
+// failed check. The integration read as ENABLED while being inert. This makes
+// the binding visible, so "enabled" and "actually wired" stop looking alike.
+void reportIntegrationBinding(const char *region_name, bool bound) {
+    static std::mutex mtx;
+    static std::set<std::string> reported;
+    std::lock_guard<std::mutex> lock(mtx);
+    if (!reported.insert(region_name).second) {
+        return;
+    }
+    if (bound) {
+        std::cout << "[Integration] " << region_name
+                  << ": bound to its region class, integration ACTIVE"
+                  << std::endl;
+    } else {
+        std::cerr << "[Integration] " << region_name
+                  << ": region present but is a base Region -- integration INERT"
+                     " (enable --anatomical-regions)"
+                  << std::endl;
+    }
+}
+} // namespace
+
         void HypergraphBrain::setPrefrontalCortexIntegrationEnabled(bool enabled) {
             pfc_integration_enabled_.store(enabled, std::memory_order_relaxed);
         }
@@ -3029,6 +3065,7 @@ namespace NeuroForge {
                     auto self_node = getRegion("SelfNode");
                     if (self_node) {
                         auto self_node_limbic = std::dynamic_pointer_cast<NeuroForge::Regions::SelfNode>(self_node);
+                        reportIntegrationBinding("SelfNode", static_cast<bool>(self_node_limbic));
                         if (self_node_limbic) {
                             self_node_limbic->initiateReflection("autonomous_goal_selection",
                                 {NeuroForge::Regions::SelfNode::SelfAspect::Cognitive, NeuroForge::Regions::SelfNode::SelfAspect::Temporal});
@@ -3040,6 +3077,7 @@ namespace NeuroForge {
                     auto prefrontal_cortex = getRegion("PrefrontalCortex");
                     if (prefrontal_cortex) {
                         auto pfc = std::dynamic_pointer_cast<NeuroForge::Regions::PrefrontalCortex>(prefrontal_cortex);
+                        reportIntegrationBinding("PrefrontalCortex", static_cast<bool>(pfc));
                         if (pfc) {
                             std::vector<float> options = {0.2f, 0.5f, 0.8f, 0.3f};
                             std::vector<float> values = {0.6f, 0.9f, 0.4f, 0.7f};
@@ -3059,6 +3097,7 @@ namespace NeuroForge {
                     auto motor_cortex = getRegion("MotorCortex");
                     if (motor_cortex) {
                         auto mc = std::dynamic_pointer_cast<NeuroForge::Regions::MotorCortex>(motor_cortex);
+                        reportIntegrationBinding("MotorCortex", static_cast<bool>(mc));
                         if (mc) {
                             std::vector<float> movement_vector = {0.1f, 0.0f, 0.2f};
                             mc->planMovement(NeuroForge::Regions::MotorCortex::BodyPart::Arms, movement_vector, 0.5f);
@@ -3080,6 +3119,7 @@ namespace NeuroForge {
                         auto self_node = getRegion("SelfNode");
                         if (self_node) {
                             auto self_node_limbic = std::dynamic_pointer_cast<NeuroForge::Regions::SelfNode>(self_node);
+                            reportIntegrationBinding("SelfNode", static_cast<bool>(self_node_limbic));
                             if (self_node_limbic) {
                                 self_node_limbic->initiateReflection("periodic_introspection", {
                                     NeuroForge::Regions::SelfNode::SelfAspect::Cognitive,

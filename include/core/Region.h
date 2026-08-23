@@ -89,6 +89,7 @@ namespace NeuroForge {
         protected:
             NeuroForge::RegionID id_;
             std::string name_;
+            double sim_time_seconds_ = 0.0;
             std::uint32_t growth_seed_base_ = 0;
             mutable std::uint32_t growth_call_counter_ = 0;
 
@@ -154,6 +155,23 @@ namespace NeuroForge {
              * explore different growth draws; 0 (the default) keeps runs
              * deterministic.
              */
+            /**
+             * @brief Seconds of SIMULATED time this region has processed.
+             *
+             * Accumulated from the delta_time passed to process(), so it advances
+             * with the model rather than the machine. Region behaviour that ages
+             * or expires state must key off this, never a wall clock: a region
+             * that drops a signal after N real seconds behaves differently on a
+             * fast and a slow run, which is not reproducible from a seed.
+             *
+             * Measured 2026-08-23: Insula aged interoceptive signals against
+             * system_clock, and the anatomical brain gave three different update
+             * totals across eight identical runs (846766 / 846550 / 846542) while
+             * its synapse count stayed exactly 2,470 -- structure reproducible,
+             * activity not.
+             */
+            double simTimeSeconds() const noexcept { return sim_time_seconds_; }
+
             void setGrowthSeedBase(std::uint32_t base) noexcept { growth_seed_base_ = base; }
             std::uint32_t getGrowthSeedBase() const noexcept { return growth_seed_base_; }
 
