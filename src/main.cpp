@@ -2573,6 +2573,10 @@ float g_demo_density = 0.05f;
 // than two generic regions. See RegionFactory::setAnatomicalDispatch.
 bool g_anatomical_regions = false;
 std::size_t g_anatomical_neurons = 64;
+// Feed a time-varying pattern into the anatomical VisualCortex each step, so
+// the brain has something EXTERNAL to respond to rather than only its own
+// internal activity. See --sensory-drive.
+bool g_sensory_drive = false;
 
 void create_demo_brain(NeuroForge::Core::HypergraphBrain &brain) {
   using NeuroForge::Core::Region;
@@ -6230,6 +6234,15 @@ int main(int argc, char *argv[]) {
                     << std::endl;
           return 2;
         }
+      } else if (arg == "--sensory-drive") {
+        g_sensory_drive = true;
+      } else if (starts_with(arg, "--sensory-drive=")) {
+        auto v = arg.substr(std::string("--sensory-drive=").size());
+        if (!parse_on_off_flag(v, g_sensory_drive)) {
+          std::cerr << "Error: --sensory-drive must be on|off|true|false|1|0"
+                    << std::endl;
+          return 2;
+        }
       } else if (arg == "--anatomical-regions") {
         g_anatomical_regions = true;
       } else if (starts_with(arg, "--anatomical-neurons=")) {
@@ -6534,7 +6547,8 @@ int main(int argc, char *argv[]) {
               "--structural-plasticity", "--structural-grow-batch=",
               "--structural-spawn-batch=", "--structural-prune-threshold=",
               "--structural-interval=", "--structural-energy-gate=",
-              "--anatomical-regions", "--anatomical-neurons="};
+              "--anatomical-regions", "--anatomical-neurons=",
+              "--sensory-drive"};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {
@@ -11339,6 +11353,42 @@ int main(int argc, char *argv[]) {
           }
         }
 
+        // Sensory drive: give the anatomical brain an EXTERNAL input.
+        //
+        // Without this the prefrontal decision is computed from the brain's own
+        // region activations only -- a closed loop deciding about itself. The
+        // synthetic grid is the same moving checker pattern the vision demo
+        // falls back to when no camera is present, so it is deterministic and it
+        // changes every step. G=8 gives 64 values, which matches the default
+        // --anatomical-neurons=64 one-to-one.
+        if (g_sensory_drive) {
+          auto vc_region = brain.getRegion("VisualCortex");
+          if (vc_region) {
+            auto vc = std::dynamic_pointer_cast<
+                NeuroForge::Regions::VisualCortex>(vc_region);
+            if (vc) {
+              vc->processVisualInput(make_synthetic_gray_grid(8, i));
+            } else {
+              static bool warned = false;
+              if (!warned) {
+                warned = true;
+                std::cerr << "[Sensory] VisualCortex present but is a base "
+                             "Region -- drive INERT (enable "
+                             "--anatomical-regions)"
+                          << std::endl;
+              }
+            }
+          } else {
+            static bool warned_missing = false;
+            if (!warned_missing) {
+              warned_missing = true;
+              std::cerr << "[Sensory] no VisualCortex region -- drive INERT "
+                           "(enable --anatomical-regions)"
+                        << std::endl;
+            }
+          }
+        }
+
         brain.processStep(delta_time_seconds);
 
         if (maze_demo && maze_obs_region && maze_action_region) {
@@ -13127,6 +13177,22 @@ int main(int argc, char *argv[]) {
       // See the note at the matching block in the Phase-C path: this is neuron
       // ACTIVITY (activation > threshold), which homeostatic scaling can move,
       // as opposed to the synapse count above, which it cannot.
+      // Per-region activation breakdown. The aggregate counts below hide WHERE
+      // signal actually lives, which is what matters when tracing whether a
+      // sensory input propagates: a drive can land in one region and never
+      // reach the next.
+      {
+        std::cout << "  Regions:\n";
+        for (const auto &kv : brain.getRegions()) {
+          const auto &r = kv.second;
+          if (!r) continue;
+          const auto st = r->getStatistics();
+          std::cout << "    " << r->getName() << " n=" << st.neuron_count
+                    << " active=" << st.active_neurons
+                    << " mean_act=" << std::fixed << std::setprecision(4)
+                    << st.average_activation << std::defaultfloat << "\n";
+        }
+      }
       {
         const auto &gs = brain.getGlobalStatistics();
         std::cout << "  Total Neurons: " << gs.total_neurons << "\n"
