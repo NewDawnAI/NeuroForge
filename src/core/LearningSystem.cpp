@@ -629,7 +629,29 @@ float LearningSystem::getLastAttentionBoostBase() const {
 }
 
 // Statistics methods
+void LearningSystem::refreshActiveSynapseCount() const {
+    if (!brain_) {
+        return;
+    }
+    std::size_t count = 0;
+    const auto& regions_map = brain_->getRegions();
+    for (const auto& [region_id, region] : regions_map) {
+        if (region) {
+            const auto& neurons = region->getNeurons();
+            for (const auto& neuron : neurons) {
+                if (neuron) {
+                    count += neuron->getInputSynapseCount();
+                }
+            }
+        }
+    }
+    statistics_.active_synapses = count;
+}
+
 LearningSystem::Statistics LearningSystem::getStatistics() const {
+    // Counted here rather than per weight update: this is a structural
+    // property of the network, so it only needs to be current when read.
+    refreshActiveSynapseCount();
     Statistics stats = statistics_;
     stats.uncertainty_signal = current_uncertainty_;
     stats.surprise_signal = current_surprise_;
@@ -979,22 +1001,20 @@ void LearningSystem::updateStatistics(LearningSystem::Algorithm algorithm, float
         statistics_.depressed_synapses++;
     }
     
-    // FIX: Update active synapses count by counting all synapses in the brain
-    if (brain_) {
-        statistics_.active_synapses = 0;
-        // Count synapses across all regions
-        const auto& regions_map = brain_->getRegions();
-        for (const auto& [region_id, region] : regions_map) {
-            if (region) {
-                const auto& neurons = region->getNeurons();
-                for (const auto& neuron : neurons) {
-                    if (neuron) {
-                        statistics_.active_synapses += neuron->getInputSynapseCount();
-                    }
-                }
-            }
-        }
-    }
+    // active_synapses is NOT recomputed here. It counts the synapses that
+    // EXIST, which a weight update cannot change, and this function runs once
+    // per weight update -- so the full-brain traversal that used to sit here
+    // cost O(synapses x neurons) per step and dominated everything else.
+    //
+    // Measured 2026-08-23 before this change, at --steps=1..5 --sequential:
+    //   n=1024 (2,048 neurons, 131,072 synapses):  9.5 s/step
+    //   n=2048 (4,096 neurons, 262,144 synapses): 39.5 s/step
+    // a 4.2x cost for a 2x network -- quadratic in neurons, while the synapse
+    // count only doubled. At n=2048 that is ~900k updates/step each walking
+    // 4,096 neurons: ~3.7 billion neuron visits per step, under a mutex.
+    //
+    // The count is now taken once on the read path, in getStatistics(), which
+    // reports the identical value. See refreshActiveSynapseCount().
 }
 
 // ===== Phase 4: Reward-Modulated Plasticity =====

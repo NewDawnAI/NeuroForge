@@ -1231,7 +1231,16 @@ namespace NeuroForge {
             auto &vec = inter_region_connections_[target_region_id];
             const std::size_t needed = vec.size() + additional;
             if (vec.capacity() < needed) {
-                vec.reserve(needed);
+            // Grow geometrically. Callers reserve ONE slot at a time (see
+            // connectToRegion), and reserve(size + 1) sets capacity to exactly
+            // size + 1, so every subsequent push_back reallocates and copies the
+            // whole vector -- turning a bulk insert into O(n^2) shared_ptr
+            // copies, each with an atomic refcount. inter_region_connections_
+            // holds every synapse between a region PAIR, which reached 131,072
+            // entries at --demo-neurons=1024, so the "pre-reserve to avoid
+            // reallocation" this function was written for did the opposite.
+            // Measured 2026-08-23: construction 74s at --demo-neurons=2048.
+                vec.reserve(std::max(needed, vec.capacity() * 2));
             }
         }
 
@@ -1241,7 +1250,8 @@ namespace NeuroForge {
             auto &vec = input_connections_[target_neuron_id];
             const std::size_t needed = vec.size() + additional;
             if (vec.capacity() < needed) {
-                vec.reserve(needed);
+            // Same growth fix as reserveInterRegionConnections above.
+                vec.reserve(std::max(needed, vec.capacity() * 2));
             }
         }
 
@@ -1251,7 +1261,8 @@ namespace NeuroForge {
             auto &vec = output_connections_[source_neuron_id];
             const std::size_t needed = vec.size() + additional;
             if (vec.capacity() < needed) {
-                vec.reserve(needed);
+            // Same growth fix as reserveInterRegionConnections above.
+                vec.reserve(std::max(needed, vec.capacity() * 2));
             }
         }
 

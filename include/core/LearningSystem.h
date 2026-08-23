@@ -7,6 +7,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
+#include "core/DeterministicRng.h"
 
 namespace NeuroForge {
 namespace Memory {
@@ -252,6 +253,12 @@ public:
   }
 
   Statistics getStatistics() const;
+
+  /// Recount existing input synapses across the brain and store the result in
+  /// statistics_.active_synapses. Called from getStatistics(); it used to run
+  /// inside updateStatistics() on every weight update, which made each
+  /// simulation step O(synapses x neurons). See the note at its definition.
+  void refreshActiveSynapseCount() const;
   void resetStatistics();
 
   // Configuration accessor
@@ -329,7 +336,7 @@ private:
   std::atomic<float> pending_reward_{0.0f};
 
   // RNG for stochastic gating
-  std::mt19937 rng_{std::random_device{}()};
+  std::mt19937 rng_{NeuroForge::Core::DeterministicRng::seedFor("LearningSystem")};
   std::uniform_real_distribution<float> dist01_{0.0f, 1.0f};
 
   // Phase 4 parameters
@@ -355,7 +362,9 @@ private:
   std::mutex consolidation_mutex_;
   std::unordered_map<NeuroForge::RegionID, float> consolidation_strengths_;
 
-  Statistics statistics_{};
+  /// mutable: refreshActiveSynapseCount() updates the synapse count from the
+  /// const read path, where the count is actually needed.
+  mutable Statistics statistics_{};
 
   // ===== Mimicry state =====
   mutable std::mutex mimicry_mutex_;
