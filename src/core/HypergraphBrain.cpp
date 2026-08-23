@@ -3001,6 +3001,34 @@ namespace {
 // cast returned nullptr and the whole block did nothing -- no error, no log, no
 // failed check. The integration read as ENABLED while being inert. This makes
 // the binding visible, so "enabled" and "actually wired" stop looking alike.
+// One region's current state, read for use as a decision input.
+//
+// `activation` is how strongly the region is firing on average; `engagement` is
+// what fraction of its neurons are over threshold. They are different questions
+// -- a region can be weakly active everywhere or strongly active in a few
+// neurons -- so they serve as the option and its value respectively rather than
+// as two names for one number.
+struct RegionSignal {
+    float activation = 0.0f;
+    float engagement = 0.0f;
+    bool valid = false;
+};
+
+RegionSignal readRegionSignal(const NeuroForge::RegionPtr &region) {
+    RegionSignal sig;
+    if (!region) {
+        return sig;
+    }
+    const auto st = region->getStatistics();
+    sig.activation = st.average_activation;
+    sig.engagement = (st.neuron_count > 0)
+                         ? static_cast<float>(st.active_neurons) /
+                               static_cast<float>(st.neuron_count)
+                         : 0.0f;
+    sig.valid = true;
+    return sig;
+}
+
 void reportIntegrationBinding(const char *region_name, bool bound) {
     static std::mutex mtx;
     static std::set<std::string> reported;
@@ -3073,15 +3101,72 @@ void reportIntegrationBinding(const char *region_name, bool bound) {
                     }
                 }
                 
+                // Carried from the prefrontal block to the motor block below, so a
+                // decision actually reaches the effector. Before this, PFC chose an
+                // option, stored it in working memory, and the motor cortex moved a
+                // hardcoded vector that no decision influenced.
+                bool pfc_decided = false;
+                std::size_t pfc_choice = 0;
+                float pfc_confidence = 0.0f;
+
                 if (pfc_integration_enabled_.load(std::memory_order_relaxed)) {
                     auto prefrontal_cortex = getRegion("PrefrontalCortex");
                     if (prefrontal_cortex) {
                         auto pfc = std::dynamic_pointer_cast<NeuroForge::Regions::PrefrontalCortex>(prefrontal_cortex);
                         reportIntegrationBinding("PrefrontalCortex", static_cast<bool>(pfc));
                         if (pfc) {
-                            std::vector<float> options = {0.2f, 0.5f, 0.8f, 0.3f};
-                            std::vector<float> values = {0.6f, 0.9f, 0.4f, 0.7f};
+                            // Options come from the regions that project to PFC in
+                            // the anatomical wiring: the thalamic sensory summary,
+                            // hippocampal memory, amygdalar affect and cingulate
+                            // conflict. Previously these were four literals, so the
+                            // "decision" was the same every cycle regardless of what
+                            // the brain was doing.
+                            static const char *kSources[] = {
+                                "Thalamus", "Hippocampus", "Amygdala", "CingulateCortex"};
+                            std::vector<float> options;
+                            std::vector<float> values;
+                            options.reserve(4);
+                            values.reserve(4);
+                            for (const char *src : kSources) {
+                                const RegionSignal sig = readRegionSignal(getRegion(src));
+                                if (sig.valid) {
+                                    options.push_back(sig.activation);
+                                    values.push_back(sig.engagement);
+                                }
+                            }
+                            if (options.empty()) {
+                                // No source regions present (e.g. the generic demo
+                                // brain). Skip rather than invent inputs.
+                                options.push_back(calculateGlobalActivation());
+                                values.push_back(calculateGlobalActivation());
+                            }
                             auto decision = pfc->makeDecision(options, values);
+                            pfc_decided = true;
+                            pfc_choice = decision.selected_option;
+                            pfc_confidence = decision.confidence;
+
+                            // Report only when the choice changes. A decision driven
+                            // by brain state should move as that state moves; one
+                            // that never moves is the signature of the constant
+                            // inputs this replaced, and would otherwise be invisible.
+                            {
+                                static std::mutex dec_mtx;
+                                static bool have_last = false;
+                                static std::size_t last_choice = 0;
+                                std::lock_guard<std::mutex> lk(dec_mtx);
+                                if (!have_last || last_choice != decision.selected_option) {
+                                    have_last = true;
+                                    last_choice = decision.selected_option;
+                                    std::cout << "[Decision] PFC option "
+                                              << decision.selected_option << " of "
+                                              << options.size() << " conf="
+                                              << decision.confidence << " inputs=[";
+                                    for (std::size_t i = 0; i < options.size(); ++i) {
+                                        std::cout << (i ? " " : "") << options[i];
+                                    }
+                                    std::cout << "]" << std::endl;
+                                }
+                            }
                             std::vector<float> planning_context = {
                                 static_cast<float>(iteration % 100) / 100.0f,
                                 calculateGlobalActivation(),
@@ -3099,8 +3184,28 @@ void reportIntegrationBinding(const char *region_name, bool bound) {
                         auto mc = std::dynamic_pointer_cast<NeuroForge::Regions::MotorCortex>(motor_cortex);
                         reportIntegrationBinding("MotorCortex", static_cast<bool>(mc));
                         if (mc) {
-                            std::vector<float> movement_vector = {0.1f, 0.0f, 0.2f};
-                            mc->planMovement(NeuroForge::Regions::MotorCortex::BodyPart::Arms, movement_vector, 0.5f);
+                            // Driven by the prefrontal decision rather than a
+                            // constant. The chosen option selects which body part
+                            // is targeted, the confidence sets the force, and the
+                            // motor cortex's own activation scales the magnitude --
+                            // so sensory/limbic state reaches an effector through a
+                            // decision instead of running in parallel to one.
+                            const RegionSignal mc_sig = readRegionSignal(motor_cortex);
+                            const float drive = pfc_decided ? pfc_confidence : 0.0f;
+                            const float gain = mc_sig.valid ? mc_sig.activation : 0.0f;
+                            std::vector<float> movement_vector = {
+                                drive * gain,
+                                drive * (1.0f - gain),
+                                gain};
+                            static const NeuroForge::Regions::MotorCortex::BodyPart kParts[] = {
+                                NeuroForge::Regions::MotorCortex::BodyPart::Arms,
+                                NeuroForge::Regions::MotorCortex::BodyPart::Hands,
+                                NeuroForge::Regions::MotorCortex::BodyPart::Head,
+                                NeuroForge::Regions::MotorCortex::BodyPart::Legs};
+                            const auto target_part =
+                                kParts[pfc_choice % (sizeof(kParts) / sizeof(kParts[0]))];
+                            mc->planMovement(target_part, movement_vector,
+                                             pfc_decided ? pfc_confidence : 0.5f);
                             mc->executeMotorCommands();
                         }
                     }

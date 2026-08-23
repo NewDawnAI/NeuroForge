@@ -152,7 +152,61 @@ exact and is the right substrate for those.
 2. `DefaultModeNetwork::getCurrentThoughts` still ages thoughts against the wall
    clock (line 709). Harmless today because the class is not constructed; it will
    bite the moment it is.
-3. The integration blocks call fixed placeholder data — `options = {0.2, 0.5,
-   0.8, 0.3}`, `movement_vector = {0.1, 0.0, 0.2}`. They now genuinely execute,
-   but they are not yet driven by anything the brain perceived. Making them
-   ACTIVE was the prerequisite; wiring real inputs into them is the next step.
+3. ~~The integration blocks call fixed placeholder data.~~ **Done** — see below.
+
+## 5. The decision is now driven by brain state
+
+The blocks executed, but on constants: `options = {0.2, 0.5, 0.8, 0.3}` and
+`movement_vector = {0.1, 0.0, 0.2}`. A decision computed from four literals is
+the same decision on every cycle forever, so "integration ACTIVE" still did not
+mean the brain was deciding anything.
+
+`options` and `values` now come from the regions that project to PFC in the
+anatomical wiring — thalamic sensory summary, hippocampal memory, amygdalar
+affect, cingulate conflict — read via a small `readRegionSignal()` helper:
+
+- `activation` = the region's mean firing level, used as the option;
+- `engagement` = the fraction of its neurons over threshold, used as its value.
+
+These are different questions: a region can be weakly active everywhere or
+strongly active in a few neurons, so they are two measurements rather than two
+names for one number.
+
+The decision is also **carried to the effector**. PFC previously chose an option,
+stored it in working memory, and the motor cortex moved a hardcoded vector that
+no decision influenced — two subsystems running beside each other rather than
+connected. Now the chosen option selects the body part, the confidence sets the
+force, and the motor cortex's own activation scales the magnitude.
+
+Verified by logging the decision only when the choice changes — a decision driven
+by state should move as the state moves, and one that never moves is exactly the
+constant-input signature this replaced:
+
+```
+[Decision] PFC option 0 of 4 conf=0        inputs=[0 0 0 0]
+[Decision] PFC option 1 of 4 conf=0.5      inputs=[0.0524548 0.204294 0.10784 0.176316]
+[Decision] PFC option 3 of 4 conf=0.921875 inputs=[0.349113 0.322898 0.149413 0.440279]
+[Decision] PFC option 0 of 4 conf=0.984375 inputs=[0.563258 0.215712 0.187091 0.457786]
+[Decision] PFC option 1 of 4 conf=1        inputs=[0.618659 0.331308 0.237437 0.538456]
+```
+
+Inputs start at zero and rise as the regions warm up; the choice moves
+0 → 1 → 3 → 0 → 1; confidence climbs from 0 to 1. That is state-dependent
+behaviour, and it is the first of it in this codebase.
+
+**Fallback checked:** with `--autonomous-mode` but no `--anatomical-regions`,
+there is no `PrefrontalCortex` region, so no decision is made and none is logged
+(0 decision lines, run completes normally). The code does not invent inputs when
+its sources are absent.
+
+**Scope, stated plainly:** the inputs are real internal state, not perception.
+Nothing here is driven by a camera, a maze, or an external environment — the
+brain is deciding about its own activity. Connecting a sensory stream to the
+sensory cortices is a separate piece of work.
+
+## 6. Re-verification after the wiring
+
+- Default path unchanged: 148,604 updates / 102 synapses.
+- Anatomical structure still exact: 2,876 active synapses x 4.
+- Full build: 106/106, 0 errors.
+- Test sweep: 33 pass, 3 fail — the pre-existing baseline.
