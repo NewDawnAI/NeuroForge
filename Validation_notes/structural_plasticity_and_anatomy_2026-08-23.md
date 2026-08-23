@@ -165,7 +165,46 @@ anatomical brain sits at **72.7%**, i.e. the region classes produce differentiat
 activity. That is a behavioural difference, not just a naming one, and it is the
 first evidence in this codebase that the region implementations do something.
 
-Determinism: 846,766 total updates across 4 runs, exact.
+### Correction: the anatomical brain is NOT deterministic
+
+An earlier version of this note, and the commit message for d7326f1, stated
+"Deterministic: 846,766 total updates across 4 runs". That was wrong. Four runs
+happened to land on the same value; eight runs give three:
+
+    3 x Total Updates: 846766
+    3 x Total Updates: 846550
+    2 x Total Updates: 846542
+
+The demo path remains exact (148,604 x 4), and the anatomical brain's STRUCTURE
+is exact (2,470 active synapses x 4) -- only the update count drifts, so
+connectivity is reproducible and activity is not.
+
+Root cause, in `Insula::` (`src/regions/LimbicRegions.cpp`): interoceptive
+signals are aged against the wall clock.
+
+```cpp
+auto now = std::chrono::system_clock::now();
+auto duration = std::chrono::duration_cast<std::chrono::seconds>(now - signal.timestamp);
+if (duration.count() < 10) { ... }   // line 247: signal valid for 10 seconds
+return duration.count() > 30;         // line 332: erased after 30 seconds
+```
+
+A run that takes slightly longer keeps or drops different signals, which changes
+downstream activity. This is behaviour gated on REAL time rather than simulation
+time — the same defect class as the `high_resolution_clock` seed removed from
+`Region::growSynapses`, and it is now reachable because these region classes are
+constructed for the first time.
+
+`LimbicRegions.cpp` has 9 wall-clock calls and `SubcorticalRegions.cpp` 2. Most
+are timestamps being recorded, which is harmless; the two Insula sites above are
+the ones that feed a decision.
+
+**Fix, not yet applied:** age signals against accumulated simulation time
+(step count x delta_time) rather than `system_clock::now()`. This changes a
+region's behavioural model, so it is called out rather than done silently.
+
+**Until then:** the anatomical brain is suitable for structural work, where it is
+exact, and not for paired activity comparisons.
 
 Composes with structural plasticity: 2,470 synapses at 120 steps, 2,510 with
 `--structural-plasticity`, 2,509 at 400 steps — it grows, then prunes.
