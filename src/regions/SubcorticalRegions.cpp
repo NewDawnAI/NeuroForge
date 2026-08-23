@@ -9,6 +9,7 @@
 #endif
 
 #include "core/RegionRegistry.h"
+#include "core/DeterministicRng.h"
 
 namespace {
     constexpr float PI_F = 3.14159265358979323846f;
@@ -52,8 +53,7 @@ namespace NeuroForge {
             
             // Initialize spatial cells (place cells, grid cells, etc.)
             spatial_cells_.reserve(neurons.size() / 10); // 10% are spatial cells
-            std::random_device rd;
-            std::mt19937 gen(rd());
+                        std::mt19937 gen(NeuroForge::Core::DeterministicRng::seedFor("SubcorticalRegions"));
             std::uniform_real_distribution<float> pos_dist(-10.0f, 10.0f);
             std::uniform_real_distribution<float> radius_dist(0.5f, 2.0f);
             

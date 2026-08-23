@@ -27,6 +27,7 @@
 #ifdef NF_HAVE_CAPNP
 #include "neuroforge.capnp.h"
 #include "brainstate.capnp.h"
+#include "core/DeterministicRng.h"
 #endif
 
 namespace NeuroForge {
@@ -185,7 +186,7 @@ private:
     mutable std::mutex statistics_mutex_;
     mutable std::mutex callback_mutex_;
     mutable std::mutex rng_mutex_;
-    std::mt19937 rng_{std::random_device{}()};
+    std::mt19937 rng_{NeuroForge::Core::DeterministicRng::seedFor("HypergraphBrain")};
     
     // Statistics and monitoring
     mutable GlobalStatistics global_stats_;

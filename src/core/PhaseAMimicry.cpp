@@ -13,6 +13,7 @@
 #include <fstream>
 #include <functional>
 #include <cstdlib>
+#include "core/DeterministicRng.h"
 
 namespace NeuroForge {
 namespace Core {
@@ -23,7 +24,7 @@ PhaseAMimicry::PhaseAMimicry(std::shared_ptr<LanguageSystem> language_system,
     : config_(config)
     , language_system_(language_system)
     , memory_db_(memory_db)
-    , rng_(std::random_device{}())
+    , rng_(NeuroForge::Core::DeterministicRng::seedFor("PhaseAMimicry"))
     , uniform_dist_(0.0f, 1.0f) {
     
     teacher_embeddings_.reserve(config_.max_teacher_embeddings);

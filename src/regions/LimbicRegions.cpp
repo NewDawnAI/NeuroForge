@@ -3,6 +3,7 @@
 #include <random>
 #include <cmath>
 #include <chrono>
+#include "core/DeterministicRng.h"
 
 namespace NeuroForge {
     namespace Regions {
@@ -666,8 +667,7 @@ namespace NeuroForge {
             thought.is_conscious = (default_activity_level_ > 0.6f);
             
             // Generate content based on type
-            std::random_device rd;
-            std::mt19937 gen(rd());
+                        std::mt19937 gen(NeuroForge::Core::DeterministicRng::seedFor("LimbicRegions"));
             std::uniform_real_distribution<float> dist(0.0f, 1.0f);
             
             for (float& value : thought.thought_pattern) {
@@ -791,8 +791,7 @@ namespace NeuroForge {
                 
                 if (thought_timer > 5.0f) { // Generate thought every 5 seconds
                     std::vector<std::string> thought_types = {"memory", "planning", "social", "creative"};
-                    std::random_device rd;
-                    std::mt19937 gen(rd());
+                                        std::mt19937 gen(NeuroForge::Core::DeterministicRng::seedFor("LimbicRegions"));
                     std::uniform_int_distribution<> dist(0, static_cast<int>(thought_types.size() - 1));
                     
                     generateSpontaneousThought(thought_types[dist(gen)]);

@@ -7,6 +7,7 @@
 #include <functional>
 #include <numeric>
 #include <stdexcept>
+#include "core/DeterministicRng.h"
 
 namespace NeuroForge {
 namespace Memory {
@@ -16,7 +17,7 @@ namespace Memory {
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 ProceduralMemory::ProceduralMemory(const ProceduralConfig &config)
     : config_(config), context_dim_(config.context_dim),
-      action_dim_(config.action_dim), rng_(std::random_device{}()) {
+      action_dim_(config.action_dim), rng_(NeuroForge::Core::DeterministicRng::seedFor("ProceduralMemory")) {
   // Initialize weight matrix to small random values (Xavier init)
   weights_.resize(context_dim_ * action_dim_);
   float scale =

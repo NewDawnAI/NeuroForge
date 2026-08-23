@@ -8,6 +8,7 @@
 #include <numeric>
 #include <random>
 #include <sstream>
+#include "core/DeterministicRng.h"
 
 namespace NeuroForge {
 namespace Core {
@@ -67,7 +68,7 @@ static std::int64_t now_ms_ls() {
 LanguageSystem::LanguageSystem(const Config &config)
     : config_(config), current_stage_(DevelopmentalStage::Chaos),
       development_step_counter_(0), narration_active_(false),
-      rng_(std::random_device{}()), uniform_dist_(0.0f, 1.0f) {
+      rng_(NeuroForge::Core::DeterministicRng::seedFor("LanguageSystem")), uniform_dist_(0.0f, 1.0f) {
 
   vocabulary_.reserve(config_.max_vocabulary_size);
   internal_narration_.resize(1000); // Ring buffer for narration history

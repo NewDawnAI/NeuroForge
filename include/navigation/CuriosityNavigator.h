@@ -23,6 +23,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include "core/DeterministicRng.h"
 
 namespace NeuroForge {
 namespace Navigation {
@@ -338,7 +339,7 @@ private:
   std::chrono::steady_clock::time_point last_navigation_;
 
   // Random number generator
-  mutable std::mt19937 rng_{std::random_device{}()};
+  mutable std::mt19937 rng_{NeuroForge::Core::DeterministicRng::seedFor("CuriosityNavigator")};
 
   // Statistics
   mutable NavigatorStats stats_;

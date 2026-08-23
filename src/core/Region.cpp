@@ -14,6 +14,7 @@
 #include <immintrin.h>
 #elif defined(__SSE2__)
 #include <emmintrin.h>
+#include "core/SubstrateAblation.h"
 #endif
 
 namespace NeuroForge {
@@ -242,8 +243,21 @@ namespace NeuroForge {
 
             if (active.size() < 2) return 0;
 
-            // Randomized pairing to diversify connectivity
-            std::mt19937 rng(static_cast<unsigned>(std::chrono::high_resolution_clock::now().time_since_epoch().count()));
+            // Randomized pairing to diversify connectivity.
+            //
+            // This was seeded from high_resolution_clock, which made synapse growth
+            // WALL-CLOCK dependent: which neurons got paired differed on every run,
+            // so the network's shape was not reproducible from any seed. Measured
+            // 2026-08-23: identical invocations at only 20 steps produced 105 / 102 /
+            // 103 active synapses, and the resulting ~2,000-unit spread in Total
+            // Updates swamped the effects a subsystem-knockout study was trying to
+            // detect. No CLI flag could reach it.
+            //
+            // Now seeded from a per-region counter mixed with the region name, so
+            // growth is varied ACROSS regions and calls but reproducible for a given
+            // run. Deterministic by default; pass a nonzero value to
+            // setGrowthSeedBase() to explore alternative growth draws on purpose.
+            std::mt19937 rng(growthSeed());
             std::shuffle(active.begin(), active.end(), rng);
 
             std::size_t grown = 0;
@@ -491,6 +505,13 @@ namespace NeuroForge {
             
             // Process neurons without holding region_mutex_ to avoid deadlock
             processNeuronsFromCopy(neurons_copy, delta_time);
+
+            // Optional substrate ablation. No-op unless --ablate is passed. Applied
+            // HERE - after activations are final, before synapse/eligibility
+            // processing reads them - so a corrupted activation propagates to every
+            // downstream consumer exactly as a real one would. neurons_copy holds
+            // shared_ptrs to the same neurons, so this mutates the region's state.
+            SubstrateAblation::instance().apply(getName(), neurons_copy);
 
             // R-STDP-lite: decay and accumulate eligibility traces for synapses connected to this region
             {

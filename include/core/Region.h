@@ -1,5 +1,7 @@
 #pragma once
 
+#include <cstdint>
+
 #include "Types.h"
 #include <vector>
 #include <unordered_map>
@@ -87,6 +89,16 @@ namespace NeuroForge {
         protected:
             NeuroForge::RegionID id_;
             std::string name_;
+            std::uint32_t growth_seed_base_ = 0;
+            mutable std::uint32_t growth_call_counter_ = 0;
+
+            /// Distinct per region and per call, identical across runs.
+            std::uint32_t growthSeed() const noexcept {
+                std::uint32_t h = 2166136261u;              // FNV-1a over the name
+                for (unsigned char c : name_) { h ^= c; h *= 16777619u; }
+                return h ^ (growth_seed_base_ * 2654435761u) ^ (++growth_call_counter_ * 40503u);
+            }
+
             Type type_;
             ActivationPattern activation_pattern_;
             
@@ -132,6 +144,19 @@ namespace NeuroForge {
             // Basic properties
             RegionID getId() const noexcept { return id_; }
             const std::string& getName() const noexcept { return name_; }
+
+            /**
+             * @brief Base seed for synapse-growth randomisation.
+             *
+             * growSynapses() previously seeded std::mt19937 from
+             * high_resolution_clock, making network shape wall-clock dependent and
+             * unreproducible from any seed. Set a nonzero base to deliberately
+             * explore different growth draws; 0 (the default) keeps runs
+             * deterministic.
+             */
+            void setGrowthSeedBase(std::uint32_t base) noexcept { growth_seed_base_ = base; }
+            std::uint32_t getGrowthSeedBase() const noexcept { return growth_seed_base_; }
+
             Type getType() const noexcept { return type_; }
             ActivationPattern getActivationPattern() const noexcept { return activation_pattern_; }
             

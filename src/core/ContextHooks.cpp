@@ -5,6 +5,7 @@
 #include <random>
 #include <unordered_map>
 #include <tuple>
+#include "core/DeterministicRng.h"
 
 namespace NeuroForge {
 namespace Core {
@@ -12,7 +13,7 @@ namespace Core {
 static std::mutex g_ctx_m;
 static NFContextConfig g_cfg;
 static std::deque<double> g_recent;
-static std::mt19937 g_rng{std::random_device{}()};
+static std::mt19937 g_rng{NeuroForge::Core::DeterministicRng::seedFor("ContextHooks")};
 
 // Peer contexts: name -> {config, recent deque, last_sample}
 struct PeerState {

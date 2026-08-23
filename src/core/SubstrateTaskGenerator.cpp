@@ -5,6 +5,7 @@
 #include <random>
 #include <sstream>
 #include <cmath>
+#include "core/DeterministicRng.h"
 
 namespace NeuroForge {
 namespace Core {
@@ -146,8 +147,7 @@ std::size_t SubstrateTaskGenerator::generateTasks(float delta_time) {
         }
         
         // Generate tasks from candidates
-        std::random_device rd;
-        std::mt19937 gen(rd());
+                std::mt19937 gen(NeuroForge::Core::DeterministicRng::seedFor("SubstrateTaskGenerator"));
         std::shuffle(candidate_tasks.begin(), candidate_tasks.end(), gen);
         
         for (auto task_type : candidate_tasks) {

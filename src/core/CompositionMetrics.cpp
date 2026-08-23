@@ -5,6 +5,7 @@
 #include <cmath>
 #include <numeric>
 #include <random>
+#include "core/DeterministicRng.h"
 
 namespace NeuroForge {
 namespace Core {
@@ -145,7 +146,7 @@ CompositionMetrics::perturbForCreativity(const std::vector<float> &repr,
   float noise_sigma = (sigma > 0.0f) ? sigma : config_.noise_sigma;
 
   // Thread-local RNG for efficiency
-  thread_local std::mt19937 rng(std::random_device{}());
+  thread_local std::mt19937 rng(NeuroForge::Core::DeterministicRng::seedFor("CompositionMetrics"));
   std::normal_distribution<float> dist(0.0f, noise_sigma);
 
   std::vector<float> perturbed(repr.size());
