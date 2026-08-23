@@ -368,7 +368,26 @@ namespace NeuroForge {
 
             // Synaptogenesis (grow)
             if (config_.structural_grow_batch > 0) {
-                (void)region->growSynapses(config_.structural_grow_batch);
+                // Give a newborn synapse headroom above the pruning threshold.
+                //
+                // growSynapses defaults initial_weight to 0.05f and
+                // structural_prune_threshold also defaults to 0.05f, so every
+                // synapse was created at EXACTLY the weight that makes it
+                // eligible for deletion. Survival then turned on whether
+                // learning happened to nudge it up or down by an epsilon in the
+                // first cycle -- a knife-edge float comparison, and a synapse
+                // that never gets a chance to strengthen before being judged.
+                //
+                // Measured 2026-08-23 at --steps=400 with growth always
+                // permitted: prune threshold 0.05 (equal to birth weight) gave
+                // 130/131 synapses, threshold 0.01 gave 133/134. New synapses
+                // were being deleted at birth.
+                const float birth_weight =
+                    (config_.structural_prune_threshold > 0.0f)
+                        ? config_.structural_prune_threshold * 2.0f
+                        : 0.05f;
+                (void)region->growSynapses(config_.structural_grow_batch,
+                                           0.6f, birth_weight);
             }
         }
 

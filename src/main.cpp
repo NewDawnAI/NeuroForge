@@ -2572,6 +2572,7 @@ float g_demo_density = 0.05f;
 
 void create_demo_brain(NeuroForge::Core::HypergraphBrain &brain) {
   using NeuroForge::Core::Region;
+
   auto regionA = brain.createRegion("DemoCortex", Region::Type::Cortical,
                                     Region::ActivationPattern::Asynchronous);
   auto regionB = brain.createRegion("DemoSubcortex", Region::Type::Subcortical,
@@ -3297,6 +3298,14 @@ int main(int argc, char *argv[]) {
     bool stdp_mult_set = false;
     bool attention_boost_set = false;
     bool homeostasis_set = false;
+    // Structural plasticity: growth, pruning and neurogenesis. Had no
+    // command-line surface at all before 2026-08-23, so the connectome could
+    // not be made to change without editing code.
+    bool structural_set = false;
+    bool structural_grow_set = false;
+    bool structural_spawn_set = false;
+    bool structural_prune_set = false;
+    bool structural_interval_set = false;
     bool consolidation_interval_set = false;
     bool consolidation_strength_set = false;
     std::string snapshot_csv_path;
@@ -6110,6 +6119,82 @@ int main(int argc, char *argv[]) {
           return 2;
         }
         homeostasis_set = true;
+      } else if (arg == "--structural-plasticity") {
+        lconf.enable_structural_plasticity = true;
+        structural_set = true;
+      } else if (starts_with(arg, "--structural-plasticity=")) {
+        auto v = arg.substr(std::string("--structural-plasticity=").size());
+        if (!parse_on_off_flag(v, lconf.enable_structural_plasticity)) {
+          std::cerr << "Error: --structural-plasticity must be "
+                       "on|off|true|false|1|0"
+                    << std::endl;
+          return 2;
+        }
+        structural_set = true;
+      } else if (starts_with(arg, "--structural-grow-batch=")) {
+        try {
+          lconf.structural_grow_batch = static_cast<std::size_t>(
+              std::stoul(arg.substr(
+                  std::string("--structural-grow-batch=").size())));
+          structural_grow_set = true;
+        } catch (...) {
+          std::cerr << "Error: invalid integer for --structural-grow-batch"
+                    << std::endl;
+          return 2;
+        }
+      } else if (starts_with(arg, "--structural-spawn-batch=")) {
+        try {
+          lconf.structural_spawn_batch = static_cast<std::size_t>(
+              std::stoul(arg.substr(
+                  std::string("--structural-spawn-batch=").size())));
+          structural_spawn_set = true;
+        } catch (...) {
+          std::cerr << "Error: invalid integer for --structural-spawn-batch"
+                    << std::endl;
+          return 2;
+        }
+      } else if (starts_with(arg, "--structural-prune-threshold=")) {
+        try {
+          lconf.structural_prune_threshold = std::stof(arg.substr(
+              std::string("--structural-prune-threshold=").size()));
+          structural_prune_set = true;
+        } catch (...) {
+          std::cerr << "Error: invalid float for --structural-prune-threshold"
+                    << std::endl;
+          return 2;
+        }
+        if (lconf.structural_prune_threshold < 0.0f ||
+            lconf.structural_prune_threshold > 1.0f) {
+          std::cerr << "Error: --structural-prune-threshold must be in [0,1]"
+                    << std::endl;
+          return 2;
+        }
+      } else if (starts_with(arg, "--structural-energy-gate=")) {
+        try {
+          lconf.structural_energy_gate = std::stof(arg.substr(
+              std::string("--structural-energy-gate=").size()));
+        } catch (...) {
+          std::cerr << "Error: invalid float for --structural-energy-gate"
+                    << std::endl;
+          return 2;
+        }
+        if (lconf.structural_energy_gate < 0.0f ||
+            lconf.structural_energy_gate > 1.0f) {
+          std::cerr << "Error: --structural-energy-gate must be in [0,1]"
+                    << std::endl;
+          return 2;
+        }
+      } else if (starts_with(arg, "--structural-interval=")) {
+        try {
+          lconf.structural_interval_steps = static_cast<std::size_t>(
+              std::stoul(arg.substr(
+                  std::string("--structural-interval=").size())));
+          structural_interval_set = true;
+        } catch (...) {
+          std::cerr << "Error: invalid integer for --structural-interval"
+                    << std::endl;
+          return 2;
+        }
       } else if (starts_with(arg, "--consolidation-interval=")) {
         auto v = arg.substr(std::string("--consolidation-interval=").size());
         try {
@@ -6373,7 +6458,10 @@ int main(int argc, char *argv[]) {
         {
           static const char *kPrimaryParserFlags[] = {
               "--demo-neurons=", "--demo-density=", "--ablate=",
-              "--ablate-region=", "--ablate-seed=", "--sequential"};
+              "--ablate-region=", "--ablate-seed=", "--sequential",
+              "--structural-plasticity", "--structural-grow-batch=",
+              "--structural-spawn-batch=", "--structural-prune-threshold=",
+              "--structural-interval=", "--structural-energy-gate="};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {
@@ -6917,6 +7005,37 @@ int main(int argc, char *argv[]) {
                       << lconf.homeostasis_eta
                       << " (eta defaults to 0, which disables it)" << std::endl;
           }
+
+          // Structural plasticity: give the batches a live default when the
+          // feature is switched on. structural_grow_batch and
+          // structural_spawn_batch both default to 0, and applyStructuralPlasticity
+          // guards each with `if (batch > 0)`, so enabling the feature without
+          // these grew nothing and spawned nothing -- only pruning ran. Same
+          // defect shape as --enable-learning with zero rates and --homeostasis
+          // with eta=0.
+          //
+          // Also widen structural_max_regions_per_cycle, which defaults to 1: with
+          // one region touched per cycle the connectome of a multi-region brain
+          // changes at a rate that is hard to distinguish from not changing.
+          if (structural_set && lconf.enable_structural_plasticity) {
+            if (!structural_grow_set && lconf.structural_grow_batch == 0) {
+              lconf.structural_grow_batch = 8;
+            }
+            if (!structural_prune_set && lconf.structural_prune_threshold <= 0.0f) {
+              lconf.structural_prune_threshold = 0.05f;
+            }
+            if (lconf.structural_max_regions_per_cycle < 2) {
+              lconf.structural_max_regions_per_cycle = 16;
+            }
+            std::cout << "[Learning] structural plasticity ON"
+                      << " grow=" << lconf.structural_grow_batch
+                      << " spawn=" << lconf.structural_spawn_batch
+                      << " prune_thr=" << lconf.structural_prune_threshold
+                      << " interval=" << lconf.structural_interval_steps
+                      << " regions/cycle=" << lconf.structural_max_regions_per_cycle
+                      << std::endl;
+          }
+
           if (phasec_brain_shared->initializeLearning(lconf)) {
             phasec_brain_shared->setLearningEnabled(true);
             auto *ls_init = phasec_brain_shared->getLearningSystem();
@@ -7652,6 +7771,37 @@ int main(int argc, char *argv[]) {
                   << lconf.homeostasis_eta
                   << " (eta defaults to 0, which disables it)" << std::endl;
       }
+
+      // Structural plasticity: give the batches a live default when the
+      // feature is switched on. structural_grow_batch and
+      // structural_spawn_batch both default to 0, and applyStructuralPlasticity
+      // guards each with `if (batch > 0)`, so enabling the feature without
+      // these grew nothing and spawned nothing -- only pruning ran. Same
+      // defect shape as --enable-learning with zero rates and --homeostasis
+      // with eta=0.
+      //
+      // Also widen structural_max_regions_per_cycle, which defaults to 1: with
+      // one region touched per cycle the connectome of a multi-region brain
+      // changes at a rate that is hard to distinguish from not changing.
+      if (structural_set && lconf.enable_structural_plasticity) {
+        if (!structural_grow_set && lconf.structural_grow_batch == 0) {
+          lconf.structural_grow_batch = 8;
+        }
+        if (!structural_prune_set && lconf.structural_prune_threshold <= 0.0f) {
+          lconf.structural_prune_threshold = 0.05f;
+        }
+        if (lconf.structural_max_regions_per_cycle < 2) {
+          lconf.structural_max_regions_per_cycle = 16;
+        }
+        std::cout << "[Learning] structural plasticity ON"
+                  << " grow=" << lconf.structural_grow_batch
+                  << " spawn=" << lconf.structural_spawn_batch
+                  << " prune_thr=" << lconf.structural_prune_threshold
+                  << " interval=" << lconf.structural_interval_steps
+                  << " regions/cycle=" << lconf.structural_max_regions_per_cycle
+                  << std::endl;
+      }
+
       if (!brain.initializeLearning(lconf)) {
         // If already initialized, it's fine; otherwise, report
         // For this demo we proceed regardless
