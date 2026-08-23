@@ -222,6 +222,8 @@ static double nf_process_rss_mb() { return 0.0; }
 #include "core/RegionRegistry.h"
 #include "core/SubstrateLanguageIntegration.h"
 #include "regions/LimbicRegions.h"
+#include "core/SubstrateAblation.h"
+#include "core/DeterministicRng.h"
 
 // Force-link declarations for region translation units (defined in their
 // respective .cpp files)
@@ -2547,6 +2549,27 @@ static void emit_json_line(bool enabled, const std::string &path,
 }
 
 // Create a tiny demo brain with two regions and sparse interconnections
+// Size of the default two-region brain, overridable with --demo-neurons= and
+// --demo-density=.
+//
+// WHY THESE ARE FLAGS NOW
+//
+// These were hardcoded 32 and 0.05f. That is a 64-neuron network whose synapse
+// count is fully determined: 32 sources x 32 targets x 0.05 x 2 directions =
+// 102. Every run this session reported "Active Synapses: 102", and the number
+// never moved because nothing in the system can move it -- LearningSystem's
+// homeostatic scaling adjusts the WEIGHTS of synapses that already exist
+// (LearningSystem.cpp ~684) and never creates one, and `active_synapses` is a
+// sum of getInputSynapseCount() over all neurons, i.e. a count of what exists
+// rather than a threshold on activity.
+//
+// So the only lever on connectivity is construction, which is what these
+// expose. Note the ceiling: HypergraphBrain::connectRegions caps fan-out at
+// max_per_source_cap = 64 per source per call, so synapses per direction
+// saturate at neurons * 64 no matter how high density goes.
+std::size_t g_demo_neurons = 32;
+float g_demo_density = 0.05f;
+
 void create_demo_brain(NeuroForge::Core::HypergraphBrain &brain) {
   using NeuroForge::Core::Region;
   auto regionA = brain.createRegion("DemoCortex", Region::Type::Cortical,
@@ -2555,15 +2578,15 @@ void create_demo_brain(NeuroForge::Core::HypergraphBrain &brain) {
                                     Region::ActivationPattern::Asynchronous);
 
   if (regionA)
-    regionA->createNeurons(32);
+    regionA->createNeurons(g_demo_neurons);
   if (regionB)
-    regionB->createNeurons(32);
+    regionB->createNeurons(g_demo_neurons);
 
   if (regionA && regionB) {
-    // Connect regions with modest density
-    brain.connectRegions(regionA->getId(), regionB->getId(), 0.05f,
+    // Connect regions with the configured density
+    brain.connectRegions(regionA->getId(), regionB->getId(), g_demo_density,
                          {0.1f, 0.9f});
-    brain.connectRegions(regionB->getId(), regionA->getId(), 0.05f,
+    brain.connectRegions(regionB->getId(), regionA->getId(), g_demo_density,
                          {0.1f, 0.9f});
   }
 }
@@ -2984,7 +3007,7 @@ private:
   NeuroForge::Core::FirstPersonMazeRenderer::AgentState agent_state_;
 
   void generateMaze() {
-    static std::mt19937 rng{std::random_device{}()};
+    static std::mt19937 rng{NeuroForge::Core::DeterministicRng::seedFor("MainLoop")};
     std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
     // Generate random walls but ensure connectivity
@@ -3489,7 +3512,7 @@ int main(int argc, char *argv[]) {
           assemble();
         }
         if (shuffle) {
-          std::mt19937 rng{std::random_device{}()};
+          std::mt19937 rng{NeuroForge::Core::DeterministicRng::seedFor("MainLoop")};
           std::shuffle(items.begin(), items.end(), rng);
         }
         if (limit > 0 && static_cast<int>(items.size()) > limit)
@@ -3628,6 +3651,11 @@ int main(int argc, char *argv[]) {
     std::string phase_c_mode = "binding"; // binding|sequence
     std::string phase_c_out = "PhaseC_Logs";
     unsigned int phase_c_seed = 0;       // 0 = random at runtime
+  bool sequential_regions = false;     // --sequential: deterministic region order
+  std::string ablate_mode = "none";   // none|zero|noise|shuffle
+  std::string ablate_region;           // substring filter; empty = all regions
+  unsigned int ablate_seed = 12345u;   // private to the ablation RNG
+  bool ablate_set = false;
     std::size_t phase_c_wm_capacity = 6; // default WM capacity
     float phase_c_wm_decay = 0.90f;      // default WM decay
     std::size_t phase_c_seq_window = 0;  // 0 = unlimited
@@ -4797,6 +4825,55 @@ int main(int argc, char *argv[]) {
           return 2;
         }
         continue;
+      } else if (arg == "--sequential" || arg == "--sequential=on") {
+        // HypergraphBrain defaults to ProcessingMode::Parallel, which dispatches
+        // regions across std::async futures. Completion order is not seed-
+        // controlled, so runs are NOT reproducible from --phase-c-seed alone:
+        // measured 45,092 / 47,076 / 45,520 Total Updates across three identical
+        // invocations. That ~2,000-unit spread swamps most effects worth
+        // measuring. This forces Sequential so a seed pins the run.
+        sequential_regions = true;
+      } else if (arg == "--sequential=off") {
+        sequential_regions = false;
+      } else if (starts_with(arg, "--demo-neurons=")) {
+        try {
+          g_demo_neurons = static_cast<std::size_t>(
+              std::stoul(arg.substr(std::string("--demo-neurons=").size())));
+        } catch (...) {
+          std::cerr << "Error: invalid integer for --demo-neurons" << std::endl;
+          return 2;
+        }
+      } else if (starts_with(arg, "--demo-density=")) {
+        try {
+          g_demo_density =
+              std::stof(arg.substr(std::string("--demo-density=").size()));
+        } catch (...) {
+          std::cerr << "Error: invalid float for --demo-density" << std::endl;
+          return 2;
+        }
+        if (g_demo_density < 0.0f || g_demo_density > 1.0f) {
+          std::cerr << "Error: --demo-density must be in [0,1]" << std::endl;
+          return 2;
+        }
+      } else if (starts_with(arg, "--ablate=")) {
+        // Substrate ablation: corrupt region activations to test whether anything
+        // downstream depends on their CONTENT. shuffle is the sharpest form - it
+        // preserves the value distribution exactly and destroys only which neuron
+        // carries what. See include/core/SubstrateAblation.h.
+        ablate_mode = arg.substr(std::string("--ablate=").size());
+        ablate_set = true;
+      } else if (starts_with(arg, "--ablate-region=")) {
+        ablate_region = arg.substr(std::string("--ablate-region=").size());
+        ablate_set = true;
+      } else if (starts_with(arg, "--ablate-seed=")) {
+        try {
+          ablate_seed = static_cast<unsigned int>(
+              std::stoul(arg.substr(std::string("--ablate-seed=").size())));
+        } catch (...) {
+          std::cerr << "Error: invalid integer for --ablate-seed" << std::endl;
+          return 2;
+        }
+        ablate_set = true;
       } else if (starts_with(arg, "--phase-c-seed=")) {
         auto v = arg.substr(std::string("--phase-c-seed=").size());
         try {
@@ -6289,6 +6366,25 @@ int main(int argc, char *argv[]) {
                 enable_motor_cortex, enable_motor_cortex_set)) {
           continue;
         }
+        // Flags consumed by the primary parser earlier in main(). This second
+        // pass never sees them assigned, so without this they are reported as
+        // unrecognized even though they took effect - a warning that reads like
+        // the flag was ignored when it was not.
+        {
+          static const char *kPrimaryParserFlags[] = {
+              "--demo-neurons=", "--demo-density=", "--ablate=",
+              "--ablate-region=", "--ablate-seed=", "--sequential"};
+          bool owned_elsewhere = false;
+          for (const char *f : kPrimaryParserFlags) {
+            if (starts_with(arg, f)) {
+              owned_elsewhere = true;
+              break;
+            }
+          }
+          if (owned_elsewhere) {
+            continue;
+          }
+        }
         if (!handled_any) {
           std::cerr << "Warning: unrecognized option '" << arg << "' (ignored)"
                     << std::endl;
@@ -6810,6 +6906,17 @@ int main(int argc, char *argv[]) {
             lconf.stdp_rate = 0.002f;           // Default STDP learning rate
             lconf.global_learning_rate = 0.01f; // Default global learning rate
           }
+          // See the matching block on the general path: homeostasis_eta
+          // defaults to 0, which makes applyHomeostasis() return immediately,
+          // so `--homeostasis` alone silently does nothing.
+          if (homeostasis_set && !homeostasis_eta_set &&
+              lconf.enable_homeostasis && lconf.homeostasis_eta <= 0.0f) {
+            lconf.homeostasis_eta = 0.01f;
+            std::cout << "[Learning] --homeostasis given without "
+                         "--homeostasis-eta; using eta="
+                      << lconf.homeostasis_eta
+                      << " (eta defaults to 0, which disables it)" << std::endl;
+          }
           if (phasec_brain_shared->initializeLearning(lconf)) {
             phasec_brain_shared->setLearningEnabled(true);
             auto *ls_init = phasec_brain_shared->getLearningSystem();
@@ -7047,6 +7154,26 @@ int main(int argc, char *argv[]) {
                       << "\n"
                       << "  Depressed Synapses: " << s.depressed_synapses
                       << "\n";
+
+            // Neuron ACTIVITY, which is a different question from the synapse
+            // count above. "Active Synapses" sums getInputSynapseCount() and so
+            // reports how many synapses EXIST; this reports how many neurons
+            // actually cross activation_threshold on the last step. Homeostatic
+            // scaling can move this ratio -- it drives average activation toward
+            // its set-point -- but it cannot move the synapse count, because it
+            // only rescales weights of synapses that already exist.
+            {
+              const auto &gs = phasec_brain_shared->getGlobalStatistics();
+              std::cout << "  Total Neurons: " << gs.total_neurons << "\n"
+                        << "  Active Neurons: " << gs.active_neurons;
+              if (gs.total_neurons > 0) {
+                std::cout << " (" << std::fixed << std::setprecision(1)
+                          << (100.0 * static_cast<double>(gs.active_neurons) /
+                              static_cast<double>(gs.total_neurons))
+                          << "%)" << std::defaultfloat;
+              }
+              std::cout << "\n";
+            }
           } else {
             std::cout << "  Total Updates: 0\n"
                       << "  Hebbian Updates: 0\n"
@@ -7209,7 +7336,23 @@ int main(int argc, char *argv[]) {
     // Build connectivity manager and brain
     auto conn_mgr =
         std::make_shared<NeuroForge::Connectivity::ConnectivityManager>();
+    // Seed every deterministic RNG site from one number, BEFORE constructing the
+    // brain. Member initialisers such as `rng_{seedFor("LearningSystem")}` run at
+    // construction, so setting the base afterwards leaves every site on the default
+    // and --phase-c-seed silently stops mattering. Fifteen sites previously seeded
+    // from std::random_device and no run was reproducible from any flag.
+    NeuroForge::Core::DeterministicRng::setBaseSeed(
+        phase_c_seed != 0u ? phase_c_seed
+                           : NeuroForge::Core::DeterministicRng::kDefaultBase);
+
     NeuroForge::Core::HypergraphBrain brain(conn_mgr);
+    if (sequential_regions) {
+      // Deterministic region order: a seed then pins the run, which paired
+      // comparisons require. Parallel is the default and is faster.
+      brain.setProcessingMode(
+          NeuroForge::Core::HypergraphBrain::ProcessingMode::Sequential);
+      std::cout << "[Determinism] region processing = Sequential" << std::endl;
+    }
     if (memdb_debug) {
       brain.setMemoryPropagationDebug(true);
     }
@@ -7463,6 +7606,19 @@ int main(int argc, char *argv[]) {
         lconf.update_interval =
             std::chrono::milliseconds(step_ms > 0 ? step_ms : 0);
       }
+      // Configure substrate ablation once, after parsing. No-op unless --ablate
+      // was passed; announced so a run's provenance is visible in its own log
+      // rather than inferred from the command line.
+      if (ablate_set) {
+        auto m = NeuroForge::Core::SubstrateAblation::parseMode(ablate_mode);
+        NeuroForge::Core::SubstrateAblation::instance().configure(m, ablate_region,
+                                                                 ablate_seed);
+        std::cout << "[Ablation] mode="
+                  << NeuroForge::Core::SubstrateAblation::modeName(m)
+                  << " region=" << (ablate_region.empty() ? "ALL" : ablate_region)
+                  << " seed=" << ablate_seed << std::endl;
+      }
+
       // Apply the same default learning rates the Phase C path already uses
       // (see the matching block above the phasec_brain_shared
       // ->initializeLearning call). LearningSystem::Config declares
@@ -7476,6 +7632,25 @@ int main(int argc, char *argv[]) {
         lconf.hebbian_rate = 0.001f;        // matches the Phase C default
         lconf.stdp_rate = 0.002f;           // matches the Phase C default
         lconf.global_learning_rate = 0.01f; // matches the Phase C default
+      }
+      // Same defect, same fix, for homeostasis. LearningSystem::Config declares
+      // homeostasis_eta as 0.0f and applyHomeostasis() opens with
+      //   if (!config_.enable_homeostasis || config_.homeostasis_eta <= 0.0f)
+      //     return;
+      // so `--homeostasis` on its own sets the enable bit and then returns
+      // immediately every step -- the flag reads as "homeostasis is on" while
+      // nothing is scaled. Measured 2026-08-23 at --steps=200: `--homeostasis`
+      // gave avg weight change 5.38e-05 against 5.27e-05 with it off (noise),
+      // while `--homeostasis-eta=1.0` gave 5.70e-04, a 10.8x change, and moved
+      // potentiated synapses from 48,644 to 16,034. The feature works; the flag
+      // alone did not reach it.
+      if (homeostasis_set && !homeostasis_eta_set &&
+          lconf.enable_homeostasis && lconf.homeostasis_eta <= 0.0f) {
+        lconf.homeostasis_eta = 0.01f;
+        std::cout << "[Learning] --homeostasis given without "
+                     "--homeostasis-eta; using eta="
+                  << lconf.homeostasis_eta
+                  << " (eta defaults to 0, which disables it)" << std::endl;
       }
       if (!brain.initializeLearning(lconf)) {
         // If already initialized, it's fine; otherwise, report
@@ -10947,7 +11122,7 @@ int main(int argc, char *argv[]) {
           // Choose action: unified policy (neural motor cortex, Q-table, or
           // hybrid blend)
           int action = 0;
-          static std::mt19937 rng{std::random_device{}()};
+          static std::mt19937 rng{NeuroForge::Core::DeterministicRng::seedFor("MainLoop")};
           // Q-learning bookkeeping
           int q_state = -1;
           int q_next_state = -1;
@@ -12725,6 +12900,22 @@ int main(int argc, char *argv[]) {
                 << "  Active Synapses: " << s.active_synapses << "\n"
                 << "  Potentiated Synapses: " << s.potentiated_synapses << "\n"
                 << "  Depressed Synapses: " << s.depressed_synapses << "\n";
+
+      // See the note at the matching block in the Phase-C path: this is neuron
+      // ACTIVITY (activation > threshold), which homeostatic scaling can move,
+      // as opposed to the synapse count above, which it cannot.
+      {
+        const auto &gs = brain.getGlobalStatistics();
+        std::cout << "  Total Neurons: " << gs.total_neurons << "\n"
+                  << "  Active Neurons: " << gs.active_neurons;
+        if (gs.total_neurons > 0) {
+          std::cout << " (" << std::fixed << std::setprecision(1)
+                    << (100.0 * static_cast<double>(gs.active_neurons) /
+                        static_cast<double>(gs.total_neurons))
+                    << "%)" << std::defaultfloat;
+        }
+        std::cout << "\n";
+      }
     } else {
       // Learning not initialized; print zeros for consistency
       std::cout << "  Total Updates: 0\n"
