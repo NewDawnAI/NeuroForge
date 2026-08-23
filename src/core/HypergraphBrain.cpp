@@ -1,3 +1,5 @@
+#include <cmath>
+#include <map>
 #include <mutex>
 #include <set>
 #include "core/HypergraphBrain.h"
@@ -3001,6 +3003,73 @@ namespace {
 // cast returned nullptr and the whole block did nothing -- no error, no log, no
 // failed check. The integration read as ENABLED while being inert. This makes
 // the binding visible, so "enabled" and "actually wired" stop looking alike.
+// Express a channel relative to its OWN recent history rather than as a raw mean.
+//
+// WHY
+//
+// The prefrontal options were raw region activations, and the four source
+// regions sit at very different resting levels -- Thalamus around 0.56-0.70
+// against Hippocampus around 0.19 and Amygdala around 0.19. Measured 2026-08-23,
+// feeding an external pattern into VisualCortex moved Thalamus by +0.0412 and
+// prefrontal by -0.0218, reproducibly and with zero run-to-run variance -- and
+// the choice sequence did not change at all (0 1 3 0 1 0 in both conditions).
+// A 0.04 perturbation cannot reorder a set separated by ~0.35, so the decision
+// was dominated by WHICH REGION a channel is rather than what it currently
+// carries.
+//
+// Normalising against a per-channel running baseline makes that 0.04 a large
+// RELATIVE change instead of a small absolute one. It is also the more
+// defensible model: cortex responds to change against expectation, not to
+// absolute firing level.
+//
+// HOW
+//
+// Per channel, an exponential moving average tracks the baseline and a second
+// tracks the typical absolute deviation, giving a running z-like score. That is
+// squashed back into [0,1] with tanh so the value range downstream is unchanged
+// -- makeDecision keeps seeing numbers shaped like activations, and only their
+// MEANING changes from "how active" to "how unusual for this channel".
+//
+// The first sample of a channel returns the neutral 0.5: with no history there
+// is no deviation to report, and inventing one would be a fabricated signal.
+class ChannelNormaliser {
+public:
+    float normalise(const std::string &channel, float raw) {
+        std::lock_guard<std::mutex> lock(mtx_);
+        State &st = state_[channel];
+        if (!st.primed) {
+            st.primed = true;
+            st.baseline = raw;
+            st.scale = 0.0f;
+            return 0.5f;
+        }
+        const float dev = raw - st.baseline;
+        // Update AFTER measuring, so the score reflects deviation from the
+        // baseline as it stood before this sample.
+        st.baseline += kAlpha * dev;
+        st.scale += kAlpha * (std::fabs(dev) - st.scale);
+        const float denom = std::max(st.scale, kMinScale);
+        const float z = dev / denom;
+        return 0.5f + 0.5f * std::tanh(z);
+    }
+
+private:
+    struct State {
+        float baseline = 0.0f;
+        float scale = 0.0f;
+        bool primed = false;
+    };
+    // Slow enough that a baseline reflects many steps, fast enough to track
+    // genuine drift as the network warms up.
+    static constexpr float kAlpha = 0.05f;
+    // Floor on the deviation scale, so a channel that has been perfectly flat
+    // does not turn sensor noise into a saturated score.
+    static constexpr float kMinScale = 1e-3f;
+
+    std::mutex mtx_;
+    std::map<std::string, State> state_;
+};
+
 // One region's current state, read for use as a decision input.
 //
 // `activation` is how strongly the region is firing on average; `engagement` is
@@ -3088,6 +3157,11 @@ void reportIntegrationBinding(const char *region_name, bool bound) {
                 
                 auto cycle_start = std::chrono::steady_clock::now();
                 float delta_time = 1.0f / target_frequency;
+
+                // Sensory input and anything else that must precede the step.
+                if (pre_cycle_hook_) {
+                    pre_cycle_hook_(iteration);
+                }
                 
                 if (selfnode_integration_enabled_.load(std::memory_order_relaxed)) {
                     auto self_node = getRegion("SelfNode");
@@ -3127,11 +3201,19 @@ void reportIntegrationBinding(const char *region_name, bool bound) {
                             std::vector<float> values;
                             options.reserve(4);
                             values.reserve(4);
+                            // One normaliser for the life of the process, so each
+                            // channel accumulates its own baseline across cycles.
+                            static ChannelNormaliser channel_norm;
+                            std::vector<float> raw_options;
+                            raw_options.reserve(4);
                             for (const char *src : kSources) {
                                 const RegionSignal sig = readRegionSignal(getRegion(src));
                                 if (sig.valid) {
-                                    options.push_back(sig.activation);
-                                    values.push_back(sig.engagement);
+                                    raw_options.push_back(sig.activation);
+                                    options.push_back(
+                                        channel_norm.normalise(src, sig.activation));
+                                    values.push_back(channel_norm.normalise(
+                                        std::string(src) + ":engagement", sig.engagement));
                                 }
                             }
                             if (options.empty()) {
@@ -3160,9 +3242,13 @@ void reportIntegrationBinding(const char *region_name, bool bound) {
                                     std::cout << "[Decision] PFC option "
                                               << decision.selected_option << " of "
                                               << options.size() << " conf="
-                                              << decision.confidence << " inputs=[";
+                                              << decision.confidence << " norm=[";
                                     for (std::size_t i = 0; i < options.size(); ++i) {
                                         std::cout << (i ? " " : "") << options[i];
+                                    }
+                                    std::cout << "] raw=[";
+                                    for (std::size_t i = 0; i < raw_options.size(); ++i) {
+                                        std::cout << (i ? " " : "") << raw_options[i];
                                     }
                                     std::cout << "]" << std::endl;
                                 }

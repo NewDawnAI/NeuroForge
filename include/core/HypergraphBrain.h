@@ -202,12 +202,25 @@ private:
     std::atomic<bool> hardware_monitoring_enabled_;
     
 public:
+    /**
+     * @brief Called at the top of each runAutonomousLoop iteration.
+     *
+     * runAutonomousLoop drives processStep() itself, so anything that must
+     * happen BEFORE the brain steps -- injecting sensory input, for instance --
+     * cannot live in a caller's own loop and still coincide with the decisions
+     * made here. The hook receives the iteration index.
+     */
+    void setPreCycleHook(std::function<void(std::size_t)> hook) {
+        pre_cycle_hook_ = std::move(hook);
+    }
+
     // Toggle procedural connectivity (Virtual Synapses)
     void setProceduralConnectivity(bool enabled) { procedural_connectivity_enabled_ = enabled; }
     bool isProceduralConnectivityEnabled() const { return procedural_connectivity_enabled_; }
 
 private:
     // Procedural connectivity mode for massive scale (avoids storing Synapse objects)
+    std::function<void(std::size_t)> pre_cycle_hook_;
     bool procedural_connectivity_enabled_{false};
 
     // M6: Hippocampal-like snapshotting for fast plasticity memory path

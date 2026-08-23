@@ -2577,6 +2577,10 @@ std::size_t g_anatomical_neurons = 64;
 // the brain has something EXTERNAL to respond to rather than only its own
 // internal activity. See --sensory-drive.
 bool g_sensory_drive = false;
+// Run the autonomous loop inline instead of on its own thread. The threaded
+// form races the main step loop, which makes every decision it takes
+// irreproducible; see --autonomous-sync.
+bool g_autonomous_sync = false;
 
 void create_demo_brain(NeuroForge::Core::HypergraphBrain &brain) {
   using NeuroForge::Core::Region;
@@ -6234,6 +6238,8 @@ int main(int argc, char *argv[]) {
                     << std::endl;
           return 2;
         }
+      } else if (arg == "--autonomous-sync") {
+        g_autonomous_sync = true;
       } else if (arg == "--sensory-drive") {
         g_sensory_drive = true;
       } else if (starts_with(arg, "--sensory-drive=")) {
@@ -6548,7 +6554,7 @@ int main(int argc, char *argv[]) {
               "--structural-spawn-batch=", "--structural-prune-threshold=",
               "--structural-interval=", "--structural-energy-gate=",
               "--anatomical-regions", "--anatomical-neurons=",
-              "--sensory-drive"};
+              "--sensory-drive", "--autonomous-sync"};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {
@@ -10012,6 +10018,36 @@ int main(int argc, char *argv[]) {
     }
 
     if (brain.isAutonomousModeEnabled()) {
+      // Sensory input has to reach the autonomous loop, which drives its own
+      // processStep() -- injecting from the main step loop below would not
+      // coincide with the decisions taken there.
+      if (g_sensory_drive) {
+        brain.setPreCycleHook([&brain](std::size_t iter) {
+          auto vc_region = brain.getRegion("VisualCortex");
+          if (!vc_region) return;
+          auto vc = std::dynamic_pointer_cast<
+              NeuroForge::Regions::VisualCortex>(vc_region);
+          if (vc) {
+            vc->processVisualInput(
+                make_synthetic_gray_grid(8, static_cast<int>(iter)));
+          }
+        });
+      }
+
+      if (g_autonomous_sync) {
+        // Inline, so the loop does not race the main step loop. The threaded
+        // form leaves the number of interleaved cycles up to the scheduler:
+        // measured 2026-08-23, three identical invocations gave Thalamus
+        // mean activation 0.8836 / 0.8835 / 0.8809 with the thread, against
+        // three identical values without autonomous mode at all. Any decision
+        // measured under the threaded form is therefore unreproducible.
+        std::cout << "Autonomous mode: running loop SYNCHRONOUSLY" << std::endl;
+        try {
+          brain.runAutonomousLoop(static_cast<std::size_t>(steps), 10.0f);
+        } catch (const std::exception &e) {
+          std::cerr << "Autonomous loop error: " << e.what() << std::endl;
+        }
+      } else {
       std::cout << "Autonomous mode detected - starting autonomous loop in "
                    "separate thread"
                 << std::endl;
@@ -10027,6 +10063,7 @@ int main(int argc, char *argv[]) {
       std::cout
           << "Autonomous loop started, continuing with regular processing..."
           << std::endl;
+      }
     }
 
     // Wait loop if autonomous mode is enabled
