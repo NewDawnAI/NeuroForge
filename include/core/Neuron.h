@@ -178,6 +178,19 @@ namespace NeuroForge {
              */
             std::vector<NeuroForge::SynapsePtr> getOutputSynapses() const;
 
+            /**
+             * @brief Append the ids of this neuron's input and output synapses.
+             *
+             * getInputSynapses()/getOutputSynapses() each return a COPY of a
+             * vector of shared_ptr, so every call allocates and touches an atomic
+             * refcount per element. LearningSystem::onNeuronSpike calls both once
+             * per spike to accumulate eligibility traces, where only the ids are
+             * needed -- millions of spikes then pay for two allocations and ~128
+             * refcount operations each. This appends plain ids into a caller-owned
+             * buffer that can be reused across calls.
+             */
+            void collectSynapseIds(std::vector<NeuroForge::SynapseID>& out) const;
+
             // Efficient accessors when only counts are needed (avoids copying vectors)
             std::size_t getInputSynapseCount() const {
                 std::lock_guard<std::mutex> lock(synapse_mutex_);

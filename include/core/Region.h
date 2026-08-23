@@ -105,6 +105,16 @@ namespace NeuroForge {
             
             // Neuron and synapse management
             NeuronContainer neurons_;
+            /// id -> neuron, kept in step with neurons_.
+            ///
+            /// getNeuron() was a std::find_if over neurons_ under region_mutex_.
+            /// That is O(n) per lookup, and LearningSystem::onNeuronSpike calls it
+            /// once per REGION per spike while accumulating eligibility traces,
+            /// making eligibility O(spikes x regions x neurons). Measured
+            /// 2026-08-24: --auto-eligibility=on did not finish 40 steps of the
+            /// 12-region anatomical brain in 420 seconds, stuck on iteration 0.
+            /// connectToRegion also calls it twice per synapse.
+            std::unordered_map<NeuronID, NeuronPtr> neuron_index_;
             // Mitochondrial state (parallel to neurons_)
             std::vector<MitochondrialState> mito_states_;
             

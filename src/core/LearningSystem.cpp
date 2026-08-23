@@ -771,26 +771,17 @@ void LearningSystem::onNeuronSpike(NeuroForge::NeuronID neuron_id, NeuroForge::T
             }
             
             if (neuron) {
-                // Get synapses connected to this neuron
-                std::vector<NeuroForge::SynapsePtr> input_synapses = neuron->getInputSynapses();
-                std::vector<NeuroForge::SynapsePtr> output_synapses = neuron->getOutputSynapses();
-                
+                // Ids only, into a buffer reused across spikes: this runs once
+                // per spike, and copying two shared_ptr vectors here cost two
+                // allocations and a refcount per synapse every time.
+                thread_local std::vector<NeuroForge::SynapseID> sids;
+                sids.clear();
+                neuron->collectSynapseIds(sids);
+
                 std::lock_guard<std::mutex> lock(syn_state_mutex_);
-                
-                // Update eligibility for input synapses (post-synaptic)
-                for (const auto& synapse : input_synapses) {
-                    if (synapse) {
-                        auto& state = syn_state_[synapse->getId()];
-                        state.eligibility = std::min(1.0f, state.eligibility + 0.1f);
-                    }
-                }
-                
-                // Update eligibility for output synapses (pre-synaptic)
-                for (const auto& synapse : output_synapses) {
-                    if (synapse) {
-                        auto& state = syn_state_[synapse->getId()];
-                        state.eligibility = std::min(1.0f, state.eligibility + 0.1f);
-                    }
+                for (const auto sid : sids) {
+                    auto& state = syn_state_[sid];
+                    state.eligibility = std::min(1.0f, state.eligibility + 0.1f);
                 }
             }
         }
@@ -1218,7 +1209,28 @@ void LearningSystem::updateStatistics(LearningSystem::Algorithm algorithm, float
 
         NeuroForge::SynapsePtr LearningSystem::findSynapseById(NeuroForge::SynapseID sid) const {
             if (!brain_) return nullptr;
+            {
+                std::lock_guard<std::mutex> lock(synapse_cache_mutex_);
+                const auto it = synapse_cache_.find(sid);
+                if (it != synapse_cache_.end()) {
+                    if (auto sp = it->second.lock()) {
+                        return sp;
+                    }
+                    // Expired: the synapse was pruned. Drop it and rescan.
+                    synapse_cache_.erase(it);
+                }
+            }
             const auto& regions_map = brain_->getRegionsMap();
+
+            // Cache whatever the scan below finds, so the walk is paid once per
+            // synapse rather than once per lookup.
+            const auto remember = [this, sid](const NeuroForge::SynapsePtr& s) {
+                if (s) {
+                    std::lock_guard<std::mutex> lock(synapse_cache_mutex_);
+                    synapse_cache_[sid] = s;
+                }
+                return s;
+            };
 
             auto check_list = [&](const auto& list) -> NeuroForge::SynapsePtr {
                 for (const auto& s : list) {
@@ -1230,22 +1242,22 @@ void LearningSystem::updateStatistics(LearningSystem::Algorithm algorithm, float
             for (auto it = regions_map.begin(); it != regions_map.end(); ++it) {
                 const auto& region = it->second;
                 if (!region) continue;
-                if (auto res = check_list(region->getInternalSynapses())) return res;
+                if (auto res = check_list(region->getInternalSynapses())) return remember(res);
 
                 const auto& inConns = region->getInputConnections();
                 for (auto it2 = inConns.begin(); it2 != inConns.end(); ++it2) {
                     const auto& vec = it2->second;
-                    if (auto res = check_list(vec)) return res;
+                    if (auto res = check_list(vec)) return remember(res);
                 }
                 const auto& outConns = region->getOutputConnections();
                 for (auto it2 = outConns.begin(); it2 != outConns.end(); ++it2) {
                     const auto& vec = it2->second;
-                    if (auto res = check_list(vec)) return res;
+                    if (auto res = check_list(vec)) return remember(res);
                 }
                 const auto& interConns = region->getInterRegionConnections();
                 for (auto it2 = interConns.begin(); it2 != interConns.end(); ++it2) {
                     const auto& vec = it2->second;
-                    if (auto res = check_list(vec)) return res;
+                    if (auto res = check_list(vec)) return remember(res);
                 }
             }
             return nullptr;

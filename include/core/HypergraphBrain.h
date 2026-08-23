@@ -202,6 +202,28 @@ private:
     std::atomic<bool> hardware_monitoring_enabled_;
     
 public:
+    /// The prefrontal decision taken on the most recent autonomous cycle.
+    ///
+    /// Exposed so a caller can ACT on it. Without this the decision is made
+    /// inside runAutonomousLoop, used to plan a movement, and then discarded --
+    /// there is no way for an environment outside the brain to see what the
+    /// brain chose, so nothing can respond to it and no consequence can come
+    /// back as reward.
+    struct LastDecision {
+        bool valid = false;
+        std::size_t choice = 0;
+        std::size_t option_count = 0;
+        float confidence = 0.0f;
+    };
+    LastDecision getLastDecision() const {
+        std::lock_guard<std::mutex> lock(last_decision_mutex_);
+        return last_decision_;
+    }
+    void setLastDecision(const LastDecision &d) {
+        std::lock_guard<std::mutex> lock(last_decision_mutex_);
+        last_decision_ = d;
+    }
+
     /**
      * @brief Called at the top of each runAutonomousLoop iteration.
      *
@@ -220,6 +242,8 @@ public:
 
 private:
     // Procedural connectivity mode for massive scale (avoids storing Synapse objects)
+    mutable std::mutex last_decision_mutex_;
+    LastDecision last_decision_;
     std::function<void(std::size_t)> pre_cycle_hook_;
     bool procedural_connectivity_enabled_{false};
 

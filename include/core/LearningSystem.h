@@ -333,6 +333,21 @@ private:
   // Phase 4 runtime state
   std::unordered_map<NeuroForge::SynapseID, SynState> syn_state_;
   mutable std::mutex syn_state_mutex_;
+  /// id -> synapse, filled on first successful lookup.
+  ///
+  /// findSynapseById() walks every region's internal synapses, input connection
+  /// vectors and output connection vectors looking for one id -- a full scan of
+  /// the connectome per call. The Phase-4 reward path calls it once per synapse
+  /// carrying eligibility, so with reward arriving every cycle that became
+  /// thousands of full scans per cycle. Measured 2026-08-24: the closed-loop
+  /// task with --auto-eligibility=on did not finish 60 steps in 500 seconds.
+  ///
+  /// weak_ptr so a pruned synapse expires here rather than being resurrected;
+  /// an expired entry falls back to the scan and re-caches.
+  mutable std::mutex synapse_cache_mutex_;
+  mutable std::unordered_map<NeuroForge::SynapseID,
+                             std::weak_ptr<NeuroForge::Synapse>>
+      synapse_cache_;
   std::atomic<float> pending_reward_{0.0f};
 
   // RNG for stochastic gating

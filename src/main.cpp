@@ -2581,6 +2581,9 @@ bool g_sensory_drive = false;
 // form races the main step loop, which makes every decision it takes
 // irreproducible; see --autonomous-sync.
 bool g_autonomous_sync = false;
+// Close the sensorimotor loop: the brain's decision moves an agent in a small
+// world, and the resulting change in brightness is fed back as reward.
+bool g_closed_loop = false;
 
 void create_demo_brain(NeuroForge::Core::HypergraphBrain &brain) {
   using NeuroForge::Core::Region;
@@ -2662,6 +2665,86 @@ void create_demo_brain(NeuroForge::Core::HypergraphBrain &brain) {
 }
 
 // Synthetic vision input (GxG) fallback: moving checker pattern
+
+// A minimal sensorimotor world, so a decision can have a consequence.
+//
+// WHY THIS EXISTS
+//
+// The brain planned and executed a motor command, but nothing observed the
+// result. With no consequence there is no signal that one choice was better than
+// another, so the decision could be MADE but never LEARNED -- and Phase-4
+// reward-modulated plasticity reported 0 updates for exactly that reason.
+//
+// The task is phototaxis, which is about the simplest closed loop that is still
+// a real one: a light sits at a fixed position on a ring, the agent occupies
+// another, and moving changes how bright the world looks. Reward is the CHANGE
+// in brightness, so an action that closes the distance is rewarded and one that
+// opens it is punished. Nothing about the answer is encoded in the observation;
+// the agent has to move to find out.
+//
+// The moving checkerboard used by --sensory-drive cannot serve here: its mean
+// brightness is identical at every shift, so no action can change any objective
+// computed from it.
+struct LightWorld {
+  static constexpr int kPositions = 8;  // ring positions
+  static constexpr int kGrid = 8;       // observation is kGrid x kGrid = 64
+
+  int agent = 0;
+  int source = 4;                       // opposite the agent at the start
+  float last_brightness = -1.0f;
+
+  /// Shortest distance around the ring.
+  int distance() const {
+    const int d = std::abs(agent - source);
+    return std::min(d, kPositions - d);
+  }
+
+  /// 1.0 standing on the light, 0.0 diametrically opposite.
+  float brightness() const {
+    return 1.0f - static_cast<float>(distance()) /
+                      (static_cast<float>(kPositions) / 2.0f);
+  }
+
+  /// Signed direction to the source, -1 (left) .. +1 (right), 0 when arrived.
+  float bearing() const {
+    int diff = source - agent;
+    if (diff > kPositions / 2) diff -= kPositions;
+    if (diff < -kPositions / 2) diff += kPositions;
+    if (diff == 0) return 0.0f;
+    return diff > 0 ? 1.0f : -1.0f;
+  }
+
+  /// Observation: overall level carries brightness, and the two halves are
+  /// unbalanced toward the source, so the grid says both "how close" and
+  /// "which way". Without the second the task would not be solvable.
+  std::vector<float> observe() const {
+    std::vector<float> grid(static_cast<std::size_t>(kGrid * kGrid), 0.0f);
+    const float b = brightness();
+    const float dir = bearing();
+    for (int r = 0; r < kGrid; ++r) {
+      for (int c = 0; c < kGrid; ++c) {
+        const bool right_half = (c >= kGrid / 2);
+        float cue = 0.0f;
+        if (dir > 0.0f) cue = right_half ? 0.35f : -0.35f;
+        else if (dir < 0.0f) cue = right_half ? -0.35f : 0.35f;
+        grid[static_cast<std::size_t>(r * kGrid + c)] =
+            std::clamp(b + cue, 0.0f, 1.0f);
+      }
+    }
+    return grid;
+  }
+
+  /// Apply an action drawn from the prefrontal choice.
+  /// Two of the four options move, two hold, so a random policy does not drift.
+  void act(std::size_t choice) {
+    switch (choice % 4) {
+      case 0: agent = (agent - 1 + kPositions) % kPositions; break;  // left
+      case 1: agent = (agent + 1) % kPositions; break;               // right
+      default: break;                                                // hold
+    }
+  }
+};
+
 std::vector<float> make_synthetic_gray_grid(int G, int step_idx) {
   std::vector<float> grid(static_cast<std::size_t>(G * G), 0.0f);
   int shift = step_idx % G;
@@ -6238,6 +6321,8 @@ int main(int argc, char *argv[]) {
                     << std::endl;
           return 2;
         }
+      } else if (arg == "--closed-loop") {
+        g_closed_loop = true;
       } else if (arg == "--autonomous-sync") {
         g_autonomous_sync = true;
       } else if (arg == "--sensory-drive") {
@@ -6554,7 +6639,7 @@ int main(int argc, char *argv[]) {
               "--structural-spawn-batch=", "--structural-prune-threshold=",
               "--structural-interval=", "--structural-energy-gate=",
               "--anatomical-regions", "--anatomical-neurons=",
-              "--sensory-drive", "--autonomous-sync"};
+              "--sensory-drive", "--autonomous-sync", "--closed-loop"};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {
@@ -10021,7 +10106,54 @@ int main(int argc, char *argv[]) {
       // Sensory input has to reach the autonomous loop, which drives its own
       // processStep() -- injecting from the main step loop below would not
       // coincide with the decisions taken there.
-      if (g_sensory_drive) {
+      if (g_closed_loop) {
+        // sense -> decide -> act -> consequence -> reward -> learn.
+        //
+        // Ordering matters and is deliberate. The hook runs at the TOP of a
+        // cycle, so it applies the decision made on the PREVIOUS cycle, scores
+        // the outcome, and only then presents the new observation the next
+        // decision will be made from. That one-cycle delay is what eligibility
+        // traces are for: the trace laid down when the action was chosen is
+        // still present when the reward arrives.
+        auto world = std::make_shared<LightWorld>();
+        brain.setPreCycleHook([&brain, world](std::size_t iter) {
+          // 1. Act on the previous decision.
+          const auto dec = brain.getLastDecision();
+          if (dec.valid) {
+            world->act(dec.choice);
+          }
+
+          // 2. Score the consequence. Reward is the CHANGE in brightness, so
+          //    closing the distance is rewarded and opening it is punished.
+          //    Absolute brightness would reward standing still near the light.
+          const float b = world->brightness();
+          if (world->last_brightness >= 0.0f && dec.valid) {
+            const float r = b - world->last_brightness;
+            if (std::fabs(r) > 1e-6f) {
+              brain.deliverReward(static_cast<double>(r), "phototaxis");
+            }
+          }
+          world->last_brightness = b;
+
+          // 3. Present the new observation.
+          auto vc_region = brain.getRegion("VisualCortex");
+          if (vc_region) {
+            auto vc = std::dynamic_pointer_cast<
+                NeuroForge::Regions::VisualCortex>(vc_region);
+            if (vc) {
+              vc->processVisualInput(world->observe());
+            }
+          }
+
+          if (iter % 25 == 0) {
+            std::cout << "[World] iter=" << iter << " agent=" << world->agent
+                      << " source=" << world->source
+                      << " dist=" << world->distance()
+                      << " brightness=" << std::fixed << std::setprecision(3)
+                      << b << std::defaultfloat << std::endl;
+          }
+        });
+      } else if (g_sensory_drive) {
         brain.setPreCycleHook([&brain](std::size_t iter) {
           auto vc_region = brain.getRegion("VisualCortex");
           if (!vc_region) return;

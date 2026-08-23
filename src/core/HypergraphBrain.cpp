@@ -3226,6 +3226,15 @@ void reportIntegrationBinding(const char *region_name, bool bound) {
                             pfc_decided = true;
                             pfc_choice = decision.selected_option;
                             pfc_confidence = decision.confidence;
+                            // Publish it so an environment can act on the choice.
+                            {
+                                LastDecision pub;
+                                pub.valid = true;
+                                pub.choice = decision.selected_option;
+                                pub.option_count = options.size();
+                                pub.confidence = decision.confidence;
+                                setLastDecision(pub);
+                            }
 
                             // Report only when the choice changes. A decision driven
                             // by brain state should move as that state moves; one

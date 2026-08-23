@@ -177,6 +177,17 @@ namespace NeuroForge {
             return getActivation() >= threshold_ && getState() == State::Active;
         }
 
+        void Neuron::collectSynapseIds(std::vector<SynapseID>& out) const {
+            std::lock_guard<std::mutex> lock(synapse_mutex_);
+            out.reserve(out.size() + input_synapses_.size() + output_synapses_.size());
+            for (const auto& s : input_synapses_) {
+                if (s) out.push_back(s->getId());
+            }
+            for (const auto& s : output_synapses_) {
+                if (s) out.push_back(s->getId());
+            }
+        }
+
         std::vector<SynapsePtr> Neuron::getInputSynapses() const {
             std::lock_guard<std::mutex> lock(synapse_mutex_);
             return input_synapses_;
