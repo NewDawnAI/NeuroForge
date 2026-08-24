@@ -216,6 +216,42 @@ added *alongside* the biological substrate.
 
 ---
 
+## Substrate credit assignment
+
+| flag | effect |
+|---|---|
+| `--action-credit` | Confine eligibility to the motor channel of the selected action. |
+| `--motor-selection` | Select among MotorCortex action channels rather than input regions. |
+
+Both are opt-in and both are **necessary but not sufficient** for the substrate
+to learn. The current state, measured:
+
+| | overall mean distance |
+|---|---|
+| uniform credit | 1.961 |
+| gated credit | 1.950 |
+| *(learned policy layer, for reference)* | *0.967* |
+
+Effect +0.011 against a within-condition spread of 0.317 — a null.
+
+Three defects were removed to get here, in order: eligibility was a flat 0.1
+bump over every synapse of every spiking neuron (now three-factor,
+`rate × pre × post`); the traces never decayed, so every synapse that ever fired
+sat at the cap forever and the trace carried no timing information (now λ=0.85
+per step); and credited synapses were not on the decision path at all, since
+selection read Thalamus/Hippocampus/Amygdala/CingulateCortex while credit landed
+on MotorCortex (now `--motor-selection`).
+
+**What remains is a reward baseline.** `dw = kappa·R·eligibility` has none, and
+reward here is a change in brightness with a mean near zero, so updates alternate
+sign and cancel — measured as potentiated 5.5–5.9M against depressed 4.1–4.5M,
+nearly balanced, in every run. The policy layer succeeds on the *same* reward
+because its update carries an advantage term, `(1[a==chosen] − p[a])`.
+
+Biologically this is the pre-Schultz model: dopamine encodes reward *prediction
+error*, not reward. Adding `dw = kappa·(R − R̄)·eligibility` with a running mean
+is the next step.
+
 ## Eligibility and Phase-4
 
 | flag | effect |

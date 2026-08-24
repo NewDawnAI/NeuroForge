@@ -3111,6 +3111,66 @@ std::pair<float, float> readRegionHalves(const NeuroForge::RegionPtr &region,
             hi_n ? hi / static_cast<float>(hi_n) : 0.0f};
 }
 
+struct RegionSignalPair {
+    float activation = 0.0f;
+    float engagement = 0.0f;
+    bool valid = false;
+};
+
+// One ACTION CHANNEL's state: a contiguous slice of a region's neurons.
+//
+// WHY THIS EXISTS
+//
+// Selection used to read Thalamus, Hippocampus, Amygdala and CingulateCortex --
+// i.e. it asked "which input region is loudest", and the answer had nothing to do
+// with which action was worth taking. Reward, meanwhile, was gated onto
+// MotorCortex input synapses. Grepping the decision inputs for MotorCortex
+// returned 0, so strengthening a credited synapse could not change what
+// argmax(values) picked: credit reached a pathway with no influence on the
+// choice, and the loop was open at that junction.
+//
+// Measured 2026-08-24 with the gate but without this: uniform credit 2.217 mean
+// distance against gated credit 1.972, an effect of +0.244 inside a
+// within-condition spread of 0.467, and no learning curve.
+//
+// Reading action values from the motor channels themselves is the actor-critic
+// and basal-ganglia arrangement: action values live in the striatal/motor
+// channels, selection reads those channels, and reinforcing a channel therefore
+// changes the next selection. Sensory and limbic regions remain INPUTS to those
+// channels -- the anatomical wiring already routes prefrontal to motor -- rather
+// than being the things selected between.
+RegionSignalPair readRegionChannel(const NeuroForge::RegionPtr &region,
+                                   std::size_t channel,
+                                   std::size_t n_channels) {
+    RegionSignalPair out;
+    if (!region || n_channels == 0) {
+        return out;
+    }
+    const auto &neurons = region->getNeurons();
+    const std::size_t width = neurons.size() / n_channels;
+    if (width == 0) {
+        return out;
+    }
+    const std::size_t begin = channel * width;
+    const std::size_t end = std::min(begin + width, neurons.size());
+    float sum = 0.0f;
+    std::size_t over = 0, counted = 0;
+    for (std::size_t i = begin; i < end; ++i) {
+        if (!neurons[i]) continue;
+        const float a = static_cast<float>(neurons[i]->getActivation());
+        sum += a;
+        if (a > 0.2f) ++over;   // same threshold Region uses for "active"
+        ++counted;
+    }
+    if (counted == 0) {
+        return out;
+    }
+    out.activation = sum / static_cast<float>(counted);
+    out.engagement = static_cast<float>(over) / static_cast<float>(counted);
+    out.valid = true;
+    return out;
+}
+
 // One region's current state, read for use as a decision input.
 //
 // `activation` is how strongly the region is firing on average; `engagement` is
@@ -3247,7 +3307,27 @@ void reportIntegrationBinding(const char *region_name, bool bound) {
                             static ChannelNormaliser channel_norm;
                             std::vector<float> raw_options;
                             raw_options.reserve(4);
+                            // ACTOR-CRITIC MODE: options are the action channels
+                            // themselves, so what is selected between is actions
+                            // rather than input regions. See readRegionChannel.
+                            const bool motor_sel =
+                                motor_selection_enabled_.load(std::memory_order_relaxed);
+                            if (motor_sel) {
+                                auto motor_r = getRegion("MotorCortex");
+                                for (std::size_t a = 0; a < policy_actions_; ++a) {
+                                    const auto ch =
+                                        readRegionChannel(motor_r, a, policy_actions_);
+                                    if (ch.valid) {
+                                        options.push_back(channel_norm.normalise(
+                                            "motor:act" + std::to_string(a), ch.activation));
+                                        values.push_back(channel_norm.normalise(
+                                            "motor:eng" + std::to_string(a), ch.engagement));
+                                    }
+                                }
+                            }
+
                             for (const char *src : kSources) {
+                                if (motor_sel) break;  // actions only
                                 const RegionSignal sig = readRegionSignal(getRegion(src));
                                 if (sig.valid) {
                                     raw_options.push_back(sig.activation);
@@ -3260,7 +3340,7 @@ void reportIntegrationBinding(const char *region_name, bool bound) {
                             // Spatial features from the sensory cortex. A region mean cannot
                             // represent WHERE in the field something is, and that is exactly what
                             // this task depends on -- see readRegionHalves.
-                            {
+                            if (!motor_sel) {
                                 const auto halves = readRegionHalves(getRegion("VisualCortex"), 8);
                                 options.push_back(channel_norm.normalise("VisualCortex:left", halves.first));
                                 values.push_back(channel_norm.normalise("VisualCortex:right", halves.second));

@@ -2590,6 +2590,11 @@ bool g_learn_policy = false;
 // Confine Phase-4 eligibility to the motor channel of the selected action, so
 // the SUBSTRATE receives action-specific credit rather than a broadcast.
 bool g_action_credit = false;
+// Select among MotorCortex action channels rather than input regions, so that
+// reinforcing a channel changes what gets selected next. See
+// readRegionChannel() in HypergraphBrain.cpp for why this is the junction that
+// was open.
+bool g_motor_selection = false;
 float g_policy_lr = 0.05f;
 float g_policy_temp = 1.0f;
 
@@ -6329,6 +6334,8 @@ int main(int argc, char *argv[]) {
                     << std::endl;
           return 2;
         }
+      } else if (arg == "--motor-selection") {
+        g_motor_selection = true;
       } else if (arg == "--action-credit") {
         g_action_credit = true;
       } else if (arg == "--learn-policy") {
@@ -6671,7 +6678,7 @@ int main(int argc, char *argv[]) {
               "--anatomical-regions", "--anatomical-neurons=",
               "--sensory-drive", "--autonomous-sync", "--closed-loop",
               "--learn-policy", "--policy-lr=", "--policy-temp=",
-              "--action-credit"};
+              "--action-credit", "--motor-selection"};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {
@@ -10138,6 +10145,11 @@ int main(int argc, char *argv[]) {
       // Sensory input has to reach the autonomous loop, which drives its own
       // processStep() -- injecting from the main step loop below would not
       // coincide with the decisions taken there.
+      if (g_motor_selection) {
+        brain.setMotorSelection(true, 4);
+        std::cout << "[Policy] selection reads MotorCortex action channels"
+                  << std::endl;
+      }
       if (g_learn_policy) {
         // 4 actions: the LightWorld executes left / right / hold / hold.
         brain.setLearnedPolicy(true, 4, g_policy_temp);

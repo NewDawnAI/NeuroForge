@@ -150,9 +150,35 @@ in every run from uniform weights.
 
 ---
 
+## 6b. Substrate credit assignment: three fixes, still a null
+
+Pursued after the closed-loop result, because the policy learner sat *beside* the
+substrate rather than in it.
+
+| attempt | change | result |
+|---|---|---|
+| 1 | three-factor eligibility (`rate × pre × post`) + action gate | +0.244, inside noise |
+| 2 | eligibility decay (traces never decayed — they saturated and stayed) | still inside noise |
+| 3 | selection reads motor action channels, closing the credit→choice path | **+0.011** |
+
+Each fixed something real; three defects had to be removed before the fourth
+became visible.
+
+**The fourth is a missing reward baseline.** Reward reaches the weights — ~2M
+Phase-4 updates per run — but potentiation and depression are nearly balanced
+(5.5–5.9M against 4.1–4.5M), so the weights random-walk. `dw = kappa·R·elig` has
+no baseline and reward has a mean near zero, so updates cancel. The policy layer
+succeeds on the identical signal because its update carries an advantage term.
+
+Credit assignment says *which* synapses; a baseline says *how much better than
+expected*. Fixing the first without the second gives correctly-targeted noise.
+
 ## 7. Open, in priority order
 
-1. **Phase-4 has no credit assignment.** `onNeuronSpike` bumps every synapse of
+1. **Phase-4 has no reward baseline.** Credit assignment is now fixed (see 6b);
+   the remaining gap is `dw = kappa·(R − R̄)·elig`, a critic. Biologically this is
+   the difference between reward and reward *prediction error*.
+1. ~~Phase-4 has no credit assignment.~~ **Done** — `onNeuronSpike` bumps every synapse of
    every spiking neuron by a flat 0.1, and 83% of neurons are active, so
    eligibility records "was active" rather than "was responsible". `dw = κ·R·elig`
    is then approximately one scalar applied to everything recently active, which

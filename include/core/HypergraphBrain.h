@@ -202,6 +202,22 @@ private:
     std::atomic<bool> hardware_monitoring_enabled_;
     
 public:
+    /// Select among ACTION CHANNELS in MotorCortex rather than among input
+    /// regions.
+    ///
+    /// Selection previously read Thalamus/Hippocampus/Amygdala/CingulateCortex,
+    /// so it answered "which input region is loudest" -- a question whose answer
+    /// no amount of reinforcement on the motor side could change. Reading action
+    /// values from the motor channels closes that: reinforcing a channel raises
+    /// its activation, which raises its chance of being selected next time.
+    void setMotorSelection(bool enabled, std::size_t n_actions = 4) {
+        motor_selection_enabled_.store(enabled, std::memory_order_relaxed);
+        policy_actions_ = n_actions;
+    }
+    bool isMotorSelectionEnabled() const {
+        return motor_selection_enabled_.load(std::memory_order_relaxed);
+    }
+
     /// Use PrefrontalCortex::makeDecisionLearned instead of the argmax.
     ///
     /// n_actions is the policy's output dimension and is deliberately separate
@@ -259,6 +275,7 @@ public:
 private:
     // Procedural connectivity mode for massive scale (avoids storing Synapse objects)
     std::atomic<bool> learned_policy_enabled_{false};
+    std::atomic<bool> motor_selection_enabled_{false};
     std::size_t policy_actions_ = 4;
     float policy_temperature_ = 1.0f;
     mutable std::mutex last_decision_mutex_;
