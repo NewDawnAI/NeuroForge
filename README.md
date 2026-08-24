@@ -6,6 +6,43 @@ It treats cognition as interacting loops—substrate learning, persistent memory
 
 The project prioritizes architecture-first coherence, traceability, and safety-bounded adaptation over benchmark chasing.
 
+## Measured capabilities (2026-08-24)
+
+The table below is what has been measured, with the invocation that shows it.
+Everything is opt-in; the default path is unchanged. See
+[`docs/FLAGS_ADDED_2026-08.md`](docs/FLAGS_ADDED_2026-08.md) for the full flag
+reference and [`Validation_notes/SESSION_SUMMARY_2026-08-22_to_24.md`](Validation_notes/SESSION_SUMMARY_2026-08-22_to_24.md)
+for the evidence.
+
+| capability | measured | flag |
+|---|---|---|
+| Reproducible from a seed | bit-exact across runs | `--sequential` |
+| Network scale | 16,384 neurons / 1,048,576 synapses in 73 s | `--demo-neurons=8192` |
+| Growing connectome | 102 → 307 synapses at runtime; pruning cancels growth | `--structural-plasticity` |
+| Anatomical regions | 12 constructed, 83.6% active vs 100% saturated generic | `--anatomical-regions` |
+| Region integrations | PFC / Motor / SelfNode bound and running | `--autonomous-mode --enable-pfc` |
+| Reward-modulated plasticity | 237,409 Phase-4 updates | `--auto-eligibility=on` |
+| **Closed-loop learning** | **phototaxis solved: 2.139 → 0.967 mean distance** | `--closed-loop --learn-policy` |
+
+Known limits, stated plainly:
+
+- **The substrate does not learn.** The weights that change under reward are the
+  prefrontal policy's, not the connectome's. Phase-4 fires but has no measurable
+  behavioural effect, because eligibility marks "was active" rather than "was
+  responsible".
+- **Determinism is exact for structure, approximate for activity** (~0.004%). One
+  of 172 `::now()` reads in `src/core` feeds a decision and has not been located.
+  Use `--sequential`, and `--autonomous-sync` for any decision-level claim.
+- **Memory is the scale ceiling**: ~657 bytes/synapse, so fruit-fly scale
+  (~54.5M synapses) needs ~36 GB.
+- Three pre-existing test failures, verified against HEAD as not regressions.
+
+Regression check after any change — expect 148,604 updates / 102 synapses:
+
+```
+--steps=400 --enable-learning --phase-c-seed=401 --sequential
+```
+
 ## Current Status
 
 | Milestone | Status |

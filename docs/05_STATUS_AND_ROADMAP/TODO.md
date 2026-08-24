@@ -1,5 +1,47 @@
 # NeuroForge Neural Substrate Development Roadmap
-Last updated: 2026-03-01
+Last updated: 2026-08-24
+
+## 2026-08-24 Update — reachability, determinism, and the first closed-loop learning
+
+Full record: [`Validation_notes/SESSION_SUMMARY_2026-08-22_to_24.md`](../../Validation_notes/SESSION_SUMMARY_2026-08-22_to_24.md).
+Flags: [`docs/FLAGS_ADDED_2026-08.md`](../FLAGS_ADDED_2026-08.md).
+
+This pass found that several subsystems recorded as complete were **implemented
+but not reachable**, and that the roadmap's status column could not distinguish
+the two. Six instances of one shape — a flag that turns a subsystem on while its
+parameters or plumbing leave it doing nothing, with no error and no warning:
+
+1. `--enable-learning` with learning rates defaulting to 0.0 → 0 updates
+2. `--homeostasis` with `homeostasis_eta` defaulting to 0.0 → returns on line 1
+3. `enable_structural_plasticity` with both batch sizes at 0, **and no CLI flag**
+4. Four region integrations whose `dynamic_pointer_cast` returned nullptr forever
+5. `--auto-eligibility` defaulting false → Phase-4 reported 0 updates
+6. Fourteen region classes never constructed — `RegionFactory` always returned base `Region`
+
+All six are now reachable, and each has a printed line when it substitutes a
+default or cannot act. **Recommendation for this roadmap: a subsystem should not
+be marked complete without a named invocation and a metric that moves.**
+
+### Newly measured
+
+- Determinism from a seed (was 44,660 / 49,064 / 47,718 / 47,252 on identical runs)
+- 16,384 neurons / 1,048,576 synapses in 73 s (was >900 s, killed) — two O(N²) defects fixed
+- A connectome that grows and prunes at runtime (was 102 synapses at every step count)
+- 12 anatomical regions running, at 83.6% active vs the generic brain's saturated 100%
+- Phase-4 reward-modulated plasticity: 237,409 updates (was 0; cause was a deadlock)
+- **Phototaxis solved end to end: 2.139 → 0.967 mean distance, no overlap between conditions**
+
+### Corrected priorities
+
+1. **Credit assignment in Phase-4** — the substrate still does not learn. Eligibility
+   bumps every synapse of every spiking neuron, so it records "was active" rather
+   than "was responsible", and reward becomes a global scalar. The closed-loop
+   result comes from a policy learner beside the substrate, not the substrate.
+2. **Locate the residual nondeterminism** — one of 172 `::now()` reads in `src/core`.
+   Structure is exact; activity is not.
+3. **Memory representation for scale** — ~657 bytes/synapse puts fly scale at ~36 GB.
+   A flat arena with integer indices, not `shared_ptr` graphs.
+4. Neurogenesis (`--structural-spawn-batch`) is wired and untested.
 
 ## Overview
 This roadmap reflects the **current implementation status** of NeuroForge neural substrate migration based on comprehensive testing validation. **Milestones M0-M7 and Stages A-E have been successfully implemented and validated**, achieving the full autonomous neural substrate vision. The project is now in a maintenance and advanced research application phase.
