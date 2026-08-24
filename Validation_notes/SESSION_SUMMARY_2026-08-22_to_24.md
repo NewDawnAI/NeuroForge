@@ -1,9 +1,9 @@
 # Session record, 2026-08-22 → 2026-08-24
 
-Index and synthesis for thirteen validation notes. Read this first; each section
+Index and synthesis for nineteen validation notes. Read this first; each section
 points at the note holding the measurements.
 
-Branch `fix/governance-and-learning-defaults`, commits `135f4bd` → `c8034f6`.
+Branch `fix/governance-and-learning-defaults`, commits `135f4bd` → `9b7e525`.
 
 ---
 
@@ -19,6 +19,7 @@ Branch `fix/governance-and-learning-defaults`, commits `135f4bd` → `c8034f6`.
 | region integrations (PFC/Motor/SelfNode) | silently inert | ACTIVE, and observable either way |
 | Phase-4 reward updates | 0 | 237,409 |
 | behaviour under reward | unchanged | phototaxis solved, 2.139 → 0.967 |
+| substrate learns under reward | no | **still no** — six attempts, all well-powered nulls |
 
 Default path unchanged throughout: **148,604 total updates, 102 active
 synapses**. Every feature above is opt-in. Full build 106/106; test sweep 33 pass
@@ -243,8 +244,55 @@ expected*. Fixing the first without the second gives correctly-targeted noise.
 | `closed_loop_2026-08-24` | phototaxis task; reward wiring |
 | `why_it_does_not_learn_2026-08-24` | the deadlock; four reasons learning was impossible |
 | `it_learns_2026-08-24` | learnable policy; three observation defects; the result |
+| `action_credit_2026-08-24` | three-factor gated eligibility; trace decay; credited synapses off the decision path |
+| `motor_selection_2026-08-24` | selection reads action channels; the credit path closes |
+| `reward_baseline_2026-08-24` | scalar baseline is a null; score function is not a baseline |
+| `critic_and_node_perturbation_2026-08-24` | TD critic and local gradient estimator; both engage, neither learns |
+| `substrate_learning_conclusion_2026-08-24` | windowed averaging; no dose-response; the arc closed |
 
 Flag reference: `docs/FLAGS_ADDED_2026-08.md`.
+
+---
+
+## 8b. The substrate-learning arc, and why it ended
+
+Six attempts to make the **substrate** learn phototaxis, rather than the policy
+layer beside it. Every arm carried a manipulation check; every comparison
+measured within-condition variance first.
+
+| # | change | effect | established |
+|---|---|---|---|
+| 1 | three-factor eligibility + action gate | +0.244 | eligibility was flat and ungated |
+| 2 | eligibility decay | inside noise | traces never decayed, so carried no timing |
+| 3 | selection on motor channels | +0.011 | credited synapses were off the decision path |
+| 4 | scalar reward baseline | +0.006 | diagnosis wrong — a score function is not a baseline |
+| 5 | critic (TD error) + node perturbation | +0.033 | mechanisms engage; signal below the noise floor |
+| 6 | selection smoothing | ±0.07, no dose-response | not selection-point noise either |
+
+Attempts 1–3 each removed a real defect and were necessary. Attempt 4 rested on
+a misreading, corrected in its note. Attempts 5 and 6 built the two remaining
+candidate explanations correctly and falsified both.
+
+**These are well-powered nulls.** The clearest manipulation check: potentiated /
+depressed ratios of 1.303 / 1.315 / 1.348 against 1.242 / 1.251 / 1.239 —
+non-overlapping across independent runs. The mechanisms demonstrably change the
+system's internal statistics. They do not change behaviour.
+
+**The dose-response check closed it.** In attempt 6, α=0.02 averages five times
+harder than α=0.10; if selection-point noise were the constraint it should have
+helped proportionally more. The two levels disagreed in *sign*. That is noise,
+not a weak effect — and it is why this is a conclusion rather than another
+inconclusive arm.
+
+**What it means.** The policy layer solves the same task, in the same world, from
+the same observations, with the same reward. Its parameters sit **at** the
+decision (`score[a] = w[a]·x`), so a weight change *is* a change in the decision.
+A substrate weight change must traverse region dynamics first.
+
+Stated with its limits: one simple task (8 states, 4 actions, near-fully
+observed), 1,500 steps, three runs per arm, one architecture with a shallow
+credit path, a linear critic on four hand-chosen features. **A negative result
+about this substrate on this task — not about local learning rules in general.**
 
 ---
 

@@ -23,13 +23,21 @@ for the evidence.
 | Region integrations | PFC / Motor / SelfNode bound and running | `--autonomous-mode --enable-pfc` |
 | Reward-modulated plasticity | 237,409 Phase-4 updates | `--auto-eligibility=on` |
 | **Closed-loop learning** | **phototaxis solved: 2.139 → 0.967 mean distance** | `--closed-loop --learn-policy` |
+| Substrate credit assignment | mechanisms engage; behaviour unchanged (6 nulls) | `--action-credit --motor-selection --critic --node-perturbation` |
 
 Known limits, stated plainly:
 
-- **The substrate does not learn.** The weights that change under reward are the
-  prefrontal policy's, not the connectome's. Phase-4 fires but has no measurable
-  behavioural effect, because eligibility marks "was active" rather than "was
-  responsible".
+- **The substrate does not learn — established, not assumed.** Six attempts
+  (three-factor gated eligibility, trace decay, selection on the credited
+  pathway, a scalar baseline, a TD critic with node perturbation, and temporal
+  averaging of the decision variable) all returned well-powered nulls. Each
+  mechanism was verified to engage — potentiated/depressed ratios separate
+  cleanly, 1.303/1.315/1.348 against 1.242/1.251/1.239 — and none changed
+  behaviour. The final arm found no dose-response, which closes it.
+  The learning that works is the prefrontal **policy layer**, whose parameters
+  sit at the decision (`score[a] = w[a]·x`) rather than upstream of it.
+  A negative result about this substrate on this task, not about local learning
+  rules. See `Validation_notes/substrate_learning_conclusion_2026-08-24.md`.
 - **Determinism is exact for structure, approximate for activity** (~0.004%). One
   of 172 `::now()` reads in `src/core` feeds a decision and has not been located.
   Use `--sequential`, and `--autonomous-sync` for any decision-level claim.

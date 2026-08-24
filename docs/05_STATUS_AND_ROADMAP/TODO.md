@@ -33,10 +33,23 @@ be marked complete without a named invocation and a metric that moves.**
 
 ### Corrected priorities
 
-1. **Credit assignment in Phase-4** — the substrate still does not learn. Eligibility
-   bumps every synapse of every spiking neuron, so it records "was active" rather
-   than "was responsible", and reward becomes a global scalar. The closed-loop
-   result comes from a policy learner beside the substrate, not the substrate.
+1. ~~**Credit assignment in Phase-4**~~ — **done, and it was not sufficient.**
+   Six attempts, all well-powered nulls with passing manipulation checks:
+   three-factor gated eligibility, trace decay, selection on the credited
+   pathway, a scalar reward baseline, a TD critic with node perturbation, and
+   temporal averaging of the decision variable. The last found no dose-response,
+   which closes the question. The substrate has correct, decaying, signed,
+   action-specific eligibility feeding a closed credit path modulated by TD
+   error — and does not learn. The working learner is the policy layer, whose
+   parameters sit at the decision rather than upstream of it. Full record in
+   `Validation_notes/substrate_learning_conclusion_2026-08-24.md`.
+
+   **The remaining option is architectural, not incremental:** shorten the path
+   from weights to decision, so the selected action *is* an argmax over a
+   directly-credited population with no intervening dynamics. That is a redesign.
+   The alternative is to accept the hybrid — policy layer as actor, substrate as
+   representation — which is roughly how basal-ganglia models are built and is
+   what the codebase currently is.
 2. **Locate the residual nondeterminism** — one of 172 `::now()` reads in `src/core`.
    Structure is exact; activity is not.
 3. **Memory representation for scale** — ~657 bytes/synapse puts fly scale at ~36 GB.
