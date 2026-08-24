@@ -22,7 +22,7 @@ for the evidence.
 | Anatomical regions | 12 constructed, 83.6% active vs 100% saturated generic | `--anatomical-regions` |
 | Region integrations | PFC / Motor / SelfNode bound and running | `--autonomous-mode --enable-pfc` |
 | Reward-modulated plasticity | 237,409 Phase-4 updates | `--auto-eligibility=on` |
-| **Closed-loop learning** | **phototaxis solved: 2.139 → 0.967 mean distance** | `--closed-loop --learn-policy` |
+| **Closed-loop learning** | **phototaxis solved: 1.971 → 1.062, 8/8 seeds, p at floor** | `--closed-loop --learn-policy` |
 | Substrate credit assignment | mechanisms engage; behaviour unchanged (6 nulls) | `--action-credit --motor-selection --critic --node-perturbation` |
 
 Known limits, stated plainly:
@@ -44,6 +44,12 @@ Known limits, stated plainly:
 - **Memory is the scale ceiling**: ~657 bytes/synapse, so fruit-fly scale
   (~54.5M synapses) needs ~36 GB.
 - Three pre-existing test failures, verified against HEAD as not regressions.
+
+**Experiments are analysed with `tools/nf_experiment.py`**, which drives the
+binary across seeds and hands the results to `falsify` for paired analysis. Use
+at least 6 distinct seeds shared across arms — `floor_p(3) = 0.25` and
+`floor_p(5) = 0.0625`, so below six seeds p<0.05 is arithmetically unreachable.
+See `Validation_notes/falsify_harness_2026-08-24.md`.
 
 Regression check after any change — expect 148,604 updates / 102 synapses:
 

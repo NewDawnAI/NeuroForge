@@ -296,6 +296,39 @@ about this substrate on this task — not about local learning rules in general.
 
 ---
 
+## 8c. falsify ported; the headline result re-seeded
+
+`tools/nf_experiment.py` drives NeuroForge across seeds and hands seed-keyed
+dicts to `falsify.paired`. Python adapter, no C++ change — the value is the
+discipline, not the arithmetic.
+
+**Two corrections it forces.** `falsify.paired` needs arms to share DISTINCT
+seeds; every comparison in this session used one seed repeated three times.
+Measured, within-condition spread is 0.73–0.94 across 8 distinct seeds against
+0.08–0.73 from repeats of one — repeats measure the implementation's noise floor,
+not robustness. And `floor_p(3) = 0.25`: at three seeds p<0.05 is arithmetically
+unreachable, so six nulls were reported where "not significant" meant "not
+testable". They stand on their spreads and manipulation checks, not on p.
+
+**It caught the validation, not the result.** The first validation reported the
+known positive as a null (+0.153, 3/8) because the script changed three variables
+at once — 900 vs 1500 steps, distinct vs repeated seeds, and a control carrying
+`--motor-selection --action-credit`. A control differing from its arm in more than
+one respect cannot attribute anything, violated while installing the very tool
+that enforces it.
+
+**Re-seeded, the headline result holds and is better supported:**
+
+```
+n=8  mean delta -0.908  wins 8/8  perm p 0.00781 (floor 0.00781)  effect/sem 9.34
+CONSISTENT — every seed moved the same direction
+```
+
+control 1.971, learned 1.062 — against 2.139 / 0.967 by hand. Smaller effect
+against a larger, more honest denominator, and it still clears it.
+
+---
+
 ## 9. Method, as practised here
 
 What repeatedly worked:
