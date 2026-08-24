@@ -202,6 +202,22 @@ private:
     std::atomic<bool> hardware_monitoring_enabled_;
     
 public:
+    /// Use PrefrontalCortex::makeDecisionLearned instead of the argmax.
+    ///
+    /// n_actions is the policy's output dimension and is deliberately separate
+    /// from the number of input channels: the caller executes actions, and how
+    /// many it has is its own business, not a consequence of how many regions
+    /// happen to feed the decision.
+    void setLearnedPolicy(bool enabled, std::size_t n_actions = 4,
+                          float temperature = 1.0f) {
+        learned_policy_enabled_.store(enabled, std::memory_order_relaxed);
+        policy_actions_ = n_actions;
+        policy_temperature_ = temperature;
+    }
+    bool isLearnedPolicyEnabled() const {
+        return learned_policy_enabled_.load(std::memory_order_relaxed);
+    }
+
     /// The prefrontal decision taken on the most recent autonomous cycle.
     ///
     /// Exposed so a caller can ACT on it. Without this the decision is made
@@ -242,6 +258,9 @@ public:
 
 private:
     // Procedural connectivity mode for massive scale (avoids storing Synapse objects)
+    std::atomic<bool> learned_policy_enabled_{false};
+    std::size_t policy_actions_ = 4;
+    float policy_temperature_ = 1.0f;
     mutable std::mutex last_decision_mutex_;
     LastDecision last_decision_;
     std::function<void(std::size_t)> pre_cycle_hook_;

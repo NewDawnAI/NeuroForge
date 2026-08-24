@@ -1,5 +1,6 @@
 #pragma once
 
+#include <random>
 #include "core/Region.h"
 #include "core/Neuron.h"
 #include <memory>
@@ -523,10 +524,70 @@ namespace NeuroForge {
                 bool is_final;
             };
 
+            /**
+             * @brief Choose an action from a LEARNED policy, with exploration.
+             *
+             * makeDecision() is `argmax(values)`. It has no parameters, so
+             * reward has nothing to adjust and the policy cannot change --
+             * measured 2026-08-24, 237,409 Phase-4 weight updates moved the
+             * choice distribution from {18,46,33,2}% to {18,46,34,2}%.
+             *
+             * This is a softmax policy over a linear score,
+             *     score[a] = sum_f w[a][f] * x[f]
+             * where x is the observation (the option/value vector plus a bias),
+             * sampled at `temperature` so alternatives actually get tried. An
+             * argmax over near-tied values is effectively deterministic, and a
+             * policy that never tries an alternative cannot discover a better
+             * one.
+             *
+             * The chosen action, the observation and the action probabilities
+             * are retained as a trace for reinforcePolicy().
+             *
+             * @param n_actions how many actions the caller can execute; this is
+             *        the policy's output dimension, and need not equal the
+             *        number of input channels.
+             */
+            Decision makeDecisionLearned(const std::vector<float>& options,
+                                         const std::vector<float>& values,
+                                         std::size_t n_actions,
+                                         float temperature,
+                                         std::mt19937& rng);
+
+            /**
+             * @brief REINFORCE update against the retained trace.
+             *
+             * dw[a][f] += lr * reward * (1[a == chosen] - p[a]) * x[f]
+             *
+             * The `(1[a==chosen] - p[a])` term is the part that was missing
+             * entirely: it raises the chosen action's score and lowers the
+             * others in proportion to how likely they already were, so credit
+             * lands on the action actually taken rather than being broadcast.
+             * Phase-4 eligibility bumps every synapse of every spiking neuron
+             * by a flat amount, which marks "was active" rather than
+             * "was responsible".
+             *
+             * Safe to call with no trace (before any decision) -- it no-ops.
+             */
+            void reinforcePolicy(float reward, float learning_rate = 0.05f);
+
+            /// True once makeDecisionLearned has produced a trace.
+            bool hasPolicyTrace() const { return policy_has_trace_; }
+            /// Flattened policy weights, for inspection and tests.
+            const std::vector<std::vector<float>>& policyWeights() const {
+                return policy_w_;
+            }
+
         private:
             std::unordered_map<PrefrontalArea, std::vector<NeuroForge::NeuronPtr>> area_neurons_;
             std::vector<std::vector<float>> working_memory_buffer_;
             std::queue<Decision> decision_queue_;
+
+            // --- learned policy ---
+            std::vector<std::vector<float>> policy_w_;   ///< [action][feature]
+            std::vector<float> policy_last_x_;           ///< observation + bias
+            std::vector<float> policy_last_p_;           ///< action probabilities
+            std::size_t policy_last_action_ = 0;
+            bool policy_has_trace_ = false;
             std::vector<ExecutiveFunction> active_functions_;
             float cognitive_load_;
             float attention_control_strength_;

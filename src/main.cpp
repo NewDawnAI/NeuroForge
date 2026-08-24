@@ -2584,6 +2584,11 @@ bool g_autonomous_sync = false;
 // Close the sensorimotor loop: the brain's decision moves an agent in a small
 // world, and the resulting change in brightness is fed back as reward.
 bool g_closed_loop = false;
+// Use a learned, sampled prefrontal policy instead of the hardcoded argmax,
+// and reinforce it from the same reward the closed loop computes.
+bool g_learn_policy = false;
+float g_policy_lr = 0.05f;
+float g_policy_temp = 1.0f;
 
 void create_demo_brain(NeuroForge::Core::HypergraphBrain &brain) {
   using NeuroForge::Core::Region;
@@ -6321,6 +6326,26 @@ int main(int argc, char *argv[]) {
                     << std::endl;
           return 2;
         }
+      } else if (arg == "--learn-policy") {
+        g_learn_policy = true;
+      } else if (starts_with(arg, "--policy-lr=")) {
+        try {
+          g_policy_lr = std::stof(arg.substr(std::string("--policy-lr=").size()));
+        } catch (...) {
+          std::cerr << "Error: invalid float for --policy-lr" << std::endl;
+          return 2;
+        }
+      } else if (starts_with(arg, "--policy-temp=")) {
+        try {
+          g_policy_temp = std::stof(arg.substr(std::string("--policy-temp=").size()));
+        } catch (...) {
+          std::cerr << "Error: invalid float for --policy-temp" << std::endl;
+          return 2;
+        }
+        if (g_policy_temp <= 0.0f) {
+          std::cerr << "Error: --policy-temp must be > 0" << std::endl;
+          return 2;
+        }
       } else if (arg == "--closed-loop") {
         g_closed_loop = true;
       } else if (arg == "--autonomous-sync") {
@@ -6639,7 +6664,8 @@ int main(int argc, char *argv[]) {
               "--structural-spawn-batch=", "--structural-prune-threshold=",
               "--structural-interval=", "--structural-energy-gate=",
               "--anatomical-regions", "--anatomical-neurons=",
-              "--sensory-drive", "--autonomous-sync", "--closed-loop"};
+              "--sensory-drive", "--autonomous-sync", "--closed-loop",
+              "--learn-policy", "--policy-lr=", "--policy-temp="};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {
@@ -10106,6 +10132,12 @@ int main(int argc, char *argv[]) {
       // Sensory input has to reach the autonomous loop, which drives its own
       // processStep() -- injecting from the main step loop below would not
       // coincide with the decisions taken there.
+      if (g_learn_policy) {
+        // 4 actions: the LightWorld executes left / right / hold / hold.
+        brain.setLearnedPolicy(true, 4, g_policy_temp);
+        std::cout << "[Policy] learned prefrontal policy ON lr=" << g_policy_lr
+                  << " temp=" << g_policy_temp << std::endl;
+      }
       if (g_closed_loop) {
         // sense -> decide -> act -> consequence -> reward -> learn.
         //
@@ -10131,6 +10163,20 @@ int main(int argc, char *argv[]) {
             const float r = b - world->last_brightness;
             if (std::fabs(r) > 1e-6f) {
               brain.deliverReward(static_cast<double>(r), "phototaxis");
+              // Reinforce the policy that chose the action, in addition to the
+              // synaptic reward path. Phase-4 broadcasts reward across every
+              // recently-active synapse; this delivers it to the action that
+              // was actually taken.
+              if (g_learn_policy) {
+                auto pfc_region = brain.getRegion("PrefrontalCortex");
+                if (pfc_region) {
+                  auto pfc = std::dynamic_pointer_cast<
+                      NeuroForge::Regions::PrefrontalCortex>(pfc_region);
+                  if (pfc) {
+                    pfc->reinforcePolicy(r, g_policy_lr);
+                  }
+                }
+              }
             }
           }
           world->last_brightness = b;

@@ -84,15 +84,32 @@ namespace NeuroForge {
             
             if (visual_input.empty()) return;
             
-            // Drive neuron activations from input so spikes are produced in process()
-            for (auto& [layer, neurons] : layer_neurons_) {
-                for (std::size_t i = 0; i < neurons.size() && i < visual_input.size(); ++i) {
-                    if (neurons[i]) {
-                        float v = std::clamp(visual_input[i], 0.0f, 1.0f);
-                        neurons[i]->setActivation(v);
-                        // Ensure process() can register a threshold crossing and emit a spike callback
-                        neurons[i]->setState(Core::Neuron::State::Inactive);
-                    }
+            // Map the input across the region's neurons in order, so neuron
+            // position corresponds to position in the visual field.
+            //
+            // This previously looped over layer_neurons_ and wrote
+            // visual_input[i] into neuron i of EVERY layer. Two consequences,
+            // both silent: only the first neurons_per_layer values of the input
+            // were ever read -- 16 of 64 for a 64-neuron region, so 75% of the
+            // field was discarded -- and all four layers received an identical
+            // copy of them. Any downstream reader splitting the region's neurons
+            // to recover spatial structure therefore saw the same values on both
+            // sides. Measured 2026-08-24: a left/right split of VisualCortex
+            // returned a difference of ~0 by construction, which left a
+            // phototaxis policy unable to tell left from right and performing at
+            // the random-walk baseline.
+            //
+            // Writing straight into the region's neuron vector keeps input index
+            // and neuron index aligned. Layers still share those neurons via
+            // layer_neurons_, so layer-wise processing is unaffected.
+            const auto& all_neurons = getNeurons();
+            const std::size_t n = std::min(all_neurons.size(), visual_input.size());
+            for (std::size_t i = 0; i < n; ++i) {
+                if (all_neurons[i]) {
+                    float v = std::clamp(visual_input[i], 0.0f, 1.0f);
+                    all_neurons[i]->setActivation(v);
+                    // Ensure process() can register a threshold crossing and emit a spike callback
+                    all_neurons[i]->setState(Core::Neuron::State::Inactive);
                 }
             }
         }
@@ -522,6 +539,114 @@ namespace NeuroForge {
             
             // Update cognitive load
             cognitive_load_ = static_cast<float>(working_memory_buffer_.size()) / 10.0f;
+        }
+
+        PrefrontalCortex::Decision PrefrontalCortex::makeDecisionLearned(
+            const std::vector<float>& options,
+            const std::vector<float>& values,
+            std::size_t n_actions,
+            float temperature,
+            std::mt19937& rng) {
+
+            Decision decision;
+            decision.decision_id = "learned_" + std::to_string(decision_queue_.size());
+            decision.options = options;
+            decision.option_values = values;
+            decision.confidence = 0.0f;
+            decision.selected_option = 0;
+            decision.is_final = false;
+
+            if (n_actions == 0) {
+                return decision;
+            }
+
+            // Observation: the two input vectors concatenated, plus a bias term
+            // so an action can acquire an unconditional preference.
+            policy_last_x_.clear();
+            policy_last_x_.reserve(options.size() + values.size() + 1);
+            policy_last_x_.insert(policy_last_x_.end(), options.begin(), options.end());
+            policy_last_x_.insert(policy_last_x_.end(), values.begin(), values.end());
+            policy_last_x_.push_back(1.0f);
+            const std::size_t n_features = policy_last_x_.size();
+
+            // Weights start at zero, so the initial policy is uniform: no action
+            // is preferred before anything has been learned, and the first
+            // episodes are pure exploration rather than an arbitrary bias.
+            if (policy_w_.size() != n_actions ||
+                (!policy_w_.empty() && policy_w_[0].size() != n_features)) {
+                policy_w_.assign(n_actions, std::vector<float>(n_features, 0.0f));
+            }
+
+            std::vector<float> scores(n_actions, 0.0f);
+            for (std::size_t a = 0; a < n_actions; ++a) {
+                float acc = 0.0f;
+                for (std::size_t f = 0; f < n_features; ++f) {
+                    acc += policy_w_[a][f] * policy_last_x_[f];
+                }
+                scores[a] = acc;
+            }
+
+            const float temp = (temperature > 1e-4f) ? temperature : 1e-4f;
+            const float max_score = *std::max_element(scores.begin(), scores.end());
+            float sum_exp = 0.0f;
+            policy_last_p_.assign(n_actions, 0.0f);
+            for (std::size_t a = 0; a < n_actions; ++a) {
+                // Subtract the max before exponentiating; without it a confident
+                // policy overflows to inf and the distribution becomes NaN.
+                policy_last_p_[a] = std::exp((scores[a] - max_score) / temp);
+                sum_exp += policy_last_p_[a];
+            }
+            for (auto& pv : policy_last_p_) {
+                pv /= sum_exp;
+            }
+
+            // Sample rather than argmax. This IS the exploration.
+            std::uniform_real_distribution<float> u(0.0f, 1.0f);
+            float r = u(rng);
+            std::size_t chosen = n_actions - 1;
+            float cum = 0.0f;
+            for (std::size_t a = 0; a < n_actions; ++a) {
+                cum += policy_last_p_[a];
+                if (r <= cum) {
+                    chosen = a;
+                    break;
+                }
+            }
+
+            policy_last_action_ = chosen;
+            policy_has_trace_ = true;
+
+            decision.selected_option = chosen;
+            decision.confidence = policy_last_p_[chosen];
+            decision.is_final = true;
+            decision_queue_.push(decision);
+            return decision;
+        }
+
+        void PrefrontalCortex::reinforcePolicy(float reward, float learning_rate) {
+            if (!policy_has_trace_ || policy_w_.empty()) {
+                return;
+            }
+            const std::size_t n_actions = policy_w_.size();
+            const std::size_t n_features = policy_last_x_.size();
+            if (policy_last_p_.size() != n_actions) {
+                return;
+            }
+            for (std::size_t a = 0; a < n_actions; ++a) {
+                const float indicator = (a == policy_last_action_) ? 1.0f : 0.0f;
+                const float advantage = indicator - policy_last_p_[a];
+                if (advantage == 0.0f) {
+                    continue;
+                }
+                const float scale = learning_rate * reward * advantage;
+                for (std::size_t f = 0; f < n_features; ++f) {
+                    policy_w_[a][f] += scale * policy_last_x_[f];
+                    // Bound the weights. An unbounded linear score saturates the
+                    // softmax, after which the policy stops exploring and cannot
+                    // recover from a bad early run of rewards.
+                    policy_w_[a][f] = std::max(-10.0f, std::min(10.0f, policy_w_[a][f]));
+                }
+            }
         }
 
         PrefrontalCortex::Decision PrefrontalCortex::makeDecision(const std::vector<float>& options,

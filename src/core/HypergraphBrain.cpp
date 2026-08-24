@@ -1,3 +1,4 @@
+#include <utility>
 #include <cmath>
 #include <map>
 #include <mutex>
@@ -3070,6 +3071,46 @@ private:
     std::map<std::string, State> state_;
 };
 
+// Mean activation of the first and second half of a region's neurons.
+//
+// readRegionSignal() returns ONE mean over the whole region, and a mean is blind
+// to spatial structure. In the phototaxis task the direction of the light is
+// encoded as a left/right imbalance -- one half of the field +0.35, the other
+// -0.35 -- so BOTH bearings produce an identical mean and the policy cannot tell
+// left from right. Measured 2026-08-24: with only region means as input the
+// learned policy explored all four actions and still performed at the random-walk
+// baseline (2.06 against ~2.0), with no improvement across a run.
+//
+// That is state aliasing, not a learning failure: the variable the task turns on
+// was absent from the observation. Splitting the field restores it.
+std::pair<float, float> readRegionHalves(const NeuroForge::RegionPtr &region,
+                                        std::size_t row_width) {
+    if (!region || row_width < 2) {
+        return {0.0f, 0.0f};
+    }
+    const auto &neurons = region->getNeurons();
+    const std::size_t n = neurons.size();
+    if (n < row_width) {
+        return {0.0f, 0.0f};
+    }
+    // Split by COLUMN, not by a contiguous index range. The observation is a
+    // row-major grid, so left/right is (i % row_width), and slicing the neuron
+    // vector in half instead splits it by ROW -- putting equal amounts of left
+    // and right field in each side and yielding a difference of exactly zero.
+    // That was the second reason the bearing feature read as neutral.
+    const std::size_t mid = row_width / 2;
+    float lo = 0.0f, hi = 0.0f;
+    std::size_t lo_n = 0, hi_n = 0;
+    for (std::size_t i = 0; i < n; ++i) {
+        if (!neurons[i]) continue;
+        const float a = static_cast<float>(neurons[i]->getActivation());
+        if ((i % row_width) < mid) { lo += a; ++lo_n; }
+        else { hi += a; ++hi_n; }
+    }
+    return {lo_n ? lo / static_cast<float>(lo_n) : 0.0f,
+            hi_n ? hi / static_cast<float>(hi_n) : 0.0f};
+}
+
 // One region's current state, read for use as a decision input.
 //
 // `activation` is how strongly the region is firing on average; `engagement` is
@@ -3216,13 +3257,35 @@ void reportIntegrationBinding(const char *region_name, bool bound) {
                                         std::string(src) + ":engagement", sig.engagement));
                                 }
                             }
+                            // Spatial features from the sensory cortex. A region mean cannot
+                            // represent WHERE in the field something is, and that is exactly what
+                            // this task depends on -- see readRegionHalves.
+                            {
+                                const auto halves = readRegionHalves(getRegion("VisualCortex"), 8);
+                                options.push_back(channel_norm.normalise("VisualCortex:left", halves.first));
+                                values.push_back(channel_norm.normalise("VisualCortex:right", halves.second));
+                                // The difference IS the bearing, given directly rather than left to
+                                // be inferred from two separately normalised halves.
+                                options.push_back(channel_norm.normalise(
+                                    "VisualCortex:bearing", halves.second - halves.first));
+                                values.push_back(channel_norm.normalise(
+                                    "VisualCortex:contrast", std::fabs(halves.second - halves.first)));
+                            }
+                            
                             if (options.empty()) {
                                 // No source regions present (e.g. the generic demo
                                 // brain). Skip rather than invent inputs.
                                 options.push_back(calculateGlobalActivation());
                                 values.push_back(calculateGlobalActivation());
                             }
-                            auto decision = pfc->makeDecision(options, values);
+                            // A learned, sampled policy when enabled; otherwise the
+                            // original argmax, so existing behaviour is untouched.
+                            auto decision =
+                                learned_policy_enabled_.load(std::memory_order_relaxed)
+                                    ? pfc->makeDecisionLearned(
+                                          options, values, policy_actions_,
+                                          policy_temperature_, rng_)
+                                    : pfc->makeDecision(options, values);
                             pfc_decided = true;
                             pfc_choice = decision.selected_option;
                             pfc_confidence = decision.confidence;
