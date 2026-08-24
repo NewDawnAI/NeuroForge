@@ -3314,12 +3314,25 @@ void reportIntegrationBinding(const char *region_name, bool bound) {
                                 motor_selection_enabled_.load(std::memory_order_relaxed);
                             if (motor_sel) {
                                 auto motor_r = getRegion("MotorCortex");
+                                if (selection_smoothing_ > 0.0f &&
+                                    channel_ema_.size() != policy_actions_) {
+                                    channel_ema_.assign(policy_actions_, 0.0f);
+                                }
                                 for (std::size_t a = 0; a < policy_actions_; ++a) {
                                     const auto ch =
                                         readRegionChannel(motor_r, a, policy_actions_);
                                     if (ch.valid) {
+                                        float act = ch.activation;
+                                        if (selection_smoothing_ > 0.0f) {
+                                            // Average the channel over time. Zero-mean
+                                            // fluctuation cancels; a consistent learned
+                                            // bias accumulates. See setSelectionSmoothing.
+                                            channel_ema_[a] += selection_smoothing_ *
+                                                               (act - channel_ema_[a]);
+                                            act = channel_ema_[a];
+                                        }
                                         options.push_back(channel_norm.normalise(
-                                            "motor:act" + std::to_string(a), ch.activation));
+                                            "motor:act" + std::to_string(a), act));
                                         values.push_back(channel_norm.normalise(
                                             "motor:eng" + std::to_string(a), ch.engagement));
                                     }

@@ -162,6 +162,7 @@ substrate rather than in it.
 | 3 | selection reads motor action channels, closing the credit→choice path | +0.011 |
 | 4 | reward baseline | **+0.006** — diagnosis was wrong; see below |
 | 5 | critic (TD error) + node perturbation | **+0.033** — mechanisms engage, signal is below the noise floor |
+| 6 | selection smoothing | **±0.07, no dose-response** — not selection-point noise either; arc closed |
 
 Each fixed something real; three defects had to be removed before the fourth
 became visible.

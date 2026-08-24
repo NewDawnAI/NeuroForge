@@ -276,6 +276,23 @@ Biologically this is the pre-Schultz model: dopamine encodes reward *prediction
 error*, not reward. Adding `dw = kappa·(R − R̄)·eligibility` with a running mean
 is the next step.
 
+### Selection smoothing
+
+| flag | effect |
+|---|---|
+| `--selection-smoothing=F` | EMA over each action channel before the argmax. 0 = off. |
+
+Smooths the **decision variable**, not the substrate — activations and plasticity
+are untouched. The mechanism works: channel spread 0.65 → 0.424 at α=0.10, and
+decision changes fell from ~400 to 40 per run.
+
+**A null, and conclusively so.** Three levels: no smoothing 1.944, α=0.10 2.022
+(−0.078), α=0.02 1.889 (+0.056), against a max within-condition spread of 0.283.
+Both inside the noise and **pointing in opposite directions**. If selection-point
+noise were the binding constraint, α=0.02 — averaging five times harder — should
+have helped proportionally more. The absence of dose-response is what makes this
+a conclusion rather than another inconclusive arm.
+
 ### Critic and node perturbation
 
 | flag | effect |

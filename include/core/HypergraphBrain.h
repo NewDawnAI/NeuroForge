@@ -202,6 +202,35 @@ private:
     std::atomic<bool> hardware_monitoring_enabled_;
     
 public:
+    /**
+     * @brief Average each action channel over time before selecting on it.
+     *
+     * WHY
+     *
+     * Measured 2026-08-24: motor channel activations fluctuate with a
+     * decision-to-decision spread of ~0.65 (e.g. [0.50 0.02 0.91 0.91]), while a
+     * single Phase-4 weight update moves a weight by order 1e-4. The learned
+     * component therefore never rises above the transient fluctuation at the
+     * point the argmax is taken -- selection stayed uniform (~25% per action)
+     * early and late, and channel differentiation did not grow with learning
+     * (0.627 -> 0.685). Every learning mechanism engaged; the signal was below
+     * the noise floor at the selection point.
+     *
+     * An exponential moving average over the channel cancels zero-mean
+     * fluctuation while a consistent learned bias accumulates, which is the
+     * standard fix for exactly this signal-to-noise shape. alpha is the EMA
+     * rate: smaller averages harder. 0 disables and restores instantaneous
+     * selection.
+     *
+     * This is smoothing of the DECISION VARIABLE, not of the substrate: neuron
+     * activations and plasticity are untouched.
+     */
+    void setSelectionSmoothing(float alpha) {
+        selection_smoothing_ = std::max(0.0f, std::min(1.0f, alpha));
+        channel_ema_.clear();
+    }
+    float selectionSmoothing() const { return selection_smoothing_; }
+
     /// Select among ACTION CHANNELS in MotorCortex rather than among input
     /// regions.
     ///
@@ -276,6 +305,8 @@ private:
     // Procedural connectivity mode for massive scale (avoids storing Synapse objects)
     std::atomic<bool> learned_policy_enabled_{false};
     std::atomic<bool> motor_selection_enabled_{false};
+    float selection_smoothing_ = 0.0f;
+    std::vector<float> channel_ema_;
     std::size_t policy_actions_ = 4;
     float policy_temperature_ = 1.0f;
     mutable std::mutex last_decision_mutex_;

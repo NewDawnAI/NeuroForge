@@ -2606,6 +2606,9 @@ float g_critic_gamma = 0.9f;
 // Node perturbation: eligibility becomes (actual - expected) x input, a local
 // estimator of the policy gradient rather than a coincidence measure.
 bool g_node_perturb = false;
+// EMA over each action channel before selecting on it, so transient
+// fluctuation cancels and a learned bias accumulates. 0 = off.
+float g_selection_smoothing = 0.0f;
 float g_reward_baseline_rate = 0.01f;
 float g_policy_lr = 0.05f;
 float g_policy_temp = 1.0f;
@@ -6368,6 +6371,18 @@ int main(int argc, char *argv[]) {
           return 2;
         }
         g_critic = true;
+      } else if (starts_with(arg, "--selection-smoothing=")) {
+        try {
+          g_selection_smoothing = std::stof(
+              arg.substr(std::string("--selection-smoothing=").size()));
+        } catch (...) {
+          std::cerr << "Error: invalid float for --selection-smoothing" << std::endl;
+          return 2;
+        }
+        if (g_selection_smoothing < 0.0f || g_selection_smoothing > 1.0f) {
+          std::cerr << "Error: --selection-smoothing must be in [0,1]" << std::endl;
+          return 2;
+        }
       } else if (arg == "--node-perturbation") {
         g_node_perturb = true;
       } else if (arg == "--reward-baseline") {
@@ -6734,7 +6749,7 @@ int main(int argc, char *argv[]) {
               "--action-credit", "--motor-selection",
               "--reward-baseline", "--reward-baseline-rate=",
               "--critic", "--critic-lr=", "--critic-gamma=",
-              "--node-perturbation"};
+              "--node-perturbation", "--selection-smoothing="};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {
@@ -10234,6 +10249,11 @@ int main(int argc, char *argv[]) {
       }
       if (g_motor_selection) {
         brain.setMotorSelection(true, 4);
+        if (g_selection_smoothing > 0.0f) {
+          brain.setSelectionSmoothing(g_selection_smoothing);
+          std::cout << "[Policy] selection smoothing alpha="
+                    << g_selection_smoothing << std::endl;
+        }
         std::cout << "[Policy] selection reads MotorCortex action channels"
                   << std::endl;
       }
