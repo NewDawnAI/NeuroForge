@@ -235,6 +235,41 @@ public:
    */
   void setEligibilityDecay(float lambda);
 
+  /**
+   * @brief Subtract a running estimate of expected reward before applying it.
+   *
+   * WHY
+   *
+   * The Phase-4 rule is `dw = kappa * R * eligibility * lr`, with no baseline.
+   * In the phototaxis task R is the CHANGE in brightness, so for a near-random
+   * policy its mean is approximately zero: an action that closes the distance is
+   * rewarded and the next that opens it is punished by a similar magnitude. The
+   * update therefore alternates sign and cancels -- a high-variance, zero-mean
+   * random walk on the weights.
+   *
+   * Measured 2026-08-24, three runs per condition with credit assignment and
+   * motor-channel selection both correct: potentiated 5.5-5.9M against depressed
+   * 4.1-4.5M, nearly balanced every time, and a behavioural effect of +0.011
+   * against a within-condition spread of 0.317. Reward reached the weights and
+   * went nowhere.
+   *
+   * The learned prefrontal policy succeeds on the SAME reward signal because its
+   * update carries `(1[a==chosen] - p[a])`, an advantage term. Credit assignment
+   * decides WHICH synapses; a baseline decides HOW MUCH BETTER THAN EXPECTED the
+   * outcome was. Without the second, correct credit assignment just delivers
+   * well-aimed noise.
+   *
+   * Biologically this is the difference between reward and reward PREDICTION
+   * ERROR. Dopamine encodes the latter; the rule without a baseline is the
+   * pre-Schultz model.
+   *
+   * Off by default, so existing behaviour is unchanged.
+   */
+  void setRewardBaseline(bool enabled, float rate = 0.01f);
+  bool isRewardBaselineEnabled() const;
+  /// Current running estimate of expected reward.
+  float rewardBaseline() const;
+
   void setAutoEligibilityAccumulation(bool enabled);
   bool isAutoEligibilityAccumulationEnabled() const;
 
@@ -395,6 +430,9 @@ private:
   mutable std::mutex eligible_targets_mutex_;
   std::atomic<float> eligibility_rate_{0.5f};
   std::atomic<float> eligibility_decay_{0.85f};
+  std::atomic<bool> reward_baseline_enabled_{false};
+  std::atomic<float> reward_baseline_{0.0f};
+  std::atomic<float> reward_baseline_rate_{0.01f};
   /// NOTE: this mutex no longer guards eligibility. It still guards rng_,
   /// attention_weights_ and statistics_, which are unrelated state that happened
   /// to share it.

@@ -242,7 +242,31 @@ per step); and credited synapses were not on the decision path at all, since
 selection read Thalamus/Hippocampus/Amygdala/CingulateCortex while credit landed
 on MotorCortex (now `--motor-selection`).
 
-**What remains is a reward baseline.** `dw = kappa·R·eligibility` has none, and
+**A reward baseline was tried and is a null** (`--reward-baseline`,
+`--reward-baseline-rate=`): +0.006 against a within-condition spread of 0.367.
+Two reasons, and the first invalidates the reasoning that motivated it.
+
+`(1[a==chosen] − p[a])·x` in the learned policy is **∇log π for a softmax** — the
+score function, not a baseline. That update is `lr·R·∇log π`, i.e. REINFORCE, a
+policy gradient with no baseline in it. The substrate's `κ·R·eligibility`
+multiplies reward by a *coincidence* trace, which is reward-modulated Hebbian and
+does not perform gradient ascent on expected reward. No baseline converts one
+into the other.
+
+Separately, an EMA baseline converges to the mean of R, and here R is a
+brightness *change* with mean ≈ 0, so `R − b ≈ R`. Measured at 400 steps, the
+potentiated/depressed ratio moved 1.554 → 1.538 with the flag confirmed active —
+a no-op, which is why the behavioural null was predicted rather than discovered.
+
+**What would actually work:** a state-dependent critic V(s), so the modulator is
+TD error `R + γV(s′) − V(s)` and stays informative when raw reward is mean-zero;
+or an eligibility trace that approximates ∇log π, e.g. node perturbation, where
+the trace becomes `(actual − expected activation) × input`. The second preserves
+locality, which is this project's architectural commitment.
+
+Superseded text follows for the record:
+
+~~What remains is a reward baseline.~~ `dw = kappa·R·eligibility` has none, and
 reward here is a change in brightness with a mean near zero, so updates alternate
 sign and cancel — measured as potentiated 5.5–5.9M against depressed 4.1–4.5M,
 nearly balanced, in every run. The policy layer succeeds on the *same* reward

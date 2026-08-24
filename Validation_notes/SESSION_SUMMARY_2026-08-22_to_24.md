@@ -159,12 +159,28 @@ substrate rather than in it.
 |---|---|---|
 | 1 | three-factor eligibility (`rate × pre × post`) + action gate | +0.244, inside noise |
 | 2 | eligibility decay (traces never decayed — they saturated and stayed) | still inside noise |
-| 3 | selection reads motor action channels, closing the credit→choice path | **+0.011** |
+| 3 | selection reads motor action channels, closing the credit→choice path | +0.011 |
+| 4 | reward baseline | **+0.006** — diagnosis was wrong; see below |
 
 Each fixed something real; three defects had to be removed before the fourth
 became visible.
 
-**The fourth is a missing reward baseline.** Reward reaches the weights — ~2M
+**The fourth was diagnosed as a missing reward baseline. That diagnosis was
+wrong.** A baseline was implemented and tested: +0.006 against a within-spread of
+0.367, a null, predicted in advance from a mechanism check.
+
+`(1[a==chosen] − p[a])·x` is **∇log π for a softmax** — the score function, not
+an advantage or baseline. The policy layer runs `lr·R·∇log π`, which is REINFORCE
+and contains no baseline. The substrate runs `κ·R·eligibility`, multiplying
+reward by a *coincidence* trace: reward-modulated Hebbian, which does not ascend
+the gradient of expected reward. The gap is the **learning rule**, not a missing
+term in it.
+
+(An EMA baseline is also a no-op on a mean-zero reward, independently.)
+
+Superseded reasoning follows:
+
+~~The fourth is a missing reward baseline.~~ Reward reaches the weights — ~2M
 Phase-4 updates per run — but potentiation and depression are nearly balanced
 (5.5–5.9M against 4.1–4.5M), so the weights random-walk. `dw = kappa·R·elig` has
 no baseline and reward has a mean near zero, so updates cancel. The policy layer

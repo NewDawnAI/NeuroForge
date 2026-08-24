@@ -132,6 +132,23 @@ namespace NeuroForge {
 
             // 3) Reward-modulated plasticity with eligibility traces (Phase 4)
             float R = pending_reward_.exchange(0.0f, std::memory_order_relaxed);
+
+            // Reward PREDICTION ERROR, when enabled: subtract a running estimate
+            // of expected reward, so the sign of the update reflects whether the
+            // outcome beat expectation rather than whether it was positive. See
+            // setRewardBaseline() for the measurements that motivated this.
+            if (reward_baseline_enabled_.load(std::memory_order_relaxed) &&
+                std::fabs(R) > 1e-9f) {
+                const float b = reward_baseline_.load(std::memory_order_relaxed);
+                const float rate = reward_baseline_rate_.load(std::memory_order_relaxed);
+                const float advantage = R - b;
+                // Update the estimate AFTER measuring against it, so the
+                // advantage is computed against the baseline as it stood when
+                // the action was taken.
+                reward_baseline_.store(b + rate * (R - b), std::memory_order_relaxed);
+                R = advantage;
+            }
+
             if (std::fabs(R) > 1e-9f) {
                 std::vector<std::pair<SynapseID, float>> deltas;
                 {
@@ -645,6 +662,22 @@ namespace NeuroForge {
         
 
 // Auto eligibility accumulation toggle
+void LearningSystem::setRewardBaseline(bool enabled, float rate) {
+    reward_baseline_enabled_.store(enabled, std::memory_order_relaxed);
+    reward_baseline_rate_.store(std::clamp(rate, 0.0f, 1.0f), std::memory_order_relaxed);
+    if (!enabled) {
+        reward_baseline_.store(0.0f, std::memory_order_relaxed);
+    }
+}
+
+bool LearningSystem::isRewardBaselineEnabled() const {
+    return reward_baseline_enabled_.load(std::memory_order_relaxed);
+}
+
+float LearningSystem::rewardBaseline() const {
+    return reward_baseline_.load(std::memory_order_relaxed);
+}
+
 void LearningSystem::setEligibilityDecay(float lambda) {
     eligibility_decay_.store(std::clamp(lambda, 0.0f, 1.0f), std::memory_order_relaxed);
 }

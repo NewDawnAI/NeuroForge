@@ -2595,6 +2595,10 @@ bool g_action_credit = false;
 // readRegionChannel() in HypergraphBrain.cpp for why this is the junction that
 // was open.
 bool g_motor_selection = false;
+// Subtract a running estimate of expected reward before applying it, so the
+// substrate learns from reward PREDICTION ERROR rather than raw reward.
+bool g_reward_baseline = false;
+float g_reward_baseline_rate = 0.01f;
 float g_policy_lr = 0.05f;
 float g_policy_temp = 1.0f;
 
@@ -6334,6 +6338,23 @@ int main(int argc, char *argv[]) {
                     << std::endl;
           return 2;
         }
+      } else if (arg == "--reward-baseline") {
+        g_reward_baseline = true;
+      } else if (starts_with(arg, "--reward-baseline-rate=")) {
+        try {
+          g_reward_baseline_rate = std::stof(
+              arg.substr(std::string("--reward-baseline-rate=").size()));
+        } catch (...) {
+          std::cerr << "Error: invalid float for --reward-baseline-rate"
+                    << std::endl;
+          return 2;
+        }
+        if (g_reward_baseline_rate < 0.0f || g_reward_baseline_rate > 1.0f) {
+          std::cerr << "Error: --reward-baseline-rate must be in [0,1]"
+                    << std::endl;
+          return 2;
+        }
+        g_reward_baseline = true;
       } else if (arg == "--motor-selection") {
         g_motor_selection = true;
       } else if (arg == "--action-credit") {
@@ -6678,7 +6699,8 @@ int main(int argc, char *argv[]) {
               "--anatomical-regions", "--anatomical-neurons=",
               "--sensory-drive", "--autonomous-sync", "--closed-loop",
               "--learn-policy", "--policy-lr=", "--policy-temp=",
-              "--action-credit", "--motor-selection"};
+              "--action-credit", "--motor-selection",
+              "--reward-baseline", "--reward-baseline-rate="};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {
@@ -10145,6 +10167,18 @@ int main(int argc, char *argv[]) {
       // Sensory input has to reach the autonomous loop, which drives its own
       // processStep() -- injecting from the main step loop below would not
       // coincide with the decisions taken there.
+      if (g_reward_baseline) {
+        auto *ls_rb = brain.getLearningSystem();
+        if (ls_rb) {
+          ls_rb->setRewardBaseline(true, g_reward_baseline_rate);
+          std::cout << "[Learning] reward baseline ON rate="
+                    << g_reward_baseline_rate
+                    << " (learning from prediction error)" << std::endl;
+        } else {
+          std::cerr << "[Learning] --reward-baseline given but no LearningSystem"
+                    << std::endl;
+        }
+      }
       if (g_motor_selection) {
         brain.setMotorSelection(true, 4);
         std::cout << "[Policy] selection reads MotorCortex action channels"
