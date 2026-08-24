@@ -2598,6 +2598,14 @@ bool g_motor_selection = false;
 // Subtract a running estimate of expected reward before applying it, so the
 // substrate learns from reward PREDICTION ERROR rather than raw reward.
 bool g_reward_baseline = false;
+// State-dependent critic: modulate plasticity by TD error rather than raw
+// reward, so the signal stays informative when reward averages to zero.
+bool g_critic = false;
+float g_critic_lr = 0.05f;
+float g_critic_gamma = 0.9f;
+// Node perturbation: eligibility becomes (actual - expected) x input, a local
+// estimator of the policy gradient rather than a coincidence measure.
+bool g_node_perturb = false;
 float g_reward_baseline_rate = 0.01f;
 float g_policy_lr = 0.05f;
 float g_policy_temp = 1.0f;
@@ -6338,6 +6346,30 @@ int main(int argc, char *argv[]) {
                     << std::endl;
           return 2;
         }
+      } else if (arg == "--critic") {
+        g_critic = true;
+      } else if (starts_with(arg, "--critic-lr=")) {
+        try {
+          g_critic_lr = std::stof(arg.substr(std::string("--critic-lr=").size()));
+        } catch (...) {
+          std::cerr << "Error: invalid float for --critic-lr" << std::endl;
+          return 2;
+        }
+        g_critic = true;
+      } else if (starts_with(arg, "--critic-gamma=")) {
+        try {
+          g_critic_gamma = std::stof(arg.substr(std::string("--critic-gamma=").size()));
+        } catch (...) {
+          std::cerr << "Error: invalid float for --critic-gamma" << std::endl;
+          return 2;
+        }
+        if (g_critic_gamma < 0.0f || g_critic_gamma > 1.0f) {
+          std::cerr << "Error: --critic-gamma must be in [0,1]" << std::endl;
+          return 2;
+        }
+        g_critic = true;
+      } else if (arg == "--node-perturbation") {
+        g_node_perturb = true;
       } else if (arg == "--reward-baseline") {
         g_reward_baseline = true;
       } else if (starts_with(arg, "--reward-baseline-rate=")) {
@@ -6700,7 +6732,9 @@ int main(int argc, char *argv[]) {
               "--sensory-drive", "--autonomous-sync", "--closed-loop",
               "--learn-policy", "--policy-lr=", "--policy-temp=",
               "--action-credit", "--motor-selection",
-              "--reward-baseline", "--reward-baseline-rate="};
+              "--reward-baseline", "--reward-baseline-rate=",
+              "--critic", "--critic-lr=", "--critic-gamma=",
+              "--node-perturbation"};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {
@@ -10167,6 +10201,25 @@ int main(int argc, char *argv[]) {
       // Sensory input has to reach the autonomous loop, which drives its own
       // processStep() -- injecting from the main step loop below would not
       // coincide with the decisions taken there.
+      if (g_critic || g_node_perturb) {
+        auto *ls_c = brain.getLearningSystem();
+        if (ls_c) {
+          if (g_critic) {
+            ls_c->setCritic(true, g_critic_lr, g_critic_gamma);
+            std::cout << "[Learning] critic ON lr=" << g_critic_lr
+                      << " gamma=" << g_critic_gamma
+                      << " (modulating by TD error)" << std::endl;
+          }
+          if (g_node_perturb) {
+            ls_c->setNodePerturbation(true);
+            std::cout << "[Learning] node perturbation ON "
+                         "(trace = (actual - expected) x input)" << std::endl;
+          }
+        } else {
+          std::cerr << "[Learning] --critic/--node-perturbation given but no "
+                       "LearningSystem" << std::endl;
+        }
+      }
       if (g_reward_baseline) {
         auto *ls_rb = brain.getLearningSystem();
         if (ls_rb) {
@@ -10276,6 +10329,34 @@ int main(int argc, char *argv[]) {
                 NeuroForge::Regions::VisualCortex>(vc_region);
             if (vc) {
               vc->processVisualInput(world->observe());
+            }
+          }
+
+          // 4. Hand the critic the state as the BRAIN sees it, not as the world
+          //    reports it. V(s) has to be learnable from what the agent can
+          //    actually observe, otherwise the critic is reading an oracle and
+          //    the result would not transfer to a task without one.
+          //
+          //    Features are the left/right halves of the visual field and their
+          //    difference (the bearing), plus a bias term. Called AFTER the new
+          //    observation is injected, so the value formed here is V(s') for the
+          //    reward delivered above -- which Phase-4 consumes on the next step.
+          if (g_critic) {
+            auto *ls_s = brain.getLearningSystem();
+            if (ls_s && vc_region) {
+              const auto &vn = vc_region->getNeurons();
+              const std::size_t row = 8;
+              float lo = 0.0f, hi = 0.0f;
+              std::size_t lo_n = 0, hi_n = 0;
+              for (std::size_t i = 0; i < vn.size(); ++i) {
+                if (!vn[i]) continue;
+                const float a = static_cast<float>(vn[i]->getActivation());
+                if ((i % row) < row / 2) { lo += a; ++lo_n; }
+                else { hi += a; ++hi_n; }
+              }
+              const float lm = lo_n ? lo / static_cast<float>(lo_n) : 0.0f;
+              const float hm = hi_n ? hi / static_cast<float>(hi_n) : 0.0f;
+              ls_s->observeState({lm, hm, hm - lm, 1.0f});
             }
           }
 

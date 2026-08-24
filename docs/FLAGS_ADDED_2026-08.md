@@ -276,6 +276,41 @@ Biologically this is the pre-Schultz model: dopamine encodes reward *prediction
 error*, not reward. Adding `dw = kappa·(R − R̄)·eligibility` with a running mean
 is the next step.
 
+### Critic and node perturbation
+
+| flag | effect |
+|---|---|
+| `--critic` | Learn V(s) online; modulate plasticity by TD error `R + γV(s′) − V(s)` instead of raw reward. |
+| `--critic-lr=F` | Critic learning rate (default 0.05). |
+| `--critic-gamma=F` | Discount on the successor state's value (default 0.9). |
+| `--node-perturbation` | Eligibility becomes `rate × pre × (post − E[post])` — a local gradient estimator rather than a coincidence measure. |
+
+Both engage and **both are nulls** on behaviour: +0.033 against a
+within-condition spread of 0.483.
+
+The manipulation check passes, which is what makes this informative rather than
+inconclusive — potentiated/depressed ratio, control 1.303/1.315/1.348 against
+critic+NP 1.242/1.251/1.239, **no overlap**. The mechanisms change the update
+statistics reliably; they do not change behaviour.
+
+**Where the chain breaks.** Reward reaches the weights (~2.5M updates/run), the
+mechanisms change the updates, and the motor channels differentiate strongly
+(spread ~0.65). But that differentiation does **not** grow with learning (0.627
+early → 0.685 late) and selection stays uniform (~25% per action, early and
+late). Intrinsic channel fluctuation swamps a per-update weight change of order
+1e-4, so the learned component never rises above the noise at the argmax.
+
+That is a signal-to-noise problem at the selection point, not a missing
+mechanism. The policy layer solves the same task with the same reward because its
+parameters sit *directly* at the decision (`score[a] = w[a]·x`), so a weight
+change **is** a change in the decision.
+
+**Traces are now signed.** Node perturbation yields negative eligibility when a
+neuron fires below its expectation, and that sign is the information. `bump()`
+clamped to `[.., cap]` and `decay()` tested `next < floor`, which would have
+zeroed every negative trace on its first decay — the null would have been
+measured with half the signal discarded and nothing to indicate it.
+
 ## Eligibility and Phase-4
 
 | flag | effect |

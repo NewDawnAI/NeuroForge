@@ -161,6 +161,7 @@ substrate rather than in it.
 | 2 | eligibility decay (traces never decayed — they saturated and stayed) | still inside noise |
 | 3 | selection reads motor action channels, closing the credit→choice path | +0.011 |
 | 4 | reward baseline | **+0.006** — diagnosis was wrong; see below |
+| 5 | critic (TD error) + node perturbation | **+0.033** — mechanisms engage, signal is below the noise floor |
 
 Each fixed something real; three defects had to be removed before the fourth
 became visible.

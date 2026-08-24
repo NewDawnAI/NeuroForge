@@ -133,6 +133,31 @@ namespace NeuroForge {
             // 3) Reward-modulated plasticity with eligibility traces (Phase 4)
             float R = pending_reward_.exchange(0.0f, std::memory_order_relaxed);
 
+            // STATE-DEPENDENT critic: replace R with TD error. Unlike the
+            // scalar baseline below, this stays informative when raw reward
+            // averages to zero, because it asks whether the STATE improved.
+            if (critic_enabled_.load(std::memory_order_relaxed) &&
+                std::fabs(R) > 1e-9f) {
+                std::lock_guard<std::mutex> clock(critic_mutex_);
+                if (critic_have_prev_ &&
+                    critic_w_.size() == critic_curr_phi_.size() &&
+                    critic_prev_phi_.size() == critic_w_.size()) {
+                    float v_s = 0.0f, v_next = 0.0f;
+                    for (std::size_t i = 0; i < critic_w_.size(); ++i) {
+                        v_s += critic_w_[i] * critic_prev_phi_[i];
+                        v_next += critic_w_[i] * critic_curr_phi_[i];
+                    }
+                    const float td = R + critic_gamma_ * v_next - v_s;
+                    // Critic update: gradient of squared TD error wrt w, with
+                    // the successor value treated as fixed (semi-gradient TD).
+                    for (std::size_t i = 0; i < critic_w_.size(); ++i) {
+                        critic_w_[i] += critic_lr_ * td * critic_prev_phi_[i];
+                        critic_w_[i] = std::max(-50.0f, std::min(50.0f, critic_w_[i]));
+                    }
+                    R = td;
+                }
+            }
+
             // Reward PREDICTION ERROR, when enabled: subtract a running estimate
             // of expected reward, so the sign of the update reflects whether the
             // outcome beat expectation rather than whether it was positive. See
@@ -662,6 +687,64 @@ namespace NeuroForge {
         
 
 // Auto eligibility accumulation toggle
+void LearningSystem::setCritic(bool enabled, float lr, float gamma) {
+    std::lock_guard<std::mutex> lock(critic_mutex_);
+    critic_enabled_.store(enabled, std::memory_order_relaxed);
+    critic_lr_ = std::max(0.0f, lr);
+    critic_gamma_ = std::clamp(gamma, 0.0f, 1.0f);
+    if (!enabled) {
+        critic_w_.clear();
+        critic_prev_phi_.clear();
+        critic_curr_phi_.clear();
+        critic_have_prev_ = false;
+    }
+}
+
+bool LearningSystem::isCriticEnabled() const {
+    return critic_enabled_.load(std::memory_order_relaxed);
+}
+
+float LearningSystem::criticValue() const {
+    std::lock_guard<std::mutex> lock(critic_mutex_);
+    if (critic_w_.size() != critic_curr_phi_.size()) {
+        return 0.0f;
+    }
+    float v = 0.0f;
+    for (std::size_t i = 0; i < critic_w_.size(); ++i) {
+        v += critic_w_[i] * critic_curr_phi_[i];
+    }
+    return v;
+}
+
+void LearningSystem::observeState(const std::vector<float> &features) {
+    if (!critic_enabled_.load(std::memory_order_relaxed)) {
+        return;
+    }
+    std::lock_guard<std::mutex> lock(critic_mutex_);
+    // The previous "current" becomes the state the action was taken in.
+    critic_prev_phi_ = critic_curr_phi_;
+    critic_have_prev_ = !critic_prev_phi_.empty();
+    critic_curr_phi_ = features;
+    if (critic_w_.size() != critic_curr_phi_.size()) {
+        // Zero-initialised: V is 0 everywhere until something is learned, so the
+        // first TD errors are just the rewards themselves.
+        critic_w_.assign(critic_curr_phi_.size(), 0.0f);
+    }
+}
+
+void LearningSystem::setNodePerturbation(bool enabled, float rate) {
+    node_perturbation_enabled_.store(enabled, std::memory_order_relaxed);
+    node_perturbation_rate_.store(std::clamp(rate, 0.0f, 1.0f), std::memory_order_relaxed);
+    if (!enabled) {
+        std::lock_guard<std::mutex> lock(activation_expectation_mutex_);
+        activation_expectation_.clear();
+    }
+}
+
+bool LearningSystem::isNodePerturbationEnabled() const {
+    return node_perturbation_enabled_.load(std::memory_order_relaxed);
+}
+
 void LearningSystem::setRewardBaseline(bool enabled, float rate) {
     reward_baseline_enabled_.store(enabled, std::memory_order_relaxed);
     reward_baseline_rate_.store(std::clamp(rate, 0.0f, 1.0f), std::memory_order_relaxed);
@@ -865,8 +948,29 @@ void LearningSystem::onNeuronSpike(NeuroForge::NeuronID neuron_id, NeuroForge::T
                     // nothing even though its target just spiked. The third
                     // factor -- reward -- arrives later and multiplies this
                     // trace in the Phase-4 path.
-                    const float post = static_cast<float>(neuron->getActivation());
+                    const float post_raw = static_cast<float>(neuron->getActivation());
                     const float rate = eligibility_rate_.load(std::memory_order_relaxed);
+
+                    // NODE PERTURBATION: use the neuron's deviation from its own
+                    // running expectation rather than its raw activation, so the
+                    // trace estimates a gradient rather than a coincidence.
+                    float post = post_raw;
+                    if (node_perturbation_enabled_.load(std::memory_order_relaxed)) {
+                        const float nrate =
+                            node_perturbation_rate_.load(std::memory_order_relaxed);
+                        std::lock_guard<std::mutex> elock(activation_expectation_mutex_);
+                        auto it = activation_expectation_.find(neuron_id);
+                        if (it == activation_expectation_.end()) {
+                            // First observation: no expectation yet, so no
+                            // deviation to report. Seed and contribute nothing,
+                            // rather than treating the first value as a surprise.
+                            activation_expectation_.emplace(neuron_id, post_raw);
+                            post = 0.0f;
+                        } else {
+                            post = post_raw - it->second;
+                            it->second += nrate * (post_raw - it->second);
+                        }
+                    }
 
                     const auto inputs = neuron->getInputSynapses();
                     for (const auto &syn : inputs) {
@@ -875,7 +979,8 @@ void LearningSystem::onNeuronSpike(NeuroForge::NeuronID neuron_id, NeuroForge::T
                         if (!src) continue;
                         const float pre = static_cast<float>(src->getActivation());
                         const float increment = rate * pre * post;
-                        if (increment > 0.0f) {
+                        // Signed under node perturbation; only skip an exact zero.
+                        if (increment != 0.0f) {
                             elig_.bump(syn->getId(), increment);
                         }
                     }

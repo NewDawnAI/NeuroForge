@@ -51,6 +51,7 @@
 #include "Types.h"
 
 #include <algorithm>
+#include <cmath>
 #include <array>
 #include <atomic>
 #include <cstddef>
@@ -84,13 +85,20 @@ public:
 
     /// Add to a synapse's trace, saturating at `cap`. Lock-free once the block
     /// exists. See the concurrency note above for why this is not a CAS loop.
+    /// Traces are SIGNED. Node perturbation produces a trace of
+    /// `(actual - expected activation) * input`, which is negative whenever a
+    /// neuron fired below its own expectation -- and that sign is the
+    /// information, not noise: it says the synapse pushed activity the wrong
+    /// way. Clamping to [-cap, cap] rather than [.., cap] keeps that half of the
+    /// signal.
     void bump(NeuroForge::SynapseID sid, float amount, float cap = 1.0f) {
         std::atomic<float> *slot = slotFor(sid, true);
         if (!slot) {
             return;
         }
         const float cur = slot->load(std::memory_order_relaxed);
-        slot->store(std::min(cap, cur + amount), std::memory_order_relaxed);
+        const float next = std::max(-cap, std::min(cap, cur + amount));
+        slot->store(next, std::memory_order_relaxed);
         noteHighest(sid);
     }
 
@@ -171,7 +179,12 @@ public:
                     continue;
                 }
                 const float next = v * factor;
-                block[i].store(next < floor ? 0.0f : next, std::memory_order_relaxed);
+                // Compare the MAGNITUDE against the floor. `next < floor` would
+                // zero every negative trace on its first decay, silently
+                // discarding the half of a signed trace that says "this synapse
+                // pushed the wrong way".
+                block[i].store(std::fabs(next) < floor ? 0.0f : next,
+                               std::memory_order_relaxed);
             }
         }
     }

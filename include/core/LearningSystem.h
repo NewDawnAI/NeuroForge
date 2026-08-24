@@ -265,6 +265,78 @@ public:
    *
    * Off by default, so existing behaviour is unchanged.
    */
+  /**
+   * @brief Use node perturbation for the eligibility trace.
+   *
+   * WHY
+   *
+   * The three-factor trace is `rate * pre * post`, a COINCIDENCE measure. Reward
+   * times coincidence is reward-modulated Hebbian: it strengthens whatever was
+   * co-active when reward was positive, and does not ascend the gradient of
+   * expected reward. Measured 2026-08-24, with credit assignment and
+   * motor-channel selection both correct and a reward baseline added, the
+   * substrate still sat at the random-walk baseline.
+   *
+   * Node perturbation replaces `post` with `post - E[post]`, the neuron's
+   * deviation from its own running expectation:
+   *
+   *     trace = rate * pre * (post - E[post])
+   *
+   * That is a local estimator of the policy gradient. The deviation is the
+   * "perturbation"; correlating it with reward estimates which way the weight
+   * should move, in the same way REINFORCE's `(1[a==chosen] - p[a])` does for an
+   * explicit softmax — but computed from quantities available AT THE SYNAPSE,
+   * which is the architectural commitment this project has made.
+   *
+   * Traces become signed: a neuron firing below its expectation yields a
+   * negative trace, and that sign carries the information.
+   *
+   * @param rate EMA rate for each neuron's expected activation.
+   */
+  /**
+   * @brief Learn V(s) and modulate plasticity by TD error instead of raw reward.
+   *
+   * WHY A SCALAR BASELINE WAS NOT ENOUGH
+   *
+   * `--reward-baseline` subtracts a running MEAN of reward. Measured 2026-08-24
+   * that is a null (+0.006 against a within-condition spread of 0.367), because
+   * reward here is a CHANGE in brightness whose mean is approximately zero: a
+   * mean-zero baseline subtracts nothing. A baseline only reduces variance when
+   * the reward has a non-zero mean.
+   *
+   * A STATE-DEPENDENT baseline does not have that problem. V(s) estimates the
+   * reward expected FROM THIS STATE, so the modulator
+   *
+   *     td = R + gamma * V(s') - V(s)
+   *
+   * stays informative even when raw reward averages to zero: it asks whether the
+   * state improved, not whether the reward was positive. This is what dopamine
+   * is usually modelled as encoding, and the rule without it is the pre-Schultz
+   * model.
+   *
+   * V is linear in the features supplied by observeState(), learned online by
+   * `w += lr * td * phi(s)`.
+   *
+   * @param lr     critic learning rate
+   * @param gamma  discount on the successor state's value
+   */
+  void setCritic(bool enabled, float lr = 0.05f, float gamma = 0.9f);
+  bool isCriticEnabled() const;
+  /// Current V(s) for the most recently observed state.
+  float criticValue() const;
+
+  /**
+   * @brief Supply the state features the critic evaluates.
+   *
+   * Call once per cycle. The system keeps the previous feature vector, so when a
+   * reward arrives it can form `R + gamma*V(s') - V(s)` with s the state the
+   * action was taken in and s' the state that followed.
+   */
+  void observeState(const std::vector<float> &features);
+
+  void setNodePerturbation(bool enabled, float rate = 0.05f);
+  bool isNodePerturbationEnabled() const;
+
   void setRewardBaseline(bool enabled, float rate = 0.01f);
   bool isRewardBaselineEnabled() const;
   /// Current running estimate of expected reward.
@@ -433,6 +505,19 @@ private:
   std::atomic<bool> reward_baseline_enabled_{false};
   std::atomic<float> reward_baseline_{0.0f};
   std::atomic<float> reward_baseline_rate_{0.01f};
+  std::atomic<bool> critic_enabled_{false};
+  float critic_lr_ = 0.05f;
+  float critic_gamma_ = 0.9f;
+  std::vector<float> critic_w_;
+  std::vector<float> critic_prev_phi_;
+  std::vector<float> critic_curr_phi_;
+  bool critic_have_prev_ = false;
+  mutable std::mutex critic_mutex_;
+  std::atomic<bool> node_perturbation_enabled_{false};
+  std::atomic<float> node_perturbation_rate_{0.05f};
+  /// Per-neuron running expectation of activation, for node perturbation.
+  std::unordered_map<NeuroForge::NeuronID, float> activation_expectation_;
+  mutable std::mutex activation_expectation_mutex_;
   /// NOTE: this mutex no longer guards eligibility. It still guards rng_,
   /// attention_weights_ and statistics_, which are unrelated state that happened
   /// to share it.
