@@ -142,6 +142,40 @@ public:
         }
     }
 
+    /// Multiply every trace by `factor`, zeroing anything that falls below
+    /// `floor`.
+    ///
+    /// WITHOUT THIS THERE IS NO TRACE. bump() saturates at a cap and nothing on
+    /// the spike path ever reduced a value, so every synapse that fired once
+    /// climbed to the cap and stayed there for the rest of the run. That makes
+    /// eligibility a "has ever been active" flag rather than a decaying record
+    /// of recent activity -- it carries no timing information, so reward cannot
+    /// be associated with a recent action, and gating the trace to one pathway
+    /// cannot help because every pathway is already maximally eligible.
+    ///
+    /// Measured 2026-08-24 before this existed: confining eligibility to the
+    /// selected motor channel produced 451,330 Phase-4 updates against 431,198
+    /// unconfined -- no reduction at all, because the confinement arrived after
+    /// everything had already saturated.
+    void decay(float factor, float floor = 1e-4f) {
+        const std::size_t high = highest_.load(std::memory_order_acquire);
+        const std::size_t last_block = std::min(high / kBlockSize, kMaxBlocks - 1);
+        for (std::size_t b = 0; b <= last_block; ++b) {
+            std::atomic<float> *block = blocks_[b].load(std::memory_order_acquire);
+            if (!block) {
+                continue;
+            }
+            for (std::size_t i = 0; i < kBlockSize; ++i) {
+                const float v = block[i].load(std::memory_order_relaxed);
+                if (v == 0.0f) {
+                    continue;
+                }
+                const float next = v * factor;
+                block[i].store(next < floor ? 0.0f : next, std::memory_order_relaxed);
+            }
+        }
+    }
+
     /// Zero every trace. Blocks are kept so the memory is not churned.
     void clear() {
         const std::size_t high = highest_.load(std::memory_order_acquire);

@@ -2587,6 +2587,9 @@ bool g_closed_loop = false;
 // Use a learned, sampled prefrontal policy instead of the hardcoded argmax,
 // and reinforce it from the same reward the closed loop computes.
 bool g_learn_policy = false;
+// Confine Phase-4 eligibility to the motor channel of the selected action, so
+// the SUBSTRATE receives action-specific credit rather than a broadcast.
+bool g_action_credit = false;
 float g_policy_lr = 0.05f;
 float g_policy_temp = 1.0f;
 
@@ -6326,6 +6329,8 @@ int main(int argc, char *argv[]) {
                     << std::endl;
           return 2;
         }
+      } else if (arg == "--action-credit") {
+        g_action_credit = true;
       } else if (arg == "--learn-policy") {
         g_learn_policy = true;
       } else if (starts_with(arg, "--policy-lr=")) {
@@ -6665,7 +6670,8 @@ int main(int argc, char *argv[]) {
               "--structural-interval=", "--structural-energy-gate=",
               "--anatomical-regions", "--anatomical-neurons=",
               "--sensory-drive", "--autonomous-sync", "--closed-loop",
-              "--learn-policy", "--policy-lr=", "--policy-temp="};
+              "--learn-policy", "--policy-lr=", "--policy-temp=",
+              "--action-credit"};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {
@@ -10153,6 +10159,42 @@ int main(int argc, char *argv[]) {
           const auto dec = brain.getLastDecision();
           if (dec.valid) {
             world->act(dec.choice);
+
+            // Gate Phase-4 eligibility to the motor channel that carried this
+            // action. MotorCortex's neurons are partitioned into as many
+            // contiguous channels as there are actions, and only the selected
+            // channel's neurons are allowed to lay down a trace -- so when the
+            // reward arrives it reaches the pathway that produced the action
+            // rather than everything that happened to be firing.
+            if (g_action_credit) {
+              auto *ls = brain.getLearningSystem();
+              auto motor = brain.getRegion("MotorCortex");
+              if (ls && motor) {
+                const auto &mn = motor->getNeurons();
+                const std::size_t n_actions = 4;
+                const std::size_t chan = dec.choice % n_actions;
+                const std::size_t width = mn.size() / n_actions;
+                std::vector<NeuroForge::NeuronID> targets;
+                if (width > 0) {
+                  targets.reserve(width);
+                  for (std::size_t i = chan * width;
+                       i < (chan + 1) * width && i < mn.size(); ++i) {
+                    if (mn[i]) targets.push_back(mn[i]->getId());
+                  }
+                }
+                ls->setEligibleTargets(targets);
+                {
+                  static bool once = false;
+                  if (!once) {
+                    once = true;
+                    std::cout << "[Credit] eligibility gated to "
+                              << ls->eligibleTargetCount() << " of "
+                              << mn.size() << " MotorCortex neurons (channel "
+                              << chan << " of " << n_actions << ")" << std::endl;
+                  }
+                }
+              }
+            }
           }
 
           // 2. Score the consequence. Reward is the CHANGE in brightness, so

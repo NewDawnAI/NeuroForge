@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unordered_set>
 #include "EligibilityTraces.h"
 #include "core/Types.h"
 #include <atomic>
@@ -182,6 +183,58 @@ public:
 
   // Toggle automatic eligibility accumulation used by HypergraphBrain
   // post-processing
+  /**
+   * @brief Restrict eligibility to synapses landing on these neurons.
+   *
+   * WHY
+   *
+   * onNeuronSpike used to bump EVERY synapse of EVERY spiking neuron by a flat
+   * 0.1. With 83% of neurons active in the anatomical brain, that trace records
+   * "was recently active" rather than "was responsible", and
+   * dw = kappa*R*eligibility becomes approximately one scalar applied to
+   * everything -- shifting all activations together and preserving their
+   * ordering, which is exactly what a decision rule cares about. Measured
+   * 2026-08-24: 237,409 Phase-4 updates moved the choice distribution from
+   * {18,46,33,2}% to {18,46,34,2}%.
+   *
+   * Credit assignment is the entire content of a reinforcement learning
+   * algorithm. A uniform trace is not a weak version of it; it is its absence.
+   *
+   * WHAT THIS DOES
+   *
+   * Passing the neurons of the SELECTED action channel confines eligibility to
+   * the pathway that produced the action taken, so reward reaches those synapses
+   * and not the ones that merely happened to be firing. This is the
+   * basal-ganglia arrangement: the selected channel is disinhibited and only it
+   * is eligible for reinforcement; the losing channels are not.
+   *
+   * An empty set restores the previous behaviour, where every spiking neuron
+   * accumulates.
+   */
+  void setEligibleTargets(const std::vector<NeuroForge::NeuronID> &ids);
+  void clearEligibleTargets();
+  std::size_t eligibleTargetCount() const;
+
+  /**
+   * @brief Scale for the three-factor eligibility increment.
+   *
+   * The increment is `rate * pre_activation * post_activation` rather than a
+   * constant, so a synapse earns credit in proportion to the coincidence of its
+   * own endpoints. A synapse attached to a spiking neuron but whose source was
+   * silent contributed nothing and now receives nothing.
+   */
+  void setEligibilityRate(float rate);
+
+  /**
+   * @brief Per-step multiplier applied to every eligibility trace.
+   *
+   * 1.0 disables decay and reproduces the previous behaviour, where a trace
+   * saturated and never fell. Lower values give the trace a time constant, which
+   * is what lets a reward be attributed to a recent action rather than to
+   * anything that has ever fired. See EligibilityTraces::decay().
+   */
+  void setEligibilityDecay(float lambda);
+
   void setAutoEligibilityAccumulation(bool enabled);
   bool isAutoEligibilityAccumulationEnabled() const;
 
@@ -337,6 +390,11 @@ private:
   /// was written ~128 times per spike under syn_state_mutex_ -- see
   /// EligibilityTraces.h for the measurements that motivated the change.
   EligibilityTraces elig_;
+  /// Empty = accumulate for every spiking neuron (the original behaviour).
+  std::unordered_set<NeuroForge::NeuronID> eligible_targets_;
+  mutable std::mutex eligible_targets_mutex_;
+  std::atomic<float> eligibility_rate_{0.5f};
+  std::atomic<float> eligibility_decay_{0.85f};
   /// NOTE: this mutex no longer guards eligibility. It still guards rng_,
   /// attention_weights_ and statistics_, which are unrelated state that happened
   /// to share it.

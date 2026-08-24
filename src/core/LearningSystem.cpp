@@ -169,6 +169,26 @@ namespace NeuroForge {
                  }
             }
 
+            // 3b) Decay the eligibility traces, once per step.
+            //
+            // This is what makes them TRACES. bump() saturates at a cap and the
+            // spike path never reduced a value, so a synapse that fired once
+            // stayed maximally eligible for the rest of the run and the trace
+            // carried no information about WHEN it was active. Reward could then
+            // not be associated with a recent action, and confining eligibility
+            // to one pathway had no effect because every pathway was already
+            // saturated.
+            //
+            // Applied after the reward path above, so a reward arriving this step
+            // sees the trace as it stood when the action was taken.
+            {
+                const float lam = std::clamp(eligibility_decay_.load(std::memory_order_relaxed),
+                                             0.0f, 1.0f);
+                if (lam < 1.0f) {
+                    elig_.decay(lam);
+                }
+            }
+
             // 4) Periodic consolidation (and track a simple consolidation rate)
             static float consolidation_accum = 0.0f;
             consolidation_accum += std::max(0.0f, delta_time);
@@ -625,6 +645,30 @@ namespace NeuroForge {
         
 
 // Auto eligibility accumulation toggle
+void LearningSystem::setEligibilityDecay(float lambda) {
+    eligibility_decay_.store(std::clamp(lambda, 0.0f, 1.0f), std::memory_order_relaxed);
+}
+
+void LearningSystem::setEligibleTargets(const std::vector<NeuroForge::NeuronID> &ids) {
+    std::lock_guard<std::mutex> lock(eligible_targets_mutex_);
+    eligible_targets_.clear();
+    eligible_targets_.insert(ids.begin(), ids.end());
+}
+
+void LearningSystem::clearEligibleTargets() {
+    std::lock_guard<std::mutex> lock(eligible_targets_mutex_);
+    eligible_targets_.clear();
+}
+
+std::size_t LearningSystem::eligibleTargetCount() const {
+    std::lock_guard<std::mutex> lock(eligible_targets_mutex_);
+    return eligible_targets_.size();
+}
+
+void LearningSystem::setEligibilityRate(float rate) {
+    eligibility_rate_.store(std::max(0.0f, rate), std::memory_order_relaxed);
+}
+
 void LearningSystem::setAutoEligibilityAccumulation(bool enabled) {
     auto_eligibility_accumulation_enabled_.store(enabled, std::memory_order_relaxed);
 }
@@ -766,16 +810,42 @@ void LearningSystem::onNeuronSpike(NeuroForge::NeuronID neuron_id, NeuroForge::T
             }
             
             if (neuron) {
-                // Ids only, into a buffer reused across spikes: this runs once
-                // per spike, and copying two shared_ptr vectors here cost two
-                // allocations and a refcount per synapse every time.
-                thread_local std::vector<NeuroForge::SynapseID> sids;
-                sids.clear();
-                neuron->collectSynapseIds(sids);
+                // ACTION GATE. When a set of eligible targets is configured,
+                // only spikes on those neurons lay down a trace. The spiking
+                // neuron is the POST side of its input synapses, so gating on it
+                // confines credit to the pathway that produced the selected
+                // action -- rather than to everything that happened to be
+                // firing, which is what a flat bump over all spiking neurons
+                // gave. See setEligibleTargets().
+                bool gated_in = true;
+                {
+                    std::lock_guard<std::mutex> glock(eligible_targets_mutex_);
+                    if (!eligible_targets_.empty()) {
+                        gated_in = eligible_targets_.count(neuron_id) != 0;
+                    }
+                }
 
-                // No lock: EligibilityTraces is a flat array of atomics.
-                for (const auto sid : sids) {
-                    elig_.bump(sid, 0.1f);
+                if (gated_in) {
+                    // THREE-FACTOR increment: rate * pre * post, not a constant.
+                    // Credit is proportional to the coincidence of the synapse's
+                    // own endpoints, so a synapse whose source was silent earns
+                    // nothing even though its target just spiked. The third
+                    // factor -- reward -- arrives later and multiplies this
+                    // trace in the Phase-4 path.
+                    const float post = static_cast<float>(neuron->getActivation());
+                    const float rate = eligibility_rate_.load(std::memory_order_relaxed);
+
+                    const auto inputs = neuron->getInputSynapses();
+                    for (const auto &syn : inputs) {
+                        if (!syn) continue;
+                        auto src = syn->getSource().lock();
+                        if (!src) continue;
+                        const float pre = static_cast<float>(src->getActivation());
+                        const float increment = rate * pre * post;
+                        if (increment > 0.0f) {
+                            elig_.bump(syn->getId(), increment);
+                        }
+                    }
                 }
             }
         }
