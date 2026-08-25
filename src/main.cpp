@@ -2584,6 +2584,43 @@ bool g_autonomous_sync = false;
 // Close the sensorimotor loop: the brain's decision moves an agent in a small
 // world, and the resulting change in brightness is fed back as reward.
 bool g_closed_loop = false;
+// A SECOND TASK, so that transfer is measurable at all.
+//
+// With one task there is no question that distinguishes intelligence from
+// control: transfer, compositionality and world models all require at least two
+// tasks to define, and the system could not fail informatively at any of them.
+//
+//   photo  approach a light, sensed through VisualCortex
+//   audio  approach the same gradient sensed through AuditoryCortex -- SAME
+//          optimal policy, DIFFERENT modality, so it isolates cross-modal
+//          transfer of the "approach the gradient" skill
+//   avoid  retreat from the light, same modality -- SAME sensors, INVERTED
+//          policy, so it isolates whether a learned policy can be reversed
+//
+// --task-switch-at=N swaps task mid-run, which is what makes the comparison a
+// transfer measurement rather than two independent runs.
+enum class TaskKind { Photo, Audio, Avoid };
+TaskKind g_task = TaskKind::Photo;
+TaskKind g_task2 = TaskKind::Photo;
+int g_task_switch_at = -1;
+// Re-randomise source and agent every N cycles. 0 = never (the original fixed
+// world, which is solvable without perception -- see LightWorld::randomise).
+int g_task_randomize = 0;
+
+static const char *task_name(TaskKind t) {
+  switch (t) {
+  case TaskKind::Audio: return "audio";
+  case TaskKind::Avoid: return "avoid";
+  default: return "photo";
+  }
+}
+
+static bool parse_task(const std::string &v, TaskKind &out) {
+  if (v == "photo") { out = TaskKind::Photo; return true; }
+  if (v == "audio") { out = TaskKind::Audio; return true; }
+  if (v == "avoid") { out = TaskKind::Avoid; return true; }
+  return false;
+}
 // Use a learned, sampled prefrontal policy instead of the hardcoded argmax,
 // and reinforce it from the same reward the closed loop computes.
 bool g_learn_policy = false;
@@ -2760,6 +2797,34 @@ struct LightWorld {
       }
     }
     return grid;
+  }
+
+  /// Move the light and the agent to new positions.
+  ///
+  /// WHY THIS IS NECESSARY, NOT OPTIONAL
+  ///
+  /// With a FIXED source (4) and a FIXED start (0) the task is solvable without
+  /// perceiving anything: a learned action bias reaches and stays near the light
+  /// by exploiting the geometry. Measured 2026-08-24, the learned policy's
+  /// advantage over control was -0.644 intact and -0.625 with VisualCortex
+  /// zeroed -- vision contributed roughly 3% of the effect. The agent was
+  /// solving the task, and not by sensing.
+  ///
+  /// A task that can be solved without its sensory channel cannot distinguish
+  /// learning-to-perceive from learning-a-bias, and makes cross-modal transfer
+  /// unmeasurable: the two tasks would differ in a variable neither depends on.
+  ///
+  /// Re-randomising forces the policy to read the current bearing, because no
+  /// fixed action sequence survives a source that moves.
+  void randomise(std::mt19937 &rng) {
+    std::uniform_int_distribution<int> d(0, kPositions - 1);
+    source = d(rng);
+    agent = d(rng);
+    // Never start on the light: that would hand out a solved episode.
+    if (agent == source) {
+      agent = (agent + 1 + d(rng) % (kPositions - 1)) % kPositions;
+    }
+    last_brightness = -1.0f;  // no reward across a discontinuity
   }
 
   /// Apply an action drawn from the prefrontal choice.
@@ -6426,6 +6491,32 @@ int main(int argc, char *argv[]) {
           std::cerr << "Error: --policy-temp must be > 0" << std::endl;
           return 2;
         }
+      } else if (starts_with(arg, "--task=")) {
+        if (!parse_task(arg.substr(std::string("--task=").size()), g_task)) {
+          std::cerr << "Error: --task must be photo|audio|avoid" << std::endl;
+          return 2;
+        }
+      } else if (starts_with(arg, "--task-2=")) {
+        if (!parse_task(arg.substr(std::string("--task-2=").size()), g_task2)) {
+          std::cerr << "Error: --task-2 must be photo|audio|avoid" << std::endl;
+          return 2;
+        }
+      } else if (starts_with(arg, "--task-randomize=")) {
+        try {
+          g_task_randomize = std::stoi(
+              arg.substr(std::string("--task-randomize=").size()));
+        } catch (...) {
+          std::cerr << "Error: invalid integer for --task-randomize" << std::endl;
+          return 2;
+        }
+      } else if (starts_with(arg, "--task-switch-at=")) {
+        try {
+          g_task_switch_at = std::stoi(
+              arg.substr(std::string("--task-switch-at=").size()));
+        } catch (...) {
+          std::cerr << "Error: invalid integer for --task-switch-at" << std::endl;
+          return 2;
+        }
       } else if (arg == "--closed-loop") {
         g_closed_loop = true;
       } else if (arg == "--autonomous-sync") {
@@ -6749,7 +6840,9 @@ int main(int argc, char *argv[]) {
               "--action-credit", "--motor-selection",
               "--reward-baseline", "--reward-baseline-rate=",
               "--critic", "--critic-lr=", "--critic-gamma=",
-              "--node-perturbation", "--selection-smoothing="};
+              "--node-perturbation", "--selection-smoothing=",
+              "--task=", "--task-2=", "--task-switch-at=",
+              "--task-randomize="};
           bool owned_elsewhere = false;
           for (const char *f : kPrimaryParserFlags) {
             if (starts_with(arg, f)) {
@@ -10274,6 +10367,15 @@ int main(int argc, char *argv[]) {
         // still present when the reward arrives.
         auto world = std::make_shared<LightWorld>();
         brain.setPreCycleHook([&brain, world](std::size_t iter) {
+          // 0. Re-randomise the episode, if asked. Done BEFORE acting so the
+          //    action is taken in the state the agent will be scored on.
+          if (g_task_randomize > 0 && iter > 0 &&
+              (iter % static_cast<std::size_t>(g_task_randomize)) == 0) {
+            static std::mt19937 world_rng(
+                NeuroForge::Core::DeterministicRng::seedFor("LightWorld"));
+            world->randomise(world_rng);
+          }
+
           // 1. Act on the previous decision.
           const auto dec = brain.getLastDecision();
           if (dec.valid) {
@@ -10319,11 +10421,35 @@ int main(int argc, char *argv[]) {
           // 2. Score the consequence. Reward is the CHANGE in brightness, so
           //    closing the distance is rewarded and opening it is punished.
           //    Absolute brightness would reward standing still near the light.
+          // Which task is live right now. --task-switch-at swaps mid-run so the
+          // substrate and policy carry over, which is what makes the second half
+          // a TRANSFER measurement rather than an independent run.
+          const TaskKind task =
+              (g_task_switch_at >= 0 &&
+               static_cast<int>(iter) >= g_task_switch_at)
+                  ? g_task2
+                  : g_task;
+          {
+            static TaskKind announced = TaskKind::Photo;
+            static bool first = true;
+            if (first || announced != task) {
+              first = false;
+              announced = task;
+              std::cout << "[Task] iter=" << iter << " task=" << task_name(task)
+                        << std::endl;
+            }
+          }
+
           const float b = world->brightness();
           if (world->last_brightness >= 0.0f && dec.valid) {
-            const float r = b - world->last_brightness;
+            float r = b - world->last_brightness;
+            // `avoid` inverts the objective on identical sensors, so the optimal
+            // policy is the exact reverse of `photo`.
+            if (task == TaskKind::Avoid) {
+              r = -r;
+            }
             if (std::fabs(r) > 1e-6f) {
-              brain.deliverReward(static_cast<double>(r), "phototaxis");
+              brain.deliverReward(static_cast<double>(r), task_name(task));
               // Reinforce the policy that chose the action, in addition to the
               // synaptic reward path. Phase-4 broadcasts reward across every
               // recently-active synapse; this delivers it to the action that
@@ -10343,12 +10469,41 @@ int main(int argc, char *argv[]) {
           world->last_brightness = b;
 
           // 3. Present the new observation.
-          auto vc_region = brain.getRegion("VisualCortex");
+          // Route the SAME observation through a different sensory cortex for
+          // the audio task. The gradient and the optimal policy are identical;
+          // only the modality carrying it changes, which is what isolates
+          // cross-modal transfer from ordinary relearning.
+          const char *sense_region =
+              (task == TaskKind::Audio) ? "AuditoryCortex" : "VisualCortex";
+          // Keep the decision's spatial features on the same cortex the task is
+          // driving, or the policy reads a silent region.
+          if (brain.sensoryRegion() != sense_region) {
+            brain.setSensoryRegion(sense_region);
+          }
+          auto vc_region = brain.getRegion(sense_region);
           if (vc_region) {
-            auto vc = std::dynamic_pointer_cast<
-                NeuroForge::Regions::VisualCortex>(vc_region);
-            if (vc) {
-              vc->processVisualInput(world->observe());
+            const auto obs = world->observe();
+            if (task == TaskKind::Audio) {
+              auto ac = std::dynamic_pointer_cast<
+                  NeuroForge::Regions::AuditoryCortex>(vc_region);
+              if (ac) {
+                // AuditoryCortex has no processVisualInput; drive its neurons
+                // directly, index-aligned exactly as VisualCortex now is.
+                const auto &an = vc_region->getNeurons();
+                const std::size_t n = std::min(an.size(), obs.size());
+                for (std::size_t i = 0; i < n; ++i) {
+                  if (an[i]) {
+                    an[i]->setActivation(std::clamp(obs[i], 0.0f, 1.0f));
+                    an[i]->setState(NeuroForge::Core::Neuron::State::Inactive);
+                  }
+                }
+              }
+            } else {
+              auto vc = std::dynamic_pointer_cast<
+                  NeuroForge::Regions::VisualCortex>(vc_region);
+              if (vc) {
+                vc->processVisualInput(obs);
+              }
             }
           }
 
@@ -10364,6 +10519,8 @@ int main(int argc, char *argv[]) {
           if (g_critic) {
             auto *ls_s = brain.getLearningSystem();
             if (ls_s && vc_region) {
+              // Features come from whichever cortex is carrying the task, so the
+              // critic reads the same modality the agent is acting on.
               const auto &vn = vc_region->getNeurons();
               const std::size_t row = 8;
               float lo = 0.0f, hi = 0.0f;

@@ -3354,15 +3354,15 @@ void reportIntegrationBinding(const char *region_name, bool bound) {
                             // represent WHERE in the field something is, and that is exactly what
                             // this task depends on -- see readRegionHalves.
                             if (!motor_sel) {
-                                const auto halves = readRegionHalves(getRegion("VisualCortex"), 8);
-                                options.push_back(channel_norm.normalise("VisualCortex:left", halves.first));
-                                values.push_back(channel_norm.normalise("VisualCortex:right", halves.second));
+                                const auto halves = readRegionHalves(getRegion(sensory_region_), 8);
+                                options.push_back(channel_norm.normalise((sensory_region_ + ":left").c_str(), halves.first));
+                                values.push_back(channel_norm.normalise((sensory_region_ + ":right").c_str(), halves.second));
                                 // The difference IS the bearing, given directly rather than left to
                                 // be inferred from two separately normalised halves.
                                 options.push_back(channel_norm.normalise(
-                                    "VisualCortex:bearing", halves.second - halves.first));
+                                    (sensory_region_ + ":bearing").c_str(), halves.second - halves.first));
                                 values.push_back(channel_norm.normalise(
-                                    "VisualCortex:contrast", std::fabs(halves.second - halves.first)));
+                                    (sensory_region_ + ":contrast").c_str(), std::fabs(halves.second - halves.first)));
                             }
                             
                             if (options.empty()) {

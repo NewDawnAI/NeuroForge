@@ -231,6 +231,19 @@ public:
     }
     float selectionSmoothing() const { return selection_smoothing_; }
 
+    /**
+     * @brief Which cortex supplies the decision's spatial features.
+     *
+     * These were hardcoded to "VisualCortex". With a second task delivering the
+     * SAME gradient through AuditoryCortex, that would have made cross-modal
+     * transfer impossible by construction -- the policy would read a silent
+     * region and the audio arm would fail for a wiring reason rather than a
+     * scientific one. That is the same state-aliasing shape that made the
+     * phototaxis policy bearing-blind until three separate defects were fixed.
+     */
+    void setSensoryRegion(const std::string &name) { sensory_region_ = name; }
+    const std::string &sensoryRegion() const { return sensory_region_; }
+
     /// Select among ACTION CHANNELS in MotorCortex rather than among input
     /// regions.
     ///
@@ -304,6 +317,7 @@ public:
 private:
     // Procedural connectivity mode for massive scale (avoids storing Synapse objects)
     std::atomic<bool> learned_policy_enabled_{false};
+    std::string sensory_region_ = "VisualCortex";
     std::atomic<bool> motor_selection_enabled_{false};
     float selection_smoothing_ = 0.0f;
     std::vector<float> channel_ema_;
